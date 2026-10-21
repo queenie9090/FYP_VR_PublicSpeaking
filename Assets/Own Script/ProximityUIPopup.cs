@@ -22,10 +22,6 @@ public class ProximityUIPopup : MonoBehaviour
     [Header("Detection Settings")]
     [SerializeField] private string playerTag = "Player";
 
-    [Header("Optional Button Event Binding")]
-    [Tooltip("Actions to trigger when the player confirms (e.g., Load Scene, Play Sound, Complete Task). Leave empty for pure info hints.")]
-    public UnityEvent OnConfirmAction;
-
     private Vector3 hiddenPos;
     private Vector3 visiblePos;
     private Coroutine activeAnimCoroutine;
@@ -100,23 +96,5 @@ public class ProximityUIPopup : MonoBehaviour
         {
             uiPanelRect.gameObject.SetActive(false);
         }
-    }
-
-    // --- PUBLIC METHODS FOR UI BUTTONS ---
-
-    /// <summary>
-    /// Wire your 'Yes' / 'Confirm' UI button to this function.
-    /// </summary>
-    public void OnClickConfirm()
-    {
-        OnConfirmAction?.Invoke();
-    }
-
-    /// <summary>
-    /// Optional: Wire a 'No' / 'Close' button to manually hide the panel.
-    /// </summary>
-    public void OnClickDismiss()
-    {
-        AnimateUI(false);
     }
 }
