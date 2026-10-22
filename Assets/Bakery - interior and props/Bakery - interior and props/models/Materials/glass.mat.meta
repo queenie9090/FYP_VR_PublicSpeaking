@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 92d6526639e02d3418a819c9912eb575
+timeCreated: 1556348533
+licenseType: Store
+NativeFormatImporter:
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 145042
+  packageName: Bakery - interior and props
+  packageVersion: 1.0
+  assetPath: Assets/Bakery - interior and props/Bakery - interior and props/models/Materials/glass.mat
+  uploadId: 397551
