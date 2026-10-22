@@ -7,10 +7,11 @@ public class MicrophoneVolumeMeter : MonoBehaviour
     [SerializeField] private Image blueFillImage;
 
     [Header("Volume Sensitivity Settings")]
-    [SerializeField] private float sensitivity = 50.0f;
-    [SerializeField] private float smoothness = 12.0f;
+    [SerializeField] private float sensitivity = 30.0f;
+    [SerializeField] private float smoothness = 15.0f;
 
     private AudioClip activeMicClip;
+    private string activeDeviceName = null;
     private bool isListening = false;
     private float[] sampleBuffer = new float[128];
 
@@ -24,11 +25,20 @@ public class MicrophoneVolumeMeter : MonoBehaviour
 
     private float GetMicLoudness()
     {
-        if (!Microphone.IsRecording(null)) return 0.0f;
+        // 1. Verify recording state and clip validity
+        if (!Microphone.IsRecording(activeDeviceName) || activeMicClip == null) return 0.0f;
 
-        int micPosition = Microphone.GetPosition(null) - (128 + 1);
-        if (micPosition < 0) return 0.0f;
+        int currentMicPos = Microphone.GetPosition(activeDeviceName);
 
+        // 2. Safely ensure we have accumulated at least 128 samples before reading
+        if (currentMicPos < 128) return 0.0f;
+
+        int micPosition = currentMicPos - 128;
+
+        // 3. Prevent out-of-bounds offset reads on the AudioClip
+        if (micPosition < 0 || micPosition + 128 > activeMicClip.samples) return 0.0f;
+
+        // 4. Safely extract samples
         activeMicClip.GetData(sampleBuffer, micPosition);
 
         float sum = 0.0f;
@@ -40,10 +50,11 @@ public class MicrophoneVolumeMeter : MonoBehaviour
         return Mathf.Sqrt(sum / 128.0f);
     }
 
-    public void EnableVolumeMeter(bool active, AudioClip clip)
+    public void EnableVolumeMeter(bool active, AudioClip clip, string deviceName = null)
     {
         isListening = active;
         activeMicClip = clip;
+        activeDeviceName = deviceName;
 
         if (!active && blueFillImage != null)
         {

@@ -1,29 +1,158 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
+using Newtonsoft.Json;
 
 public class SupabaseManager : MonoBehaviour
 {
-    public IEnumerator SaveSessionResult(SessionResultPayload payload, Action onSuccess, Action<string> onError)
+    /// <summary>
+    /// Saves completed session data across normalized tables: session, performance_metric, and dialogue_turn.
+    /// </summary>
+    public IEnumerator SaveSessionNormalized(
+        string userId,
+        string scenarioType,
+        string selectedRole,
+        string topic,
+        string difficulty,
+        string inputMode,
+        float overallScore,
+        float clarityScore,
+        float eyeContactPct,
+        float gestureScore,
+        float wpm,
+        int totalFillers,
+        float gpm,
+        string feedbackSummary,
+        List<DialogueTurnRecord> dialogueTurns,
+        Action onSuccess,
+        Action<string> onError)
     {
         string supabaseUrl = ConfigLoader.GetSupabaseUrl().Trim();
         string supabaseApiKey = ConfigLoader.GetSupabaseAnonKey().Trim();
 
-        string endpoint = $"{supabaseUrl}/rest/v1/session_history";
-        string jsonPayload = Newtonsoft.Json.JsonConvert.SerializeObject(payload);
-
-        using (UnityWebRequest www = new UnityWebRequest(endpoint, "POST"))
+        // -------------------------------------------------------------
+        // STEP 1: Insert into 'session' table and return generated session_id
+        // -------------------------------------------------------------
+        string sessionEndpoint = $"{supabaseUrl}/rest/v1/session";
+        var sessionData = new
         {
-            byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonPayload);
-            www.uploadHandler = new UploadHandlerRaw(bodyRaw);
-            www.downloadHandler = new DownloadHandlerBuffer();
+            user_id = userId,
+            scenario_type = scenarioType,
+            selected_role = selectedRole,
+            scenario_topic = topic,
+            difficulty_level = difficulty,
+            input_mode_used = inputMode
+        };
 
-            www.SetRequestHeader("Content-Type", "application/json");
+        string sessionJson = JsonConvert.SerializeObject(sessionData);
+        string newSessionId = null;
+
+        using (UnityWebRequest www = CreatePostRequest(sessionEndpoint, sessionJson, supabaseApiKey))
+        {
+            // Prefer: return=representation instructs Supabase to send back the newly created row
+            www.SetRequestHeader("Prefer", "return=representation");
+            yield return www.SendWebRequest();
+
+            if (www.result != UnityWebRequest.Result.Success)
+            {
+                onError?.Invoke($"[Session Insert Error] {www.error} | {www.downloadHandler.text}");
+                yield break;
+            }
+
+            var createdSessions = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(www.downloadHandler.text);
+            if (createdSessions != null && createdSessions.Count > 0)
+            {
+                newSessionId = createdSessions[0]["session_id"].ToString();
+            }
+        }
+
+        if (string.IsNullOrEmpty(newSessionId))
+        {
+            onError?.Invoke("Failed to retrieve generated session_id from database.");
+            yield break;
+        }
+
+        // -------------------------------------------------------------
+        // STEP 2: Insert into 'performance_metric' table using foreign key
+        // -------------------------------------------------------------
+        string metricEndpoint = $"{supabaseUrl}/rest/v1/performance_metric";
+        var metricData = new
+        {
+            session_id = newSessionId,
+            overall_score = overallScore,
+            speech_clarity_score = clarityScore,
+            eye_contact_pct = eyeContactPct,
+            hand_gesture_score = gestureScore,
+            average_wpm = wpm,
+            filler_word_count = totalFillers,
+            gestures_per_minute = gpm,
+            ai_feedback_summary = feedbackSummary
+        };
+
+        using (UnityWebRequest www = CreatePostRequest(metricEndpoint, JsonConvert.SerializeObject(metricData), supabaseApiKey))
+        {
+            yield return www.SendWebRequest();
+            if (www.result != UnityWebRequest.Result.Success)
+            {
+                onError?.Invoke($"[Metric Insert Error] {www.error} | {www.downloadHandler.text}");
+                yield break;
+            }
+        }
+
+        // -------------------------------------------------------------
+        // STEP 3: Insert dialogue turns into 'dialogue_turn' table
+        // -------------------------------------------------------------
+        if (dialogueTurns != null && dialogueTurns.Count > 0)
+        {
+            string turnEndpoint = $"{supabaseUrl}/rest/v1/dialogue_turn";
+            List<object> turnPayloads = new List<object>();
+
+            for (int i = 0; i < dialogueTurns.Count; i++)
+            {
+                turnPayloads.Add(new
+                {
+                    session_id = newSessionId,
+                    turn_sequence = i + 1,
+                    user_transcript = dialogueTurns[i].user_transcript,
+                    ai_response_text = dialogueTurns[i].ai_response_text,
+                    filler_word_count = dialogueTurns[i].filler_word_count,
+                    speaking_rate_wpm = dialogueTurns[i].speaking_rate_wpm
+                });
+            }
+
+            using (UnityWebRequest www = CreatePostRequest(turnEndpoint, JsonConvert.SerializeObject(turnPayloads), supabaseApiKey))
+            {
+                yield return www.SendWebRequest();
+                if (www.result != UnityWebRequest.Result.Success)
+                {
+                    onError?.Invoke($"[Dialogue Turn Insert Error] {www.error} | {www.downloadHandler.text}");
+                    yield break;
+                }
+            }
+        }
+
+        onSuccess?.Invoke();
+    }
+
+    /// <summary>
+    /// Fetches the latest normalized session along with performance metrics and dialogue turns.
+    /// </summary>
+    public IEnumerator GetLatestNormalizedSession(string userId, Action<NormalizedSessionData> onSuccess, Action<string> onError)
+    {
+        string supabaseUrl = ConfigLoader.GetSupabaseUrl().Trim();
+        string supabaseApiKey = ConfigLoader.GetSupabaseAnonKey().Trim();
+
+        // PostgREST embedded query: Joins session, performance_metric, and dialogue_turn
+        string endpoint = $"{supabaseUrl}/rest/v1/session?user_id=eq.{userId}&select=*,performance_metric(*),dialogue_turn(*)&order=start_time.desc&limit=1";
+
+        using (UnityWebRequest www = UnityWebRequest.Get(endpoint))
+        {
             www.SetRequestHeader("apikey", supabaseApiKey);
             www.SetRequestHeader("Authorization", "Bearer " + supabaseApiKey);
-            www.SetRequestHeader("Prefer", "return=minimal");
+            www.SetRequestHeader("Accept", "application/json");
 
             yield return www.SendWebRequest();
 
@@ -33,8 +162,35 @@ public class SupabaseManager : MonoBehaviour
             }
             else
             {
-                onSuccess?.Invoke();
+                try
+                {
+                    List<NormalizedSessionData> results = JsonConvert.DeserializeObject<List<NormalizedSessionData>>(www.downloadHandler.text);
+                    if (results != null && results.Count > 0)
+                    {
+                        onSuccess?.Invoke(results[0]);
+                    }
+                    else
+                    {
+                        onSuccess?.Invoke(null);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    onError?.Invoke("JSON Deserialization Error: " + ex.Message);
+                }
             }
         }
+    }
+
+    private UnityWebRequest CreatePostRequest(string url, string jsonBody, string apiKey)
+    {
+        UnityWebRequest www = new UnityWebRequest(url, "POST");
+        byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonBody);
+        www.uploadHandler = new UploadHandlerRaw(bodyRaw);
+        www.downloadHandler = new DownloadHandlerBuffer();
+        www.SetRequestHeader("Content-Type", "application/json");
+        www.SetRequestHeader("apikey", apiKey);
+        www.SetRequestHeader("Authorization", "Bearer " + apiKey);
+        return www;
     }
 }
