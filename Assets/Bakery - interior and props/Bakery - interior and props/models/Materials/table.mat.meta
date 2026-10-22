@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: c2e15af44350b3149812ac87e2b7668b
+timeCreated: 1556348534
+licenseType: Store
+NativeFormatImporter:
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 145042
+  packageName: Bakery - interior and props
+  packageVersion: 1.0
+  assetPath: Assets/Bakery - interior and props/Bakery - interior and props/models/Materials/table.mat
+  uploadId: 397551
