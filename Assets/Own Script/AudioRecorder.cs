@@ -25,7 +25,11 @@ public class AudioRecorder : MonoBehaviour
         }
 
         float turnStartTime = Time.time;
-        AudioClip recordedClip = Microphone.Start(selectedMic, false, 30, 44100);
+
+        // 1. Lower sample rate to 16000 Hz (speech-to-text optimal, drastically reduces size)
+        int targetSampleRate = 16000;
+        int maxClipSeconds = 15;
+        AudioClip recordedClip = Microphone.Start(selectedMic, false, maxClipSeconds, targetSampleRate);
 
         if (micVolumeMeter != null)
             micVolumeMeter.EnableVolumeMeter(true, recordedClip, selectedMic);
@@ -35,9 +39,10 @@ public class AudioRecorder : MonoBehaviour
         float speechStart = Time.time;
         float silenceDuration = speechStart - turnStartTime;
 
-        float dynamicSilenceTimer = 4.5f;
+        // 2. Tighter silence & duration limits for low-latency responsiveness
+        float dynamicSilenceTimer = 2.0f;  // Reduced from 4.5s to 2.0s
         float totalRecordingTimer = 0.0f;
-        float maxAllowedDuration = 20.0f; // Safety cap
+        float maxAllowedDuration = 10.0f;  // Reduced safety cap from 20s to 10s
         float[] sampleBuffer = new float[128];
 
         // Loop runs until VAD times out, max limit is reached, OR user hits Stop
@@ -59,7 +64,7 @@ public class AudioRecorder : MonoBehaviour
                         for (int i = 0; i < 128; i++) sum += Mathf.Abs(sampleBuffer[i]);
                         float averageLoudness = sum / 128.0f;
 
-                        if (averageLoudness > 0.003f) dynamicSilenceTimer = 4.5f;
+                        if (averageLoudness > 0.003f) dynamicSilenceTimer = 2.0f;
                         else dynamicSilenceTimer -= 0.1f;
                     }
                     else dynamicSilenceTimer -= 0.1f;
@@ -69,13 +74,37 @@ public class AudioRecorder : MonoBehaviour
             else dynamicSilenceTimer -= 0.1f;
         }
 
+        int lastMicPosition = Microphone.GetPosition(selectedMic);
         Microphone.End(selectedMic);
+
         if (micVolumeMeter != null)
             micVolumeMeter.EnableVolumeMeter(false, null, null);
 
         float speechDuration = Time.time - speechStart;
-        byte[] wavBytes = SavWav.GetWavBytes(recordedClip);
+
+        // 3. Trim the clip to actual recorded duration before converting to WAV
+        AudioClip trimmedClip = TrimAudioClip(recordedClip, lastMicPosition);
+        byte[] wavBytes = SavWav.GetWavBytes(trimmedClip);
 
         onRecordingComplete?.Invoke(wavBytes, speechDuration, silenceDuration);
+    }
+
+    // Trims empty trailing silence from the allocated AudioClip
+    private AudioClip TrimAudioClip(AudioClip originalClip, int lastPosition)
+    {
+        if (originalClip == null || lastPosition <= 0) return originalClip;
+
+        float[] samples = new float[lastPosition * originalClip.channels];
+        originalClip.GetData(samples, 0);
+
+        AudioClip trimmedClip = AudioClip.Create(
+            originalClip.name + "_trimmed",
+            lastPosition,
+            originalClip.channels,
+            originalClip.frequency,
+            false
+        );
+        trimmedClip.SetData(samples, 0);
+        return trimmedClip;
     }
 }
