@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 using UnityEngine.SceneManagement;
 using System.Collections.Generic;
+using System.Text;
 
 public class PCDashboardController : MonoBehaviour
 {
@@ -31,15 +32,13 @@ public class PCDashboardController : MonoBehaviour
     [SerializeField] private Image eyeContactProgressBar;
 
     [Header("Gesture Breakdown")]
-    [SerializeField] private TMP_Text gestureScoreText;      // Restored Score Percentage Text (90%)
-    [SerializeField] private TMP_Text gpmText;               // Rate/GPM Text
-    [SerializeField] private Image gestureProgressBar;       // Restored Progress Bar
+    [SerializeField] private TMP_Text gestureScoreText;
+    [SerializeField] private TMP_Text gpmText;
+    [SerializeField] private Image gestureProgressBar;
 
     [Header("AI Feedback & Conversation Log")]
     [SerializeField] private TMP_Text aiFeedbackText;
-    [SerializeField] private Transform logContainer;
-    [SerializeField] private GameObject userTurnPrefab;
-    [SerializeField] private GameObject npcTurnPrefab;
+    [SerializeField] private TMP_Text conversationLogText; // Single Text Mesh Pro element for zero layout bugs
 
     [Header("Navigation")]
     [SerializeField] private Button backToMenuButton;
@@ -101,7 +100,6 @@ public class PCDashboardController : MonoBehaviour
         if (eyeContactScoreText != null) eyeContactScoreText.text = $"{metric.eye_contact_pct:F0}%";
         if (eyeContactProgressBar != null) eyeContactProgressBar.fillAmount = metric.eye_contact_pct / 100.0f;
 
-        // Gesture Breakdown Populating
         if (gestureScoreText != null) gestureScoreText.text = $"{metric.hand_gesture_score:F0}%";
         if (gpmText != null) gpmText.text = $"Rate: {metric.gestures_per_minute:F1} GPM";
         if (gestureProgressBar != null) gestureProgressBar.fillAmount = metric.hand_gesture_score / 100.0f;
@@ -126,7 +124,7 @@ public class PCDashboardController : MonoBehaviour
                 : metric.ai_feedback_summary;
         }
 
-        // 6. Populate Dialogue Log UI Scroll View
+        // 6. Populate Dialogue Log UI
         PopulateConversationLog(data.dialogue_turn);
     }
 
@@ -137,14 +135,16 @@ public class PCDashboardController : MonoBehaviour
         switch (scenario)
         {
             case "Hall":
-                scenarioWeightsSubtext.text = "Weights: Clarity (40%) | Eye Contact (20%) | Gestures (40%)";
+                scenarioWeightsSubtext.text = "Weights: Clarity (40%)\nEye Contact (20%)\nGestures (40%)";
                 break;
             case "Classroom":
-                scenarioWeightsSubtext.text = "Weights: Clarity (40%) | Eye Contact (40%) | Gestures (20%)";
+                scenarioWeightsSubtext.text = "Weights: Clarity (40%)\nEye Contact (40%)\nGestures (20%)";
                 break;
+            case "Cafeteria":
             case "Interview":
             case "Normal Conversation":
-                scenarioWeightsSubtext.text = "Weights: Clarity (50%) | Eye Contact (30%) | Gestures (20%)";
+            default:
+                scenarioWeightsSubtext.text = "Weights: Clarity (50%)\nEye Contact (30%)\nGestures (20%)";
                 break;
         }
     }
@@ -173,25 +173,26 @@ public class PCDashboardController : MonoBehaviour
 
     private void PopulateConversationLog(List<DialogueTurnRecord> turns)
     {
-        if (turns == null || logContainer == null) return;
+        if (turns == null || conversationLogText == null) return;
 
-        foreach (Transform child in logContainer) Destroy(child.gameObject);
+        conversationLogText.text = "";
+        turns.Sort((a, b) => a.turn_sequence.CompareTo(b.turn_sequence));
+
+        StringBuilder sb = new StringBuilder();
 
         foreach (var turn in turns)
         {
-            if (!string.IsNullOrEmpty(turn.user_transcript) && userTurnPrefab != null)
+            if (!string.IsNullOrEmpty(turn.user_transcript))
             {
-                GameObject userItem = Instantiate(userTurnPrefab, logContainer);
-                TMP_Text userTxt = userItem.GetComponentInChildren<TMP_Text>();
-                if (userTxt != null) userTxt.text = $"<b>You:</b> {turn.user_transcript}";
+                sb.AppendLine($"<color=#4FC3F7><b>You:</b></color> {turn.user_transcript}\n");
             }
 
-            if (!string.IsNullOrEmpty(turn.ai_response_text) && npcTurnPrefab != null)
+            if (!string.IsNullOrEmpty(turn.ai_response_text))
             {
-                GameObject npcItem = Instantiate(npcTurnPrefab, logContainer);
-                TMP_Text npcTxt = npcItem.GetComponentInChildren<TMP_Text>();
-                if (npcTxt != null) npcTxt.text = $"<b>NPC:</b> {turn.ai_response_text}";
+                sb.AppendLine($"<color=#AED581><b>NPC:</b></color> {turn.ai_response_text}\n");
             }
         }
+
+        conversationLogText.text = sb.ToString();
     }
 }

@@ -114,7 +114,7 @@ public class OpenAIManager : MonoBehaviour
         var requestBody = new
         {
             model = "gpt-6-luna",
-        response_format = new { type = "json_object" },
+            response_format = new { type = "json_object" },
             messages = messages
         };
 
@@ -154,28 +154,33 @@ public class OpenAIManager : MonoBehaviour
         {
             model = "tts-1",
             input = text,
-            voice = string.IsNullOrEmpty(voice) ? "alloy" : voice
+            voice = voice,
+            response_format = "mp3"
         };
 
         string jsonPayload = Newtonsoft.Json.JsonConvert.SerializeObject(requestBody);
+        byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonPayload);
 
-        using (UnityWebRequest www = new UnityWebRequest(TtsUrl, "POST"))
+        using (UnityWebRequest request = new UnityWebRequest(TtsUrl, "POST"))
         {
-            byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonPayload);
-            www.uploadHandler = new UploadHandlerRaw(bodyRaw);
-            www.downloadHandler = new DownloadHandlerAudioClip(TtsUrl, AudioType.MPEG);
-            www.SetRequestHeader("Content-Type", "application/json");
-            www.SetRequestHeader("Authorization", "Bearer " + ApiKey);
+            request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            request.downloadHandler = new DownloadHandlerAudioClip(TtsUrl, AudioType.MPEG);
 
-            yield return www.SendWebRequest();
+            request.SetRequestHeader("Content-Type", "application/json");
+            request.SetRequestHeader("Authorization", $"Bearer {ApiKey}");
 
-            if (www.result != UnityWebRequest.Result.Success)
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success)
             {
-                onError?.Invoke(www.error + " | " + www.downloadHandler.text);
+                // Safely read standard HTTP error string instead of binary text!
+                string errorMsg = $"[TTS Error]: {request.error}";
+                Debug.LogError(errorMsg);
+                onError?.Invoke(errorMsg);
             }
             else
             {
-                AudioClip clip = DownloadHandlerAudioClip.GetContent(www);
+                AudioClip clip = DownloadHandlerAudioClip.GetContent(request);
                 onSuccess?.Invoke(clip);
             }
         }
@@ -188,7 +193,6 @@ public class OpenAIManager : MonoBehaviour
     private class Message { public string content; }
     [Serializable] private class HintResponse { public string hint; }
 
-    // Deepgram Deserialization Structures
     [Serializable]
     public class DeepgramResponse
     {

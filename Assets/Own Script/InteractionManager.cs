@@ -24,6 +24,9 @@ public class InteractionManager : MonoBehaviour
     [SerializeField] private Button startSessionButton;
     [SerializeField] private Button exitButton;
 
+    [Header("Navigation")]
+    [SerializeField] private string defaultDashboardScene = "DashboardScene";
+
     private ScenarioConfig activeConfig;
     private List<DialogueTurn> conversationHistory = new List<DialogueTurn>();
     private bool isSessionActive = false;
@@ -32,6 +35,8 @@ public class InteractionManager : MonoBehaviour
     private float totalSpeakingTimeSeconds = 0.0f;
     private float totalSilenceTimeSeconds = 0.0f;
     private int totalFillerWordsDetected = 0;
+    private DateTime sessionStartTimestamp;
+    private DateTime sessionEndTimestamp;
 
     private void Start()
     {
@@ -52,7 +57,7 @@ public class InteractionManager : MonoBehaviour
         {
             activeConfig = new ScenarioConfig
             {
-                scenario = "Tutorial",
+                scenario = "TutorialScene",
                 topic = "System Calibration",
                 difficulty = "Easy",
                 participantRole = "Trainee",
@@ -62,7 +67,10 @@ public class InteractionManager : MonoBehaviour
                 sessionStartSignal = "Start Tutorial"
             };
         }
-        else activeConfig = UserSession.SelectedScenarioConfig;
+        else
+        {
+            activeConfig = UserSession.SelectedScenarioConfig;
+        }
     }
 
     public void OnUserConfirmedStart()
@@ -89,6 +97,9 @@ public class InteractionManager : MonoBehaviour
         isSessionActive = true;
         conversationHistory.Clear();
         sessionElapsedTimeSeconds = 0f; totalSpeakingTimeSeconds = 0f; totalSilenceTimeSeconds = 0f; totalFillerWordsDetected = 0;
+
+        // Capture precise start time (ISO 8601 string format for Supabase timestamptz)
+        sessionStartTimestamp = DateTime.UtcNow;
 
         if (eyeContactTracker != null) eyeContactTracker.StartTracking();
         if (gestureTracker != null) gestureTracker.ResetTracker();
@@ -231,9 +242,32 @@ public class InteractionManager : MonoBehaviour
     private void CalculateAndSaveResults()
     {
         uiManager.SetStatus("Saving Results...");
-        if (eyeContactTracker != null) eyeContactTracker.StopTracking();
-        if (gestureTracker != null) gestureTracker.StopTracking();
 
+        // Capture session completion timestamp
+        sessionEndTimestamp = DateTime.UtcNow;
+
+        string startTimeIso = sessionStartTimestamp.ToString("o");
+        string endTimeIso = sessionEndTimestamp.ToString("o");
+
+        // 1. Calculate physical metrics using attached tracking components
+        float eyeContactPct = 0.0f;
+        if (eyeContactTracker != null)
+        {
+            eyeContactTracker.StopTracking();
+            eyeContactPct = eyeContactTracker.CalculateEyeContactScore(); // EyeContactTracker method
+        }
+
+        int expressiveGestureCount = 0;
+        float gpm = 0.0f;
+        if (gestureTracker != null)
+        {
+            gestureTracker.StopTracking();
+            var gestureMetrics = gestureTracker.CalculateGestureMetrics(); // GestureTracker method
+            expressiveGestureCount = gestureMetrics.expressiveCount;
+            gpm = gestureMetrics.gpm;
+        }
+
+        // 2. Bypass database saving if this was just a calibration tutorial
         if (UserSession.IsRunningTutorial)
         {
             uiManager.SetStatus("Calibration Complete!");
@@ -241,14 +275,81 @@ public class InteractionManager : MonoBehaviour
             return;
         }
 
-        // Aggregate metric calculations...
-        string activeUserId = (UserSession.IsLoggedIn && !string.IsNullOrEmpty(UserSession.CurrentUserId))
-            ? UserSession.CurrentUserId
-            : "00000000-0000-0000-0000-000000000000";
+        // 3. Compute speech metrics (WPM, Clarity, Scores)
+        float speakingMinutes = totalSpeakingTimeSeconds / 60.0f;
+        int totalWordsSpoken = 0;
+        List<DialogueTurnRecord> turnRecords = new List<DialogueTurnRecord>();
 
-        // Save to Supabase...
-        uiManager.SetStatus("Session Complete!");
-        OnSessionCompletedSequence();
+        for (int i = 0; i < conversationHistory.Count; i += 2)
+        {
+            string userText = conversationHistory[i].dialogue;
+            string aiText = (i + 1 < conversationHistory.Count) ? conversationHistory[i + 1].dialogue : "";
+            int turnFillers = conversationHistory[i].fillerWordCount;
+            float userDurationMin = conversationHistory[i].speechDuration / 60.0f;
+
+            int wordCount = string.IsNullOrEmpty(userText) ? 0 : userText.Split(new[] { ' ', '\t', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
+            totalWordsSpoken += wordCount;
+
+            float turnWpm = userDurationMin > 0 ? wordCount / userDurationMin : 0.0f;
+
+            turnRecords.Add(new DialogueTurnRecord
+            {
+                turn_sequence = (i / 2) + 1,
+                user_transcript = userText,
+                ai_response_text = aiText,
+                filler_word_count = turnFillers,
+                speaking_rate_wpm = turnWpm
+            });
+        }
+
+        float overallWpm = speakingMinutes > 0 ? totalWordsSpoken / speakingMinutes : 0.0f;
+        float clarityScore = Mathf.Clamp(100.0f - (totalFillerWordsDetected * 5.0f), 0.0f, 100.0f);
+        float gestureScore = Mathf.Clamp(expressiveGestureCount * 10.0f, 0.0f, 100.0f);
+        float overallScore = (clarityScore * 0.4f) + (eyeContactPct * 0.3f) + (gestureScore * 0.3f);
+
+        string activeUserId = UserSession.IsLoggedIn ? UserSession.CurrentUserId : "00000000-0000-0000-0000-000000000000";
+
+        // 4. Save to Supabase using SaveSessionNormalized
+        if (supabaseManager != null)
+        {
+            StartCoroutine(supabaseManager.SaveSessionNormalized(
+                userId: activeUserId,
+                scenarioType: activeConfig != null ? activeConfig.scenario : "Unknown",
+                selectedRole: activeConfig != null ? activeConfig.participantRole : "User",
+                topic: activeConfig != null ? activeConfig.topic : "General",
+                difficulty: activeConfig != null ? activeConfig.difficulty : "Medium",
+                inputMode: UserSession.InputMode,
+                startTime: startTimeIso,
+                endTime: endTimeIso,
+                durationSeconds: sessionElapsedTimeSeconds,
+                overallScore: overallScore,
+                clarityScore: clarityScore,
+                eyeContactPct: eyeContactPct,
+                gestureScore: gestureScore,
+                wpm: overallWpm,
+                totalFillers: totalFillerWordsDetected,
+                gpm: gpm,
+                feedbackSummary: $"Overall Performance: {overallScore:F0}%. Speech clarity was {clarityScore:F0}% with {totalFillerWordsDetected} filler words.",
+                dialogueTurns: turnRecords,
+                onSuccess: () =>
+                {
+                    Debug.Log("[InteractionManager] Session successfully saved to Supabase!");
+                    uiManager.SetStatus("Session Saved!");
+                    OnSessionCompletedSequence();
+                },
+                onError: (err) =>
+                {
+                    Debug.LogError($"[InteractionManager] Failed to save session: {err}");
+                    uiManager.SetStatus("Save Failed!");
+                    OnSessionCompletedSequence();
+                }
+            ));
+        }
+        else
+        {
+            Debug.LogWarning("[InteractionManager] SupabaseManager reference missing!");
+            OnSessionCompletedSequence();
+        }
     }
 
     public void ExitSession()
@@ -261,14 +362,87 @@ public class InteractionManager : MonoBehaviour
 
     private void OnSessionCompletedSequence()
     {
+        isSessionActive = false;
+
         if (UserSession.IsRunningTutorial)
         {
-            UserSession.IsRunningTutorial = false;
-            SceneManager.LoadScene(UserSession.SelectedScenarioConfig != null ? UserSession.SelectedScenarioConfig.scenario : "PCDashboardScene");
+            if (uiManager != null)
+            {
+                uiManager.SetStatus("Tutorial Completed! Walk to the Exit Zone to begin your scenario.");
+            }
         }
         else
         {
-            uiManager.SetStatus("Session Finished! Please proceed to the Exit Door.");
+            if (uiManager != null)
+            {
+                uiManager.SetStatus("Session Ended. Walk to the Exit Zone to leave.");
+            }
         }
+    }
+
+    // Call this method when the player interacts with or walks into the Exit Door / Zone
+    public void ConfirmExitFromDoor()
+    {
+        isSessionActive = false;
+        StopAllCoroutines();
+
+        string targetScene = defaultDashboardScene; // "DashboardScene"
+
+        // Check if exiting from Tutorial
+        if (UserSession.IsRunningTutorial || (activeConfig != null && activeConfig.scenario == "TutorialScene"))
+        {
+            UserSession.IsRunningTutorial = false; // Turn off tutorial flag
+
+            // Route to the scenario selected before entering tutorial (if set)
+            if (UserSession.SelectedScenarioConfig != null &&
+                !string.IsNullOrEmpty(UserSession.SelectedScenarioConfig.scenario) &&
+                UserSession.SelectedScenarioConfig.scenario != "TutorialScene")
+            {
+                targetScene = UserSession.SelectedScenarioConfig.scenario;
+            }
+        }
+        else
+        {
+            // Exiting from regular scenario -> ALWAYS go to Dashboard
+            targetScene = defaultDashboardScene;
+        }
+
+        // Safety check: Fix old scene names dynamically
+        if (targetScene == "PCDashboardScene")
+        {
+            targetScene = defaultDashboardScene; // Force "DashboardScene"
+        }
+
+        Debug.Log($"[InteractionManager] Exiting scenario. Transitioning to target scene: {targetScene}");
+        SceneManager.LoadScene(targetScene);
+    }
+
+    private List<DialogueTurnRecord> MapDialogueTurnsToRecords()
+    {
+        List<DialogueTurnRecord> records = new List<DialogueTurnRecord>();
+
+        // Pair up User and NPC turns into single records if structured pairwise,
+        // or map user turns directly
+        for (int i = 0; i < conversationHistory.Count; i += 2)
+        {
+            string userText = conversationHistory[i].dialogue;
+            string aiText = (i + 1 < conversationHistory.Count) ? conversationHistory[i + 1].dialogue : "";
+            int fillers = conversationHistory[i].fillerWordCount;
+
+            // Calculate WPM if duration > 0
+            float userDurationMin = conversationHistory[i].speechDuration / 60.0f;
+            int wordCount = userText.Split(new[] { ' ', '\t', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
+            float wpm = userDurationMin > 0 ? wordCount / userDurationMin : 0.0f;
+
+            records.Add(new DialogueTurnRecord
+            {
+                user_transcript = userText,
+                ai_response_text = aiText,
+                filler_word_count = fillers,
+                speaking_rate_wpm = wpm
+            });
+        }
+
+        return records;
     }
 }

@@ -18,6 +18,9 @@ public class SupabaseManager : MonoBehaviour
         string topic,
         string difficulty,
         string inputMode,
+        string startTime,        // ISO 8601 string e.g. "2026-10-22T14:30:00.000Z"
+        string endTime,          // ISO 8601 string
+        float durationSeconds,
         float overallScore,
         float clarityScore,
         float eyeContactPct,
@@ -37,22 +40,25 @@ public class SupabaseManager : MonoBehaviour
         // STEP 1: Insert into 'session' table and return generated session_id
         // -------------------------------------------------------------
         string sessionEndpoint = $"{supabaseUrl}/rest/v1/session";
-        var sessionData = new
+
+        var sessionPayload = new
         {
             user_id = userId,
             scenario_type = scenarioType,
             selected_role = selectedRole,
             scenario_topic = topic,
             difficulty_level = difficulty,
-            input_mode_used = inputMode
+            input_mode_used = inputMode,
+            start_time = startTime,            // Maps to timestamptz column in session table
+            end_time = endTime,                // Maps to timestamptz column in session table
+            duration_seconds = durationSeconds // Maps to float8 column in session table
         };
 
-        string sessionJson = JsonConvert.SerializeObject(sessionData);
+        string sessionJson = JsonConvert.SerializeObject(sessionPayload);
         string newSessionId = null;
 
         using (UnityWebRequest www = CreatePostRequest(sessionEndpoint, sessionJson, supabaseApiKey))
         {
-            // Prefer: return=representation instructs Supabase to send back the newly created row
             www.SetRequestHeader("Prefer", "return=representation");
             yield return www.SendWebRequest();
 
@@ -139,13 +145,13 @@ public class SupabaseManager : MonoBehaviour
 
     /// <summary>
     /// Fetches the latest normalized session along with performance metrics and dialogue turns.
+    /// Handles empty database results and single-object responses safely.
     /// </summary>
     public IEnumerator GetLatestNormalizedSession(string userId, Action<NormalizedSessionData> onSuccess, Action<string> onError)
     {
         string supabaseUrl = ConfigLoader.GetSupabaseUrl().Trim();
         string supabaseApiKey = ConfigLoader.GetSupabaseAnonKey().Trim();
 
-        // PostgREST embedded query: Joins session, performance_metric, and dialogue_turn
         string endpoint = $"{supabaseUrl}/rest/v1/session?user_id=eq.{userId}&select=*,performance_metric(*),dialogue_turn(*)&order=start_time.desc&limit=1";
 
         using (UnityWebRequest www = UnityWebRequest.Get(endpoint))
@@ -162,9 +168,22 @@ public class SupabaseManager : MonoBehaviour
             }
             else
             {
+                string jsonText = www.downloadHandler.text != null ? www.downloadHandler.text.Trim() : "";
+
+                // LOG RAW SUPABASE RESPONSE
+                Debug.Log($"[Supabase Raw Dashboard Response for UserId '{userId}']: {jsonText}");
+
+                // Safely handle empty database responses or JSON object error responses
+                if (string.IsNullOrEmpty(jsonText) || jsonText == "[]" || jsonText.StartsWith("{"))
+                {
+                    Debug.LogWarning("[SupabaseManager] No session data array found for user. Returning null.");
+                    onSuccess?.Invoke(null);
+                    yield break;
+                }
+
                 try
                 {
-                    List<NormalizedSessionData> results = JsonConvert.DeserializeObject<List<NormalizedSessionData>>(www.downloadHandler.text);
+                    List<NormalizedSessionData> results = JsonConvert.DeserializeObject<List<NormalizedSessionData>>(jsonText);
                     if (results != null && results.Count > 0)
                     {
                         onSuccess?.Invoke(results[0]);
