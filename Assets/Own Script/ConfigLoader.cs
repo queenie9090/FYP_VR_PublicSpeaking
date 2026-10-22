@@ -6,9 +6,10 @@ public static class ConfigLoader
     [System.Serializable]
     private class ConfigData
     {
-        public string apiKey;
+        public string apiKey;          // OpenAI API Key
         public string supabaseUrl;
         public string supabaseAnonKey;
+        public string deepgramApiKey;  // Deepgram API Key
     }
 
     private static ConfigData cachedConfig;
@@ -45,5 +46,11 @@ public static class ConfigLoader
     {
         LoadConfig();
         return cachedConfig != null ? cachedConfig.supabaseAnonKey : "";
+    }
+
+    public static string GetDeepgramApiKey()
+    {
+        LoadConfig();
+        return cachedConfig != null ? cachedConfig.deepgramApiKey : "";
     }
 }

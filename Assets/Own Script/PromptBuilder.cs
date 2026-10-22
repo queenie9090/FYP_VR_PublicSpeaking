@@ -32,6 +32,10 @@ SYSTEM-DEFINED PARAMETERS
 DIFFICULTY INSTRUCTION
 - {difficultyInstruction}
 
+CONCISE RESPONSE & LANGUAGE RULES:
+- Keep your 'npc_response' extremely concise (1 to 2 sentences maximum, under 35 words). Do not talk too much.
+- Speak exclusively in natural English.
+
 RESPONSE CONDITION RULES
 
 Normal Response:
@@ -92,7 +96,7 @@ RECENT CONVERSATION HISTORY:
 {conversationContext}
 
 TASK:
-Provide a concise, helpful 1-sentence hint or suggested response to help the user answer effectively.
+Provide a concise, helpful 1-sentence hint (under 15 words) to help the user answer effectively in English.
 
 OUTPUT FORMAT:
 Return ONLY a valid JSON object:

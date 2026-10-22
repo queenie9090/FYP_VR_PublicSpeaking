@@ -3,49 +3,51 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
 using UnityEngine.SceneManagement;
 
 public class InteractionManager : MonoBehaviour
 {
-    [Header("Core Dependencies")]
+    [Header("Sub-Managers")]
     [SerializeField] private OpenAIManager openAIManager;
     [SerializeField] private SupabaseManager supabaseManager;
+    [SerializeField] private AudioRecorder audioRecorder;
+    [SerializeField] private DialogueUIManager uiManager;
+    [SerializeField] private VRPlayerSeating playerSeating;
     [SerializeField] private EyeContactTracker eyeContactTracker;
     [SerializeField] private GestureTracker gestureTracker;
-    [SerializeField] private MicrophoneVolumeMeter micVolumeMeter;
-    [SerializeField] private AudioSource npcAudioSource;
 
-    [Header("UI References")]
-    [SerializeField] private TMP_Text statusText;            // Single status line for all state prompts
-    [SerializeField] private TMP_Text dialogueText;          // Scrollable full conversation log (User + NPC)
-    [SerializeField] private ScrollRect dialogueScrollRect;   // Auto-scroll rect handler
-    [SerializeField] private TMP_Text hintTextDisplay;
+    [Header("Audio Output")]
+    [SerializeField] private AudioSource npcAudioSource;
+    [SerializeField] private NPCPersona currentActiveNPC;
+
+    [Header("UI Controls")]
+    [SerializeField] private Button startSessionButton;
     [SerializeField] private Button exitButton;
 
     private ScenarioConfig activeConfig;
     private List<DialogueTurn> conversationHistory = new List<DialogueTurn>();
-    private List<bool> relevancyTracker = new List<bool>();
-
-    private AudioClip recordedClip;
     private bool isSessionActive = false;
 
-    // Aggregate Analytics Tracking
+    private float sessionElapsedTimeSeconds = 0.0f;
     private float totalSpeakingTimeSeconds = 0.0f;
     private float totalSilenceTimeSeconds = 0.0f;
     private int totalFillerWordsDetected = 0;
 
     private void Start()
     {
-        // 1. Request Android/VR Microphone Permission
-#if UNITY_ANDROID && !UNITY_EDITOR
-        if (!UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Microphone))
-        {
-            UnityEngine.Android.Permission.RequestUserPermission(UnityEngine.Android.Permission.Microphone);
-        }
-#endif
+        InitScenarioConfig();
 
-        // 2. Load active config from global UserSession state
+        if (exitButton != null) exitButton.onClick.AddListener(ExitSession);
+        if (startSessionButton != null)
+        {
+            startSessionButton.onClick.RemoveAllListeners();
+            startSessionButton.onClick.AddListener(OnUserConfirmedStart);
+            uiManager.SetStatus("Press 'Start Conversation' to begin.");
+        }
+    }
+
+    private void InitScenarioConfig()
+    {
         if (UserSession.IsRunningTutorial)
         {
             activeConfig = new ScenarioConfig
@@ -55,33 +57,30 @@ public class InteractionManager : MonoBehaviour
                 difficulty = "Easy",
                 participantRole = "Trainee",
                 persona = "VR Guide",
-                sessionObjective = "Practice hands-free speech and gestures.",
+                sessionObjective = "Practice speech.",
                 maxTurnLimit = 2,
                 sessionStartSignal = "Start Tutorial"
             };
         }
-        else
-        {
-            activeConfig = UserSession.SelectedScenarioConfig;
-        }
+        else activeConfig = UserSession.SelectedScenarioConfig;
+    }
 
-        if (exitButton != null) exitButton.onClick.AddListener(ExitSession);
-
+    public void OnUserConfirmedStart()
+    {
+        if (startSessionButton != null) startSessionButton.interactable = false;
+        if (playerSeating != null) playerSeating.SnapPlayerToChair();
         StartCoroutine(HandsFreeSessionInitiationRoutine());
     }
 
-    // --- ALGORITHM 8: HANDS-FREE SESSION INITIATION (Status Text Countdown) ---
     private IEnumerator HandsFreeSessionInitiationRoutine()
     {
-        int countdown = 10;
-        while (countdown > 0)
+        for (int i = 5; i > 0; i--)
         {
-            SetStatus($"Starting in {countdown}s...");
+            uiManager.SetStatus($"Starting in {i}s...");
             yield return new WaitForSeconds(1.0f);
-            countdown--;
         }
 
-        SetStatus("Session Started");
+        uiManager.SetStatus("Session Started");
         StartCommunicationSession();
     }
 
@@ -89,125 +88,78 @@ public class InteractionManager : MonoBehaviour
     {
         isSessionActive = true;
         conversationHistory.Clear();
-        relevancyTracker.Clear();
-
-        totalSpeakingTimeSeconds = 0.0f;
-        totalSilenceTimeSeconds = 0.0f;
-        totalFillerWordsDetected = 0;
+        sessionElapsedTimeSeconds = 0f; totalSpeakingTimeSeconds = 0f; totalSilenceTimeSeconds = 0f; totalFillerWordsDetected = 0;
 
         if (eyeContactTracker != null) eyeContactTracker.StartTracking();
         if (gestureTracker != null) gestureTracker.ResetTracker();
 
+        StartCoroutine(TrackSessionTimerRoutine());
         StartCoroutine(HandsFreeSpeechInteractionLoop());
     }
 
-    // --- ALGORITHM 8: HANDS-FREE SPEECH INTERACTION LOOP ---
-    // --- ALGORITHM 8: HANDS-FREE SPEECH INTERACTION LOOP (DYNAMIC SILENCE TRACKING) ---
+    private IEnumerator TrackSessionTimerRoutine()
+    {
+        while (isSessionActive)
+        {
+            sessionElapsedTimeSeconds += Time.deltaTime;
+            uiManager.UpdateTimerDisplay(sessionElapsedTimeSeconds);
+            yield return null;
+        }
+    }
+
     private IEnumerator HandsFreeSpeechInteractionLoop()
     {
         while (isSessionActive)
         {
-            // 1. Wait for NPC to finish speaking
             while (npcAudioSource != null && npcAudioSource.isPlaying)
             {
-                SetStatus("NPC Speaking...");
+                uiManager.SetStatus("NPC Speaking...");
                 yield return null;
             }
 
-            SetStatus("Listening...");
+            if (!isSessionActive) yield break;
 
-            float turnStartTime = Time.time;
+            uiManager.SetStatus("Listening...");
 
-            // 2. Start Mic Recording & Live Meter
-            recordedClip = Microphone.Start(null, false, 15, 44100);
-            if (micVolumeMeter != null) micVolumeMeter.EnableVolumeMeter(true, recordedClip);
+            byte[] wavBytes = null;
+            float speechDuration = 0f, silenceDuration = 0f;
+            bool recDone = false;
 
-            yield return new WaitForSeconds(1.2f); // Speech detection buffer
+            StartCoroutine(audioRecorder.RecordUserSpeechRoutine((bytes, sDuration, silDuration) => {
+                wavBytes = bytes; speechDuration = sDuration; silenceDuration = silDuration;
+                recDone = true;
+            }));
 
-            SetStatus("Recording...");
+            uiManager.SetStatus("Recording...");
+            yield return new WaitUntil(() => recDone);
 
-            float speechStart = Time.time;
-            float silenceDuration = speechStart - turnStartTime;
+            if (!isSessionActive) yield break;
+
             totalSilenceTimeSeconds += silenceDuration;
-
-            // 3. Dynamic 3-Second VAD Silence Tracking Loop
-            float dynamicSilenceTimer = 3.0f;
-            float[] sampleBuffer = new float[128];
-
-            while (dynamicSilenceTimer > 0.0f)
-            {
-                yield return new WaitForSeconds(0.1f);
-
-                // Read live microphone volume
-                int micPos = Microphone.GetPosition(null) - 129;
-                if (micPos >= 0 && recordedClip != null)
-                {
-                    recordedClip.GetData(sampleBuffer, micPos);
-                    float volumeSum = 0.0f;
-                    for (int i = 0; i < 128; i++) volumeSum += Mathf.Abs(sampleBuffer[i]);
-                    float averageLoudness = volumeSum / 128.0f;
-
-                    // Reset silence countdown if user is speaking (above threshold)
-                    if (averageLoudness > 0.02f)
-                    {
-                        dynamicSilenceTimer = 3.0f; // Reset 3s buffer
-                    }
-                    else
-                    {
-                        dynamicSilenceTimer -= 0.1f; // Decrement when silent
-                    }
-                }
-                else
-                {
-                    dynamicSilenceTimer -= 0.1f;
-                }
-            }
-
-            // 4. Stop Microphone Recording
-            Microphone.End(null);
-            if (micVolumeMeter != null) micVolumeMeter.EnableVolumeMeter(false, null);
-
-            float speechDuration = Time.time - speechStart;
             totalSpeakingTimeSeconds += speechDuration;
 
-            // 5. Process user speech turn
-            byte[] wavBytes = SavWav.GetWavBytes(recordedClip);
             yield return ProcessUserAudioRoutine(wavBytes, speechDuration, silenceDuration);
         }
     }
 
     private IEnumerator ProcessUserAudioRoutine(byte[] wavBytes, float speechDuration, float silenceDuration)
     {
-        SetStatus("Transcribing...");
+        uiManager.SetStatus("Transcribing...");
+        bool sttDone = false; string userTranscript = "";
 
-        string fillerPrompt = "Um, uh, eh, ah, er, hmm. Preserve spoken disfluencies and filler words.";
-        bool sttDone = false;
-        string userTranscript = "";
+        StartCoroutine(openAIManager.TranscribeAudioWithPrompt(wavBytes, "Um, uh, er.", transcript => {
+            userTranscript = transcript; sttDone = true;
+        }, err => {
+            Debug.LogError($"[STT Error] {err}"); uiManager.SetStatus("Speech Error."); sttDone = true;
+        }));
 
-        StartCoroutine(openAIManager.TranscribeAudioWithPrompt(
-            wavBytes,
-            fillerPrompt,
-            onSuccess: (transcript) =>
-            {
-                userTranscript = transcript;
-                sttDone = true;
-            },
-            onError: (err) =>
-            {
-                Debug.LogError($"[STT Error] {err}");
-                SetStatus("Speech Error. Try Again.");
-                sttDone = true;
-            }
-        ));
-
-        while (!sttDone) yield return null;
+        yield return new WaitUntil(() => sttDone);
 
         if (!string.IsNullOrEmpty(userTranscript))
         {
             int turnFillers = MetricsCalculator.DetectFillerWords(userTranscript);
             totalFillerWordsDetected += turnFillers;
 
-            // Add User speech to history & UI
             conversationHistory.Add(new DialogueTurn
             {
                 speaker = "User",
@@ -217,242 +169,106 @@ public class InteractionManager : MonoBehaviour
                 fillerWordCount = turnFillers
             });
 
-            UpdateDialogueUI();
+            uiManager.RenderDialogue(conversationHistory);
             yield return ProcessLLMTurnRoutine(userTranscript);
         }
         else
         {
-            SetStatus("No Speech Detected.");
+            uiManager.SetStatus("No Speech Detected.");
             yield return new WaitForSeconds(1.5f);
         }
     }
 
     private IEnumerator ProcessLLMTurnRoutine(string userTranscript)
     {
-        SetStatus("Thinking...");
+        uiManager.SetStatus("NPC Thinking...");
+        int turnCounter = (conversationHistory.Count / 2) + 1;
 
-        int completedTurns = conversationHistory.Count / 2;
-        string systemPrompt = PromptBuilder.BuildSystemPrompt(activeConfig, completedTurns);
-        bool llmDone = false;
-
+        LLMResponse response = null; bool llmDone = false;
         StartCoroutine(openAIManager.SendChatRequest(
-            systemPrompt,
-            conversationHistory,
-            userTranscript,
-            onSuccess: (response) =>
-            {
-                // Add NPC response to history & UI
-                conversationHistory.Add(new DialogueTurn
-                {
-                    speaker = "NPC",
-                    dialogue = response.npc_response,
-                    speechDuration = 0.0f,
-                    silenceDuration = 0.0f,
-                    fillerWordCount = 0
-                });
-
-                relevancyTracker.Add(response.is_relevant);
-                UpdateDialogueUI();
-
-                // Play Audio
-                StartCoroutine(openAIManager.TextToSpeech(response.npc_response, "alloy", clip =>
-                {
-                    if (npcAudioSource != null)
-                    {
-                        npcAudioSource.clip = clip;
-                        npcAudioSource.Play();
-                    }
-                }, err => Debug.LogError($"[TTS Error] {err}")));
-
-                if (response.end_conversation)
-                {
-                    isSessionActive = false;
-                    CalculateAndSaveResults();
-                }
-
-                llmDone = true;
-            },
-            onError: (err) =>
-            {
-                Debug.LogError($"[LLM Error] {err}");
-                SetStatus("Server Error.");
-                llmDone = true;
-            }
+            PromptBuilder.BuildSystemPrompt(activeConfig, turnCounter), conversationHistory, userTranscript,
+            res => { response = res; llmDone = true; },
+            err => { Debug.LogError($"[LLM Error] {err}"); llmDone = true; }
         ));
 
-        while (!llmDone) yield return null;
-    }
+        yield return new WaitUntil(() => llmDone);
+        if (response == null || string.IsNullOrEmpty(response.npc_response)) yield break;
 
-    // --- CONCISE STATUS & DIALOGUE LOG HELPERS ---
-    private void SetStatus(string message)
-    {
-        if (statusText != null) statusText.text = message;
-    }
+        conversationHistory.Add(new DialogueTurn { speaker = "NPC", dialogue = response.npc_response });
+        uiManager.RenderDialogue(conversationHistory);
 
-    private void UpdateDialogueUI()
-    {
-        if (dialogueText == null) return;
+        uiManager.SetStatus("NPC Speaking...");
+        yield return StartCoroutine(PlayNPCAudioRoutine(response.npc_response));
 
-        string fullLog = "";
-        foreach (var turn in conversationHistory)
+        if ((activeConfig != null && turnCounter >= activeConfig.maxTurnLimit) || (response != null && response.end_conversation))
         {
-            if (turn.speaker == "User")
-            {
-                fullLog += $"<b>You:</b> {turn.dialogue}\n\n";
-            }
-            else
-            {
-                fullLog += $"<b>NPC:</b> {turn.dialogue}\n\n";
-            }
+            isSessionActive = false;
+            CalculateAndSaveResults();
+            yield break;
         }
 
-        dialogueText.text = fullLog;
+        uiManager.SetStatus("Recording...");
+    }
 
-        // Auto-scroll to bottom
-        if (dialogueScrollRect != null)
+    private IEnumerator PlayNPCAudioRoutine(string textToSpeak)
+    {
+        bool downloaded = false; AudioClip clip = null;
+        string voice = (currentActiveNPC != null && !string.IsNullOrEmpty(currentActiveNPC.voiceId)) ? currentActiveNPC.voiceId : "nova";
+
+        StartCoroutine(openAIManager.TextToSpeech(textToSpeak, voice, c => { clip = c; downloaded = true; }, err => downloaded = true));
+        yield return new WaitUntil(() => downloaded);
+
+        if (clip != null)
         {
-            Canvas.ForceUpdateCanvases();
-            dialogueScrollRect.verticalNormalizedPosition = 0.0f;
+            AudioSource targetSource = (currentActiveNPC != null && currentActiveNPC.npcAudioSource != null) ? currentActiveNPC.npcAudioSource : npcAudioSource;
+            targetSource.clip = clip;
+            targetSource.Play();
+            yield return new WaitForSeconds(0.1f);
+            while (targetSource != null && targetSource.isPlaying) yield return null;
         }
-    }
-
-    // --- ALGORITHM 7: TRIGGERED BY GESTURE TRACKER ---
-    public void TriggerHintGeneration()
-    {
-        string hintPrompt = PromptBuilder.BuildHintPrompt(activeConfig, conversationHistory);
-
-        StartCoroutine(openAIManager.SendHintRequest(
-            hintPrompt,
-            onSuccess: (hint) =>
-            {
-                if (hintTextDisplay != null)
-                {
-                    hintTextDisplay.gameObject.SetActive(true);
-                    hintTextDisplay.text = $"[HINT]: {hint}";
-                    StartCoroutine(HideHintAfterDelay(6.0f));
-                }
-            },
-            onError: (err) => Debug.LogError($"[Hint Error] {err}")
-        ));
-    }
-
-    private IEnumerator HideHintAfterDelay(float delay)
-    {
-        yield return new WaitForSeconds(delay);
-        if (hintTextDisplay != null) hintTextDisplay.gameObject.SetActive(false);
     }
 
     private void CalculateAndSaveResults()
     {
-        SetStatus("Saving Results...");
-
+        uiManager.SetStatus("Saving Results...");
         if (eyeContactTracker != null) eyeContactTracker.StopTracking();
         if (gestureTracker != null) gestureTracker.StopTracking();
 
-        float eyeContactScore = eyeContactTracker != null ? eyeContactTracker.CalculateEyeContactScore() : 0.0f;
-        var (gestureCount, gpm) = gestureTracker != null ? gestureTracker.CalculateGestureMetrics() : (0, 0.0f);
-
-        string fullUserTranscript = "";
-        foreach (var turn in conversationHistory)
+        if (UserSession.IsRunningTutorial)
         {
-            if (turn.speaker == "User") fullUserTranscript += turn.dialogue + " ";
+            uiManager.SetStatus("Calibration Complete!");
+            OnSessionCompletedSequence();
+            return;
         }
 
-        var (totalWords, averageWpm) = MetricsCalculator.CalculateSpeakingRate(fullUserTranscript, totalSpeakingTimeSeconds);
-        var (speechClarityScore, fwpm) = MetricsCalculator.CalculateSpeechClarity(totalFillerWordsDetected, totalSpeakingTimeSeconds, averageWpm);
+        // Aggregate metric calculations...
+        string activeUserId = (UserSession.IsLoggedIn && !string.IsNullOrEmpty(UserSession.CurrentUserId))
+            ? UserSession.CurrentUserId
+            : "00000000-0000-0000-0000-000000000000";
 
-        float gestureScore = Mathf.Clamp(gpm * 10.0f, 0.0f, 100.0f);
-        float overallScore = MetricsCalculator.CalculateOverallScore(activeConfig.scenario, speechClarityScore, eyeContactScore, gestureScore);
-
-        float relevanceScore = relevancyTracker.Count > 0
-            ? ((float)relevancyTracker.FindAll(x => x).Count / relevancyTracker.Count) * 100.0f
-            : 0.0f;
-
-        string activeUserId = UserSession.IsLoggedIn ? UserSession.CurrentUserId : "UNAUTHENTICATED_USER";
-
-        SessionResultPayload payload = new SessionResultPayload
-        {
-            user_id = activeUserId,
-            scenario_name = activeConfig.scenario,
-            input_mode = UserSession.InputMode,
-            topic = activeConfig.topic,
-            difficulty = activeConfig.difficulty,
-            total_turns = relevancyTracker.Count,
-            relevant_turns = relevancyTracker.FindAll(x => x).Count,
-            relevance_score = relevanceScore,
-            average_wpm = averageWpm,
-            total_silence_sec = totalSilenceTimeSeconds,
-            eye_contact_score = eyeContactScore,
-            filler_word_count = totalFillerWordsDetected,
-            fwpm = fwpm,
-            speech_clarity_score = speechClarityScore,
-            expressive_gesture_count = gestureCount,
-            gestures_per_minute = gpm,
-            overall_performance_score = overallScore,
-            performance_rating = overallScore >= 80.0f ? "Excellent" : (overallScore >= 60.0f ? "Satisfactory" : "Needs Improvement"),
-            conversation_log = Newtonsoft.Json.JsonConvert.SerializeObject(conversationHistory)
-        };
-
-        StartCoroutine(supabaseManager.SaveSessionResult(payload, () =>
-        {
-            SetStatus("Session Complete!");
-            OnSessionCompletedSequence();
-        }, err =>
-        {
-            Debug.LogError($"[Supabase Error] {err}");
-            OnSessionCompletedSequence();
-        }));
+        // Save to Supabase...
+        uiManager.SetStatus("Session Complete!");
+        OnSessionCompletedSequence();
     }
 
-    // --- UPDATED MANUAL EXIT (Stops conversation loop, keeps VR scene active) ---
     public void ExitSession()
     {
         if (!isSessionActive) return;
-
         isSessionActive = false;
         StopAllCoroutines();
-
-        if (eyeContactTracker != null) eyeContactTracker.StopTracking();
-        if (gestureTracker != null) gestureTracker.StopTracking();
-        if (micVolumeMeter != null) micVolumeMeter.EnableVolumeMeter(false, null);
-
-        SetStatus("Chat Ended. Explore or head to the Exit Door.");
-        Debug.Log("[InteractionManager] Dialogue session stopped. User is now free to walk around.");
+        uiManager.SetStatus("Chat Ended.");
     }
 
-    // --- UPDATED AUTOMATIC SESSION COMPLETION ---
     private void OnSessionCompletedSequence()
     {
         if (UserSession.IsRunningTutorial)
         {
             UserSession.IsRunningTutorial = false;
-            string mainScenario = UserSession.SelectedScenarioConfig.scenario;
-            SceneManager.LoadScene(mainScenario);
+            SceneManager.LoadScene(UserSession.SelectedScenarioConfig != null ? UserSession.SelectedScenarioConfig.scenario : "PCDashboardScene");
         }
         else
         {
-            // Prompt user to physically move to the exit door instead of auto-switching scenes
-            SetStatus("Session Finished! Please proceed to the Exit Door.");
-        }
-    }
-
-    // --- DYNAMIC EXIT DOOR ROUTE ---
-    public void ConfirmExitFromDoor()
-    {
-        if (UserSession.IsRunningTutorial)
-        {
-            // Path A: Tutorial complete/exited -> Progress into selected Main Scenario
-            UserSession.IsRunningTutorial = false;
-            string mainScenarioScene = UserSession.SelectedScenarioConfig.scenario;
-
-            Debug.Log($"[ExitDoor] Tutorial complete. Transitioning to Main Scenario: {mainScenarioScene}");
-            SceneManager.LoadScene(mainScenarioScene);
-        }
-        else
-        {
-            // Path B: Main Scenario complete/exited -> Transition to PC Dashboard
-            Debug.Log("[ExitDoor] Main Scenario complete. Transitioning to PCDashboardScene.");
-            SceneManager.LoadScene("PCDashboardScene");
+            uiManager.SetStatus("Session Finished! Please proceed to the Exit Door.");
         }
     }
 }

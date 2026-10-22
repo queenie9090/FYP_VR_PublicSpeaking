@@ -7,27 +7,23 @@ using UnityEngine.Networking;
 
 public class OpenAIManager : MonoBehaviour
 {
-    private const string WhisperUrl = "https://api.openai.com/v1/audio/transcriptions";
+    private const string DeepgramUrl = "https://api.deepgram.com/v1/listen?model=nova-3&language=en&filler_words=true&smart_format=true";
     private const string ChatUrl = "https://api.openai.com/v1/chat/completions";
     private const string TtsUrl = "https://api.openai.com/v1/audio/speech";
 
     public string ApiKey => ConfigLoader.GetApiKey();
+    public string DeepgramApiKey => ConfigLoader.GetDeepgramApiKey();
 
-    #region Speech-to-Text (Whisper with Filler Word Prompting)
+    #region Speech-to-Text (Deepgram Nova-3 with Verbatim Fillers)
     public IEnumerator TranscribeAudioWithPrompt(byte[] wavData, string initialPrompt, Action<string> onSuccess, Action<string> onError)
     {
-        WWWForm form = new WWWForm();
-        form.AddBinaryData("file", wavData, "audio.wav", "audio/wav");
-        form.AddField("model", "whisper-1");
-
-        if (!string.IsNullOrEmpty(initialPrompt))
+        using (UnityWebRequest www = new UnityWebRequest(DeepgramUrl, "POST"))
         {
-            form.AddField("initial_prompt", initialPrompt);
-        }
+            www.uploadHandler = new UploadHandlerRaw(wavData);
+            www.downloadHandler = new DownloadHandlerBuffer();
+            www.SetRequestHeader("Content-Type", "audio/wav");
+            www.SetRequestHeader("Authorization", "Token " + DeepgramApiKey);
 
-        using (UnityWebRequest www = UnityWebRequest.Post(WhisperUrl, form))
-        {
-            www.SetRequestHeader("Authorization", "Bearer " + ApiKey);
             yield return www.SendWebRequest();
 
             if (www.result != UnityWebRequest.Result.Success)
@@ -36,9 +32,19 @@ public class OpenAIManager : MonoBehaviour
             }
             else
             {
-                string json = www.downloadHandler.text;
-                WhisperResponse response = JsonUtility.FromJson<WhisperResponse>(json);
-                onSuccess?.Invoke(response.text);
+                string rawJson = www.downloadHandler.text;
+                DeepgramResponse res = Newtonsoft.Json.JsonConvert.DeserializeObject<DeepgramResponse>(rawJson);
+
+                if (res != null && res.results != null && res.results.channels != null && res.results.channels.Length > 0)
+                {
+                    string transcript = res.results.channels[0].alternatives[0].transcript;
+                    Debug.Log($"[Deepgram Transcript]: {transcript}");
+                    onSuccess?.Invoke(transcript);
+                }
+                else
+                {
+                    onSuccess?.Invoke("");
+                }
             }
         }
     }
@@ -65,7 +71,7 @@ public class OpenAIManager : MonoBehaviour
 
         var requestBody = new
         {
-            model = "gpt-4o-mini",
+            model = "gpt-6-luna",
             response_format = new { type = "json_object" },
             messages = messages
         };
@@ -107,8 +113,8 @@ public class OpenAIManager : MonoBehaviour
 
         var requestBody = new
         {
-            model = "gpt-4o-mini",
-            response_format = new { type = "json_object" },
+            model = "gpt-6-luna",
+        response_format = new { type = "json_object" },
             messages = messages
         };
 
@@ -177,10 +183,35 @@ public class OpenAIManager : MonoBehaviour
     #endregion
 
     #region Helper Classes
-    [Serializable] private class WhisperResponse { public string text; }
     private class ChatCompletionResponse { public List<Choice> choices; }
     private class Choice { public Message message; }
     private class Message { public string content; }
     [Serializable] private class HintResponse { public string hint; }
+
+    // Deepgram Deserialization Structures
+    [Serializable]
+    public class DeepgramResponse
+    {
+        public DeepgramResults results;
+    }
+
+    [Serializable]
+    public class DeepgramResults
+    {
+        public DeepgramChannel[] channels;
+    }
+
+    [Serializable]
+    public class DeepgramChannel
+    {
+        public DeepgramAlternative[] alternatives;
+    }
+
+    [Serializable]
+    public class DeepgramAlternative
+    {
+        public string transcript;
+        public float confidence;
+    }
     #endregion
 }
