@@ -26,11 +26,12 @@ public class PCDashboardController : MonoBehaviour
     [SerializeField] private Image speechClarityProgressBar;
     [SerializeField] private TMP_Text wpmText;
     [SerializeField] private TMP_Text fillerWordCountText;
-    [SerializeField] private TMP_Text silenceDurationText; // Displays total silence time
+    [SerializeField] private TMP_Text silenceDurationText;
 
     [Header("Eye Contact Breakdown")]
     [SerializeField] private TMP_Text eyeContactScoreText;
     [SerializeField] private Image eyeContactProgressBar;
+    [SerializeField] private TMP_Text eyeContactStatusText; // Newly added status field
 
     [Header("Gesture Breakdown")]
     [SerializeField] private TMP_Text gestureScoreText;
@@ -41,29 +42,57 @@ public class PCDashboardController : MonoBehaviour
     [SerializeField] private TMP_Text aiFeedbackText;
     [SerializeField] private TMP_Text conversationLogText;
 
-    [Header("Scroll View Layout Containers")]
-    [SerializeField] private RectTransform mainDashboardContentTransform; // Content Transform of the Main ScrollView
-    [SerializeField] private RectTransform conversationLogContentTransform; // Content Transform of the Log ScrollView
+    [Header("Scroll View Container")]
+    [SerializeField] private RectTransform dashboardContentTransform;
+
+    [Header("Export Action Buttons")]
+    [SerializeField] private Button exportPdfButton;
+    [SerializeField] private Button exportCsvButton;
+    [SerializeField] private Button exportJsonButton;
 
     [Header("Navigation")]
     [SerializeField] private Button backToMenuButton;
+
+    private NormalizedSessionData cachedCurrentSession;
 
     private void Start()
     {
         if (backToMenuButton != null)
             backToMenuButton.onClick.AddListener(() => SceneManager.LoadScene("MainMenu"));
 
+        if (exportCsvButton != null)
+            exportCsvButton.onClick.AddListener(OnExportCSVClicked);
+
+        if (exportJsonButton != null)
+            exportJsonButton.onClick.AddListener(OnExportJSONClicked);
+
+        if (exportPdfButton != null)
+            exportPdfButton.onClick.AddListener(OnExportPDFClicked);
+
         FetchAndDisplayLatestSession();
     }
 
     private void FetchAndDisplayLatestSession()
     {
+        // 1. Check if user navigated here from Main Menu History
+        if (UserSession.CurrentSessionData != null)
+        {
+            cachedCurrentSession = UserSession.CurrentSessionData;
+            PopulateDashboard(cachedCurrentSession);
+
+            // Reset payload so subsequent visits load default behavior
+            UserSession.CurrentSessionData = null;
+            return;
+        }
+
+        // 2. Otherwise, load the latest session from Supabase
         string userId = UserSession.IsLoggedIn ? UserSession.CurrentUserId : "UNAUTHENTICATED_USER";
 
         StartCoroutine(supabaseManager.GetLatestNormalizedSession(userId, (data) =>
         {
             if (data != null && data.performance_metric != null && data.performance_metric.Count > 0)
             {
+                cachedCurrentSession = data;
                 PopulateDashboard(data);
             }
             else
@@ -80,14 +109,18 @@ public class PCDashboardController : MonoBehaviour
     {
         PerformanceMetricRecord metric = data.performance_metric[0];
 
-        // 1. Header Metadata
+        // 1. Header Metadata (Fixed data.duration_seconds reference)
         if (reportTitleText != null)
             reportTitleText.text = $"{data.scenario_type} Evaluation Report";
 
         if (sessionMetaText != null)
-            sessionMetaText.text = $"Topic: {data.scenario_topic} | Difficulty: {data.difficulty_level} | Mode: {data.input_mode_used}";
+        {
+            float talkTime = data.duration_seconds > 0 ? data.duration_seconds : 0f;
+            sessionMetaText.text = $"Topic: {data.scenario_topic} | Difficulty: {data.difficulty_level} | Mode: {data.input_mode_used}\n" +
+                                   $"Date: {System.DateTime.Now:MMM dd, yyyy} | Duration: {talkTime:F0}s";
+        }
 
-        // 2. Animate Hero Donut Gauge Chart
+        // 2. Donut Gauge Chart
         string rating = metric.overall_score >= 80.0f ? "Excellent" : (metric.overall_score >= 60.0f ? "Satisfactory" : "Needs Improvement");
         if (overallGaugeChart != null)
         {
@@ -96,21 +129,35 @@ public class PCDashboardController : MonoBehaviour
 
         SetScenarioWeightsSubtext(data.scenario_type);
 
-        // 3. Populate Metric Progress Bars
+        // 3. Speech Clarity Breakdown
         if (speechClarityScoreText != null) speechClarityScoreText.text = $"{metric.speech_clarity_score:F0}%";
         if (speechClarityProgressBar != null) speechClarityProgressBar.fillAmount = metric.speech_clarity_score / 100.0f;
-        if (wpmText != null) wpmText.text = $"WPM: {metric.average_wpm:F0}";
+
+        string paceBadge = metric.average_wpm < 110f ? "<color=#FF8A65>(Slow - Target: 110-150)</color>" :
+                         (metric.average_wpm > 160f ? "<color=#FF8A65>(Fast - Target: 110-150)</color>" : "<color=#81C784>(Optimal Pace)</color>");
+        if (wpmText != null) wpmText.text = $"WPM: {metric.average_wpm:F0} {paceBadge}";
+
         if (fillerWordCountText != null) fillerWordCountText.text = $"FWC: {metric.filler_word_count}";
         if (silenceDurationText != null) silenceDurationText.text = $"Silence: {metric.total_silence_seconds:F1}s";
 
+        // 4. Eye Contact Breakdown
         if (eyeContactScoreText != null) eyeContactScoreText.text = $"{metric.eye_contact_pct:F0}%";
         if (eyeContactProgressBar != null) eyeContactProgressBar.fillAmount = metric.eye_contact_pct / 100.0f;
 
+        if (eyeContactStatusText != null)
+        {
+            eyeContactStatusText.text = metric.eye_contact_pct >= 70.0f
+                ? "<color=#81C784>(Target Reached >= 70%)</color>"
+                : "<color=#FF8A65>(Below Target < 70%)</color>";
+        }
+
+        // 5. Gesture Breakdown
+        string gestureBadge = metric.gestures_per_minute >= 3.0f ? "<color=#81C784>(Active Expression)</color>" : "<color=#FF8A65>(Low Expression)</color>";
         if (gestureScoreText != null) gestureScoreText.text = $"{metric.hand_gesture_score:F0}%";
-        if (gpmText != null) gpmText.text = $"Rate: {metric.gestures_per_minute:F1} GPM";
+        if (gpmText != null) gpmText.text = $"Rate: {metric.gestures_per_minute:F1} GPM {gestureBadge}";
         if (gestureProgressBar != null) gestureProgressBar.fillAmount = metric.hand_gesture_score / 100.0f;
 
-        // 4. Populate Timeline Chart (Using precise turn duration)
+        // 6. Timeline Chart
         if (timelineChart != null && data.dialogue_turn != null && data.dialogue_turn.Count > 0)
         {
             List<float> turnScores = new List<float>();
@@ -129,7 +176,7 @@ public class PCDashboardController : MonoBehaviour
             timelineChart.PopulateTimeline(turnScores);
         }
 
-        // 5. Populate AI Feedback Highlights
+        // 7. AI Feedback Summary
         if (aiFeedbackText != null)
         {
             aiFeedbackText.text = string.IsNullOrEmpty(metric.ai_feedback_summary)
@@ -137,19 +184,20 @@ public class PCDashboardController : MonoBehaviour
                 : metric.ai_feedback_summary;
         }
 
-        // 6. Populate Dialogue Log UI
+        // 8. Dialogue Log
         PopulateConversationLog(data.dialogue_turn);
 
-        // 7. Force ScrollView Layout Rebuilds
-        RefreshScrollViewLayout(conversationLogContentTransform);
-        RefreshScrollViewLayout(mainDashboardContentTransform);
+        // 9. Layout Rebuild
+        RefreshScrollViewLayout(dashboardContentTransform);
     }
 
     private void SetScenarioWeightsSubtext(string scenario)
     {
         if (scenarioWeightsSubtext == null) return;
 
-        switch (scenario)
+        string cleanScenario = string.IsNullOrEmpty(scenario) ? "" : scenario.Replace("Scene", "").Trim();
+
+        switch (cleanScenario)
         {
             case "Hall":
             case "Stage Venue":
@@ -161,6 +209,7 @@ public class PCDashboardController : MonoBehaviour
                 break;
             case "Cafeteria":
             case "Interview":
+            case "Normal Conversation":
             default:
                 scenarioWeightsSubtext.text = "Weights: Clarity (50%)\nEye Contact (30%)\nGestures (20%)";
                 break;
@@ -169,24 +218,25 @@ public class PCDashboardController : MonoBehaviour
 
     private string GenerateAIFeedback(PerformanceMetricRecord metric)
     {
-        string feedback = $"<b>Performance Highlights:</b>\n";
+        StringBuilder sb = new StringBuilder();
+        sb.AppendLine("<b>Performance Highlights:</b>");
 
         if (metric.speech_clarity_score >= 80.0f)
-            feedback += "• Excellent spoken articulation with minimal disfluency.\n";
+            sb.AppendLine("• <color=#81C784>Speech:</color> Excellent articulation with minimal disfluency.");
         else
-            feedback += "• Work on reducing filler words ('um', 'uh') during speech pauses.\n";
+            sb.AppendLine("• <color=#FF8A65>Speech:</color> Work on replacing filler words ('um', 'uh') with intentional pauses.");
 
         if (metric.eye_contact_pct >= 70.0f)
-            feedback += "• Maintained strong visual engagement with the evaluator.\n";
+            sb.AppendLine("• <color=#81C784>Gaze:</color> Maintained strong visual engagement with the evaluator.");
         else
-            feedback += "• Practice keeping direct eye gaze on the speaker's face.\n";
+            sb.AppendLine("• <color=#FF8A65>Gaze:</color> Practice keeping direct eye gaze on the speaker's face.");
 
         if (metric.gestures_per_minute >= 3.0f)
-            feedback += "• Dynamic non-verbal hand expressions reinforced key dialogue points.";
+            sb.AppendLine("• <color=#81C784>Gestures:</color> Dynamic hand expressions reinforced key dialogue points.");
         else
-            feedback += "• Incorporate more open hand gestures to improve non-verbal engagement.";
+            sb.AppendLine("• <color=#FF8A65>Gestures:</color> Incorporate more open hand gestures to improve non-verbal engagement.");
 
-        return feedback;
+        return sb.ToString();
     }
 
     private void PopulateConversationLog(List<DialogueTurnRecord> turns)
@@ -221,5 +271,24 @@ public class PCDashboardController : MonoBehaviour
             Canvas.ForceUpdateCanvases();
             LayoutRebuilder.ForceRebuildLayoutImmediate(contentRect);
         }
+    }
+
+    // --- EXPORT HANDLERS ---
+    private void OnExportCSVClicked()
+    {
+        if (cachedCurrentSession != null)
+            DataExporter.ExportToCSV(cachedCurrentSession);
+    }
+
+    private void OnExportJSONClicked()
+    {
+        if (cachedCurrentSession != null)
+            DataExporter.ExportToJSON(cachedCurrentSession);
+    }
+
+    private void OnExportPDFClicked()
+    {
+        if (cachedCurrentSession != null)
+            DataExporter.ExportToPDFReport(cachedCurrentSession);
     }
 }

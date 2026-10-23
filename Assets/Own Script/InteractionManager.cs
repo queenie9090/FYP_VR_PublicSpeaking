@@ -341,7 +341,10 @@ public class InteractionManager : MonoBehaviour
         var (clarityScore, fwpm) = MetricsCalculator.CalculateSpeechClarity(totalFillerWordsDetected, totalSpeakingTimeSeconds, overallWpm);
         float gestureScore = Mathf.Clamp(expressiveGestureCount * 10.0f, 0.0f, 100.0f);
 
-        string currentScenario = activeConfig != null ? activeConfig.scenario : "Normal Conversation";
+        // Clean the scene name (e.g. "CafeteriaScene" -> "Cafeteria") so it matches scenario weights
+        string rawScenario = activeConfig != null ? activeConfig.scenario : "Normal Conversation";
+        string currentScenario = rawScenario.Replace("Scene", "").Trim();
+
         float overallScore = MetricsCalculator.CalculateOverallScore(currentScenario, clarityScore, eyeContactPct, gestureScore);
 
         string activeUserId = UserSession.IsLoggedIn ? UserSession.CurrentUserId : "00000000-0000-0000-0000-000000000000";
