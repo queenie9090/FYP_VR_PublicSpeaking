@@ -92,54 +92,52 @@ public static class MetricsCalculator
     /// Computes the weighted composite score based on the selected scenario type.
     /// </summary>
     public static float CalculateOverallScore(
-        string scenarioType,
-        float speechClarityScore,
-        float eyeContactScore,
-        float gestureScore)
+    string scenarioType,
+    float speechClarityScore,
+    float eyeContactScore,
+    float gestureScore)
     {
         float wClarity = 0.40f;
         float wEye = 0.30f;
         float wGesture = 0.30f;
 
-        // Retrieve scenario-specific weightings as defined in Algorithm 9
-        switch (scenarioType)
+        // Remove "Scene", spaces, and make lowercase for foolproof matching
+        string cleanScenario = string.IsNullOrEmpty(scenarioType)
+            ? ""
+            : scenarioType.Replace("Scene", "").Replace(" ", "").Trim().ToLower();
+
+        switch (cleanScenario)
         {
-            case "Hall":
-            case "Stage Venue":
-            case "StageVenue":
+            case "hall":
+            case "stagevenue":
                 wClarity = 0.40f;
                 wEye = 0.20f;
                 wGesture = 0.40f;
                 break;
 
-            case "Cafeteria":
-            case "Interview":
+            case "cafeteria":
+            case "interview":
+            case "normalconversation":
                 wClarity = 0.50f;
                 wEye = 0.30f;
                 wGesture = 0.20f;
                 break;
 
-            case "Classroom":
+            case "classroom":
                 wClarity = 0.40f;
                 wEye = 0.40f;
                 wGesture = 0.20f;
                 break;
 
             default:
-                Debug.LogWarning($"[MetricsCalculator] Unrecognized scenario type '{scenarioType}'. Applying standard balanced weighting.");
+                Debug.LogWarning($"[MetricsCalculator] Unrecognized scenario '{scenarioType}'. Applying default 40/30/30 weighting.");
                 wClarity = 0.40f;
                 wEye = 0.30f;
                 wGesture = 0.30f;
                 break;
         }
 
-        float weightedClarity = wClarity * speechClarityScore;
-        float weightedEyeContact = wEye * eyeContactScore;
-        float weightedGesture = wGesture * gestureScore;
-
-        float rawCompositeScore = weightedClarity + weightedEyeContact + weightedGesture;
-        float overallPerformanceScore = (float)Math.Round(rawCompositeScore);
-
-        return Math.Clamp(overallPerformanceScore, 0.0f, 100.0f);
+        float rawCompositeScore = (wClarity * speechClarityScore) + (wEye * eyeContactScore) + (wGesture * gestureScore);
+        return Math.Clamp((float)Math.Round(rawCompositeScore), 0.0f, 100.0f);
     }
 }
