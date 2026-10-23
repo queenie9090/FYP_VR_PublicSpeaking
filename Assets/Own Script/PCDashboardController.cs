@@ -26,6 +26,7 @@ public class PCDashboardController : MonoBehaviour
     [SerializeField] private Image speechClarityProgressBar;
     [SerializeField] private TMP_Text wpmText;
     [SerializeField] private TMP_Text fillerWordCountText;
+    [SerializeField] private TMP_Text silenceDurationText; // Displays total silence time
 
     [Header("Eye Contact Breakdown")]
     [SerializeField] private TMP_Text eyeContactScoreText;
@@ -38,7 +39,11 @@ public class PCDashboardController : MonoBehaviour
 
     [Header("AI Feedback & Conversation Log")]
     [SerializeField] private TMP_Text aiFeedbackText;
-    [SerializeField] private TMP_Text conversationLogText; // Single Text Mesh Pro element for zero layout bugs
+    [SerializeField] private TMP_Text conversationLogText;
+
+    [Header("Scroll View Layout Containers")]
+    [SerializeField] private RectTransform mainDashboardContentTransform; // Content Transform of the Main ScrollView
+    [SerializeField] private RectTransform conversationLogContentTransform; // Content Transform of the Log ScrollView
 
     [Header("Navigation")]
     [SerializeField] private Button backToMenuButton;
@@ -46,7 +51,7 @@ public class PCDashboardController : MonoBehaviour
     private void Start()
     {
         if (backToMenuButton != null)
-            backToMenuButton.onClick.AddListener(() => SceneManager.LoadScene("MainMenuScene"));
+            backToMenuButton.onClick.AddListener(() => SceneManager.LoadScene("MainMenu"));
 
         FetchAndDisplayLatestSession();
     }
@@ -96,6 +101,7 @@ public class PCDashboardController : MonoBehaviour
         if (speechClarityProgressBar != null) speechClarityProgressBar.fillAmount = metric.speech_clarity_score / 100.0f;
         if (wpmText != null) wpmText.text = $"WPM: {metric.average_wpm:F0}";
         if (fillerWordCountText != null) fillerWordCountText.text = $"FWC: {metric.filler_word_count}";
+        if (silenceDurationText != null) silenceDurationText.text = $"Silence: {metric.total_silence_seconds:F1}s";
 
         if (eyeContactScoreText != null) eyeContactScoreText.text = $"{metric.eye_contact_pct:F0}%";
         if (eyeContactProgressBar != null) eyeContactProgressBar.fillAmount = metric.eye_contact_pct / 100.0f;
@@ -104,13 +110,20 @@ public class PCDashboardController : MonoBehaviour
         if (gpmText != null) gpmText.text = $"Rate: {metric.gestures_per_minute:F1} GPM";
         if (gestureProgressBar != null) gestureProgressBar.fillAmount = metric.hand_gesture_score / 100.0f;
 
-        // 4. Populate Timeline Chart
+        // 4. Populate Timeline Chart (Using precise turn duration)
         if (timelineChart != null && data.dialogue_turn != null && data.dialogue_turn.Count > 0)
         {
             List<float> turnScores = new List<float>();
             foreach (var turn in data.dialogue_turn)
             {
-                float turnClarity = Mathf.Clamp(100.0f - (turn.filler_word_count * 15.0f), 20.0f, 100.0f);
+                int turnWords = string.IsNullOrEmpty(turn.user_transcript) ? 0 : turn.user_transcript.Split(new[] { ' ', '\t', '\n' }, System.StringSplitOptions.RemoveEmptyEntries).Length;
+                float speakingDurationSec = turn.speaking_rate_wpm > 0 ? (turnWords / turn.speaking_rate_wpm) * 60.0f : 1.0f;
+
+                var (turnClarity, _) = MetricsCalculator.CalculateSpeechClarity(
+                    turn.filler_word_count,
+                    speakingDurationSec,
+                    turn.speaking_rate_wpm
+                );
                 turnScores.Add(turnClarity);
             }
             timelineChart.PopulateTimeline(turnScores);
@@ -126,6 +139,10 @@ public class PCDashboardController : MonoBehaviour
 
         // 6. Populate Dialogue Log UI
         PopulateConversationLog(data.dialogue_turn);
+
+        // 7. Force ScrollView Layout Rebuilds
+        RefreshScrollViewLayout(conversationLogContentTransform);
+        RefreshScrollViewLayout(mainDashboardContentTransform);
     }
 
     private void SetScenarioWeightsSubtext(string scenario)
@@ -135,6 +152,8 @@ public class PCDashboardController : MonoBehaviour
         switch (scenario)
         {
             case "Hall":
+            case "Stage Venue":
+            case "StageVenue":
                 scenarioWeightsSubtext.text = "Weights: Clarity (40%)\nEye Contact (20%)\nGestures (40%)";
                 break;
             case "Classroom":
@@ -142,7 +161,6 @@ public class PCDashboardController : MonoBehaviour
                 break;
             case "Cafeteria":
             case "Interview":
-            case "Normal Conversation":
             default:
                 scenarioWeightsSubtext.text = "Weights: Clarity (50%)\nEye Contact (30%)\nGestures (20%)";
                 break;
@@ -194,5 +212,14 @@ public class PCDashboardController : MonoBehaviour
         }
 
         conversationLogText.text = sb.ToString();
+    }
+
+    private void RefreshScrollViewLayout(RectTransform contentRect)
+    {
+        if (contentRect != null)
+        {
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(contentRect);
+        }
     }
 }

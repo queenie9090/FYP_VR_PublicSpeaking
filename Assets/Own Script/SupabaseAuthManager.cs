@@ -101,8 +101,8 @@ public class SupabaseAuthManager : MonoBehaviour
         catch (Exception ex)
         {
             IsReady = false;
-            SetStatus("Could not initialize Supabase.", isSignUp: false);
-            SetStatus("Could not initialize Supabase.", isSignUp: true);
+            SetStatus("Could not initialize authentication service.", isSignUp: false);
+            SetStatus("Could not initialize authentication service.", isSignUp: true);
             Debug.LogError("[Auth] Supabase initialization error: " + ex);
         }
     }
@@ -167,13 +167,14 @@ public class SupabaseAuthManager : MonoBehaviour
             }
             else
             {
-                SetStatus("No active session returned.", isSignUp: false, isError: true);
+                SetStatus("Login failed. No active session returned.", isSignUp: false, isError: true);
             }
         }
         catch (Exception ex)
         {
             Debug.LogWarning("[Auth] Login failed: " + ex.Message);
-            SetStatus("User not found or incorrect password.", isSignUp: false, isError: true);
+            string friendlyError = FormatAuthError(ex.Message, isSignUp: false);
+            SetStatus(friendlyError, isSignUp: false, isError: true);
         }
         finally
         {
@@ -209,14 +210,15 @@ public class SupabaseAuthManager : MonoBehaviour
             }
             else
             {
-                SetStatus("Account created! Please log in.", isSignUp: false, isError: false);
+                SetStatus("Account created! Please check your email to confirm.", isSignUp: false, isError: false);
                 ShowLoginPanel();
             }
         }
         catch (Exception ex)
         {
             Debug.LogWarning("[Auth] Sign-up failed: " + ex.Message);
-            SetStatus("Sign-up failed: " + ex.Message, isSignUp: true, isError: true);
+            string friendlyError = FormatAuthError(ex.Message, isSignUp: true);
+            SetStatus(friendlyError, isSignUp: true, isError: true);
         }
         finally
         {
@@ -303,7 +305,8 @@ public class SupabaseAuthManager : MonoBehaviour
         catch (Exception ex)
         {
             Debug.LogWarning("[Auth] Google Sign-In failed: " + ex.Message);
-            SetStatus("Google Sign-In failed.", isFromSignUp, isError: true);
+            string friendlyError = FormatAuthError(ex.Message, isFromSignUp, isOAuth: true);
+            SetStatus(friendlyError, isFromSignUp, isError: true);
         }
         finally
         {
@@ -423,7 +426,7 @@ public class SupabaseAuthManager : MonoBehaviour
     {
         if (!IsReady || Client == null)
         {
-            SetStatus("Connecting to Supabase...", isSignUp, isError: true);
+            SetStatus("Connecting to authentication service...", isSignUp, isError: true);
             return false;
         }
         return !isBusy;
@@ -433,12 +436,12 @@ public class SupabaseAuthManager : MonoBehaviour
     {
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
         {
-            SetStatus("Enter both email and password.", isSignUp, isError: true);
+            SetStatus("Please enter both email and password.", isSignUp, isError: true);
             return false;
         }
-        if (!email.Contains("@"))
+        if (!email.Contains("@") || !email.Contains("."))
         {
-            SetStatus("Enter a valid email address.", isSignUp, isError: true);
+            SetStatus("Please enter a valid email address.", isSignUp, isError: true);
             return false;
         }
         if (password.Length < 6)
@@ -447,6 +450,39 @@ public class SupabaseAuthManager : MonoBehaviour
             return false;
         }
         return true;
+    }
+
+    /// <summary>
+    /// Parses raw exception messages into user-friendly status text.
+    /// </summary>
+    private string FormatAuthError(string rawMessage, bool isSignUp, bool isOAuth = false)
+    {
+        if (string.IsNullOrEmpty(rawMessage)) return "An unexpected error occurred.";
+
+        string msg = rawMessage.ToLower();
+
+        if (isOAuth)
+        {
+            if (msg.Contains("access_denied") || msg.Contains("cancelled") || msg.Contains("canceled"))
+                return "Google sign-in was cancelled.";
+            if (msg.Contains("listener") || msg.Contains("port") || msg.Contains("prefix"))
+                return "Browser redirect failed. Please try again.";
+            return "Google sign-in failed. Please try again.";
+        }
+
+        // Common Supabase/GoTrue error mappings
+        if (msg.Contains("already registered") || msg.Contains("already exists") || msg.Contains("422"))
+            return "An account with this email already exists.";
+        if (msg.Contains("invalid login credentials") || msg.Contains("invalid_grant") || msg.Contains("400"))
+            return "Incorrect email or password.";
+        if (msg.Contains("email not confirmed"))
+            return "Please check your inbox to confirm your email before logging in.";
+        if (msg.Contains("rate limit") || msg.Contains("too many requests") || msg.Contains("429"))
+            return "Too many attempts. Please wait a moment and try again.";
+        if (msg.Contains("network") || msg.Contains("unable to resolve host") || msg.Contains("timed out"))
+            return "Network connection issue. Check your internet connection.";
+
+        return isSignUp ? "Sign-up failed. Please check your details." : "Login failed. Please check your credentials.";
     }
 
     private void SetStatus(string message, bool isSignUp, bool isError = true)
