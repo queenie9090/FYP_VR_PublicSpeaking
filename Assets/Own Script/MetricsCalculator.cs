@@ -101,16 +101,18 @@ public static class MetricsCalculator
         float wEye = 0.30f;
         float wGesture = 0.30f;
 
-        // Retrieve scenario-specific weightings
+        // Retrieve scenario-specific weightings as defined in Algorithm 9
         switch (scenarioType)
         {
             case "Hall":
+            case "Stage Venue":
+            case "StageVenue":
                 wClarity = 0.40f;
                 wEye = 0.20f;
                 wGesture = 0.40f;
                 break;
 
-            case "Normal Conversation":
+            case "Cafeteria":
             case "Interview":
                 wClarity = 0.50f;
                 wEye = 0.30f;

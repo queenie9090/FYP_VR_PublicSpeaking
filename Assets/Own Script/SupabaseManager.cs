@@ -28,6 +28,7 @@ public class SupabaseManager : MonoBehaviour
         float wpm,
         int totalFillers,
         float gpm,
+        float totalSilenceSeconds, // <-- ADDED SILENCE PARAMETER
         string feedbackSummary,
         List<DialogueTurnRecord> dialogueTurns,
         Action onSuccess,
@@ -95,6 +96,7 @@ public class SupabaseManager : MonoBehaviour
             average_wpm = wpm,
             filler_word_count = totalFillers,
             gestures_per_minute = gpm,
+            total_silence_seconds = totalSilenceSeconds, // <-- MAPPED TO SUPABASE COLUMN
             ai_feedback_summary = feedbackSummary
         };
 
@@ -125,7 +127,8 @@ public class SupabaseManager : MonoBehaviour
                     user_transcript = dialogueTurns[i].user_transcript,
                     ai_response_text = dialogueTurns[i].ai_response_text,
                     filler_word_count = dialogueTurns[i].filler_word_count,
-                    speaking_rate_wpm = dialogueTurns[i].speaking_rate_wpm
+                    speaking_rate_wpm = dialogueTurns[i].speaking_rate_wpm,
+                    silence_duration_seconds = dialogueTurns[i].silence_duration_seconds // <-- MAPPED TO SUPABASE COLUMN
                 });
             }
 
@@ -170,10 +173,8 @@ public class SupabaseManager : MonoBehaviour
             {
                 string jsonText = www.downloadHandler.text != null ? www.downloadHandler.text.Trim() : "";
 
-                // LOG RAW SUPABASE RESPONSE
                 Debug.Log($"[Supabase Raw Dashboard Response for UserId '{userId}']: {jsonText}");
 
-                // Safely handle empty database responses or JSON object error responses
                 if (string.IsNullOrEmpty(jsonText) || jsonText == "[]" || jsonText.StartsWith("{"))
                 {
                     Debug.LogWarning("[SupabaseManager] No session data array found for user. Returning null.");
