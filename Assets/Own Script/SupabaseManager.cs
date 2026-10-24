@@ -262,6 +262,55 @@ public class SupabaseManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Fetches all participant session records across all users for educator cohort analysis.
+    /// </summary>
+    public IEnumerator GetAllCohortNormalizedSessions(Action<List<NormalizedSessionData>> onSuccess, Action<string> onError)
+    {
+        string supabaseUrl = ConfigLoader.GetSupabaseUrl().Trim();
+        string supabaseApiKey = ConfigLoader.GetSupabaseAnonKey().Trim();
+
+        // Select all sessions and join performance_metric + dialogue_turn tables
+        string rawSelect = "*,performance_metric(*),dialogue_turn(*)";
+        string encodedSelect = UnityWebRequest.EscapeURL(rawSelect);
+
+        string endpoint = $"{supabaseUrl}/rest/v1/session?select={encodedSelect}&order=start_time.desc";
+
+        using (UnityWebRequest request = UnityWebRequest.Get(endpoint))
+        {
+            request.SetRequestHeader("apikey", supabaseApiKey);
+            request.SetRequestHeader("Authorization", $"Bearer {supabaseApiKey}");
+            request.SetRequestHeader("Accept", "application/json");
+
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                string jsonResponse = request.downloadHandler.text != null ? request.downloadHandler.text.Trim() : "";
+
+                if (string.IsNullOrEmpty(jsonResponse) || jsonResponse == "[]")
+                {
+                    onSuccess?.Invoke(new List<NormalizedSessionData>());
+                    yield break;
+                }
+
+                try
+                {
+                    List<NormalizedSessionData> sessions = JsonConvert.DeserializeObject<List<NormalizedSessionData>>(jsonResponse);
+                    onSuccess?.Invoke(sessions ?? new List<NormalizedSessionData>());
+                }
+                catch (Exception ex)
+                {
+                    onError?.Invoke("JSON Deserialization Error: " + ex.Message);
+                }
+            }
+            else
+            {
+                onError?.Invoke($"[HTTP {request.responseCode}] {request.error} | {request.downloadHandler?.text}");
+            }
+        }
+    }
+
     private UnityWebRequest CreatePostRequest(string url, string jsonBody, string apiKey)
     {
         UnityWebRequest www = new UnityWebRequest(url, "POST");

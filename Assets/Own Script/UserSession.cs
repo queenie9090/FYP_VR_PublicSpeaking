@@ -3,9 +3,12 @@ public static class UserSession
     public static string CurrentUserId { get; set; }
     public static string CurrentUserEmail { get; set; }
 
+    // Add this role property
+    public static string UserRole { get; set; } = "student"; // Defaults to student
+
     // Configured scenario parameters from Setup UI
     public static ScenarioConfig SelectedScenarioConfig { get; set; } = new ScenarioConfig();
-    public static string InputMode { get; set; } = "Hands-Tracking";
+    public static string InputMode { get; set; } = "Hands-Free";
 
     // Session control flags
     public static bool IsRunningTutorial { get; set; } = false;
@@ -14,6 +17,7 @@ public static class UserSession
     public static NormalizedSessionData CurrentSessionData { get; set; }
 
     public static bool IsLoggedIn => !string.IsNullOrEmpty(CurrentUserId);
+    public static bool IsEducator => UserRole?.ToLower() == "educator";
 }
 
 //public static class UserSession
