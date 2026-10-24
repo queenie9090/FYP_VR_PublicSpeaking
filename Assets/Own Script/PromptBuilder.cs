@@ -102,14 +102,14 @@ RECENT CONVERSATION HISTORY:
 HINT GENERATION INSTRUCTIONS:
 - Generate one concise and contextually relevant hint based on the current conversation state.
 - Provide a complete sample script that the participant can use as a guide.
-- Format: ""Try explaining [relevant response direction]. Example Script: '[complete sample response]""
+- Format: ""Try explaining [relevant response direction]. Example Script: '[complete sample response]'""
 - Do not use placeholders, fill-in-the-blanks, or keywords.
 - Do not generate NPC dialogue or ask questions.
 
 OUTPUT FORMAT:
 Return ONLY a valid JSON object:
 {{
-  ""hint"": ""string""
+  ""npc_response"": ""string""
 }}";
     }
 }

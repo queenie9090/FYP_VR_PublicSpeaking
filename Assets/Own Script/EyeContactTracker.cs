@@ -37,6 +37,7 @@ public class EyeContactTracker : MonoBehaviour
         Debug.Log("[EyeContactTracker] Gaze sampling started.");
     }
 
+
     // Call when ending a VR session
     public void StopTracking()
     {

@@ -28,6 +28,7 @@ public class SupabaseManager : MonoBehaviour
         float wpm,
         int totalFillers,
         float gpm,
+        float totalSilenceSeconds,
         string feedbackSummary,
         List<DialogueTurnRecord> dialogueTurns,
         Action onSuccess,
@@ -49,9 +50,9 @@ public class SupabaseManager : MonoBehaviour
             scenario_topic = topic,
             difficulty_level = difficulty,
             input_mode_used = inputMode,
-            start_time = startTime,            // Maps to timestamptz column in session table
-            end_time = endTime,                // Maps to timestamptz column in session table
-            duration_seconds = durationSeconds // Maps to float8 column in session table
+            start_time = startTime,
+            end_time = endTime,
+            duration_seconds = durationSeconds
         };
 
         string sessionJson = JsonConvert.SerializeObject(sessionPayload);
@@ -95,6 +96,7 @@ public class SupabaseManager : MonoBehaviour
             average_wpm = wpm,
             filler_word_count = totalFillers,
             gestures_per_minute = gpm,
+            total_silence_seconds = totalSilenceSeconds,
             ai_feedback_summary = feedbackSummary
         };
 
@@ -125,7 +127,8 @@ public class SupabaseManager : MonoBehaviour
                     user_transcript = dialogueTurns[i].user_transcript,
                     ai_response_text = dialogueTurns[i].ai_response_text,
                     filler_word_count = dialogueTurns[i].filler_word_count,
-                    speaking_rate_wpm = dialogueTurns[i].speaking_rate_wpm
+                    speaking_rate_wpm = dialogueTurns[i].speaking_rate_wpm,
+                    silence_duration_seconds = dialogueTurns[i].silence_duration_seconds
                 });
             }
 
@@ -145,14 +148,22 @@ public class SupabaseManager : MonoBehaviour
 
     /// <summary>
     /// Fetches the latest normalized session along with performance metrics and dialogue turns.
-    /// Handles empty database results and single-object responses safely.
     /// </summary>
     public IEnumerator GetLatestNormalizedSession(string userId, Action<NormalizedSessionData> onSuccess, Action<string> onError)
     {
         string supabaseUrl = ConfigLoader.GetSupabaseUrl().Trim();
         string supabaseApiKey = ConfigLoader.GetSupabaseAnonKey().Trim();
 
-        string endpoint = $"{supabaseUrl}/rest/v1/session?user_id=eq.{userId}&select=*,performance_metric(*),dialogue_turn(*)&order=start_time.desc&limit=1";
+        // Fallback to default UUID if unauthenticated to avoid 400 bad request (invalid UUID syntax)
+        string validUserId = (string.IsNullOrEmpty(userId) || userId == "UNAUTHENTICATED_USER")
+            ? "00000000-0000-0000-0000-000000000000"
+            : userId;
+
+        // Escape query params so PostgREST parses joined tables correctly
+        string rawSelect = "*,performance_metric(*),dialogue_turn(*)";
+        string encodedSelect = UnityWebRequest.EscapeURL(rawSelect);
+
+        string endpoint = $"{supabaseUrl}/rest/v1/session?user_id=eq.{validUserId}&select={encodedSelect}&order=start_time.desc&limit=1";
 
         using (UnityWebRequest www = UnityWebRequest.Get(endpoint))
         {
@@ -164,19 +175,14 @@ public class SupabaseManager : MonoBehaviour
 
             if (www.result != UnityWebRequest.Result.Success)
             {
-                onError?.Invoke(www.error + " | " + www.downloadHandler.text);
+                onError?.Invoke($"[HTTP {www.responseCode}] {www.error} | {www.downloadHandler?.text}");
             }
             else
             {
                 string jsonText = www.downloadHandler.text != null ? www.downloadHandler.text.Trim() : "";
 
-                // LOG RAW SUPABASE RESPONSE
-                Debug.Log($"[Supabase Raw Dashboard Response for UserId '{userId}']: {jsonText}");
-
-                // Safely handle empty database responses or JSON object error responses
-                if (string.IsNullOrEmpty(jsonText) || jsonText == "[]" || jsonText.StartsWith("{"))
+                if (string.IsNullOrEmpty(jsonText) || jsonText == "[]")
                 {
-                    Debug.LogWarning("[SupabaseManager] No session data array found for user. Returning null.");
                     onSuccess?.Invoke(null);
                     yield break;
                 }
@@ -197,6 +203,61 @@ public class SupabaseManager : MonoBehaviour
                 {
                     onError?.Invoke("JSON Deserialization Error: " + ex.Message);
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Fetches all historical normalized sessions for a specific user from Supabase.
+    /// Returns a list of sessions ordered by start_time descending (newest first).
+    /// </summary>
+    public IEnumerator GetAllUserNormalizedSessions(string userId, Action<List<NormalizedSessionData>> onSuccess, Action<string> onError)
+    {
+        string supabaseUrl = ConfigLoader.GetSupabaseUrl().Trim();
+        string supabaseApiKey = ConfigLoader.GetSupabaseAnonKey().Trim();
+
+        // Fallback to default UUID if unauthenticated to avoid 400 bad request (invalid UUID syntax)
+        string validUserId = (string.IsNullOrEmpty(userId) || userId == "UNAUTHENTICATED_USER")
+            ? "00000000-0000-0000-0000-000000000000"
+            : userId;
+
+        // Escape query params so PostgREST parses joined tables correctly
+        string rawSelect = "*,performance_metric(*),dialogue_turn(*)";
+        string encodedSelect = UnityWebRequest.EscapeURL(rawSelect);
+
+        string endpoint = $"{supabaseUrl}/rest/v1/session?user_id=eq.{validUserId}&select={encodedSelect}&order=start_time.desc";
+
+        using (UnityWebRequest request = UnityWebRequest.Get(endpoint))
+        {
+            request.SetRequestHeader("apikey", supabaseApiKey);
+            request.SetRequestHeader("Authorization", $"Bearer {supabaseApiKey}");
+            request.SetRequestHeader("Accept", "application/json");
+
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                string jsonResponse = request.downloadHandler.text != null ? request.downloadHandler.text.Trim() : "";
+
+                if (string.IsNullOrEmpty(jsonResponse) || jsonResponse == "[]")
+                {
+                    onSuccess?.Invoke(new List<NormalizedSessionData>());
+                    yield break;
+                }
+
+                try
+                {
+                    List<NormalizedSessionData> sessions = JsonConvert.DeserializeObject<List<NormalizedSessionData>>(jsonResponse);
+                    onSuccess?.Invoke(sessions ?? new List<NormalizedSessionData>());
+                }
+                catch (Exception ex)
+                {
+                    onError?.Invoke("JSON Deserialization Error: " + ex.Message);
+                }
+            }
+            else
+            {
+                onError?.Invoke($"[HTTP {request.responseCode}] {request.error} | {request.downloadHandler?.text}");
             }
         }
     }

@@ -33,6 +33,12 @@ public class SetupUIController : MonoBehaviour
             UserSession.SelectedScenarioConfig = new ScenarioConfig();
         }
 
+        // Initialize toggle position based on current UserSession preference
+        if (inputModeToggle != null)
+        {
+            inputModeToggle.isOn = (UserSession.InputMode == "Hands-Free");
+        }
+
         // 2. Add dropdown listener to auto-populate defaults and update scenario weights
         if (scenarioDropdown != null)
         {
@@ -65,7 +71,8 @@ public class SetupUIController : MonoBehaviour
         // Auto-populate default topic/role presets
         switch (selectedScenario)
         {
-            case "Hall":
+            case "Stage Venue":
+            case "StageVenue":
                 SetPresetIfEmpty("Keynote Presentation", "Presenter", "Audience Member");
                 break;
             case "Interview":
@@ -74,12 +81,12 @@ public class SetupUIController : MonoBehaviour
             case "Classroom":
                 SetPresetIfEmpty("Lecture QA Session", "Student", "Teacher");
                 break;
-            case "Normal Conversation":
+            case "Cafeteria":
                 SetPresetIfEmpty("Social Networking", "Participant", "Peer");
                 break;
         }
 
-        // Refresh informational scenario card weights (Algorithm 9 display)
+        // Refresh informational scenario card weights
         if (scenarioCardUI != null)
         {
             scenarioCardUI.UpdateScenarioWeightsDisplay(selectedScenario);
@@ -109,6 +116,7 @@ public class SetupUIController : MonoBehaviour
             sessionStartSignal = "Session Start"
         };
 
+        // Reads the actual state of the UI toggle
         UserSession.InputMode = (inputModeToggle != null && inputModeToggle.isOn) ? "Hands-Free" : "Controller";
 
         Debug.Log($"[SetupUIController] Configured: {UserSession.SelectedScenarioConfig.scenario} | Topic: {UserSession.SelectedScenarioConfig.topic} | Input: {UserSession.InputMode}");

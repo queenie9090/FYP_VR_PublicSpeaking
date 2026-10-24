@@ -6,8 +6,16 @@ using UnityEngine;
 public class GestureTracker : MonoBehaviour
 {
     private List<Tuple<string, float>> validExpressiveGestures = new List<Tuple<string, float>>();
-    private float sessionStartTime;
+    private float activeTrackingDurationSeconds = 0.0f;
     private bool isTracking = false;
+
+    private void Update()
+    {
+        if (isTracking)
+        {
+            activeTrackingDurationSeconds += Time.deltaTime;
+        }
+    }
 
     // Called when the VR interaction session starts or resets
     public void StartTracking()
@@ -18,7 +26,7 @@ public class GestureTracker : MonoBehaviour
     public void ResetTracker()
     {
         validExpressiveGestures.Clear();
-        sessionStartTime = Time.time;
+        activeTrackingDurationSeconds = 0.0f;
         isTracking = true;
         Debug.Log("[GestureTracker] Gesture tracking started/reset.");
     }
@@ -38,13 +46,13 @@ public class GestureTracker : MonoBehaviour
     {
         if (!isTracking) return;
 
-        // 1. Exclude VR interaction gestures
+        // 1. Exclude VR interaction gestures (Algorithm 6: Lines 4-5)
         if (gestureType == "Pinch" || gestureType == "Point + Pinch" || gestureType == "Grab" || gestureType == "Handshake")
         {
             return; // Excluded from movement analysis
         }
 
-        // 2. Open Palm classification rule
+        // 2. Open Palm classification rule (Algorithm 6: Lines 6-13 / Algorithm 7: Lines 3-12)
         if (gestureType == "Open Palm")
         {
             if (gestureDuration > 1.0f)
@@ -70,10 +78,13 @@ public class GestureTracker : MonoBehaviour
     /// <summary>
     /// ALGORITHM 6: Computes total expressive count and Gestures Per Minute (GPM).
     /// </summary>
-    public (int expressiveCount, float gpm) CalculateGestureMetrics()
+    public (int expressiveCount, float gpm) CalculateGestureMetrics(float overrideDurationSeconds = -1.0f)
     {
         int expressiveCount = validExpressiveGestures.Count;
-        float simulationDurationMinutes = (Time.time - sessionStartTime) / 60.0f;
+
+        // Use override session duration if provided, otherwise use tracked active duration
+        float durationSec = overrideDurationSeconds > 0.0f ? overrideDurationSeconds : activeTrackingDurationSeconds;
+        float simulationDurationMinutes = durationSec / 60.0f;
 
         float gpm = 0.0f;
         if (simulationDurationMinutes > 0.0f)

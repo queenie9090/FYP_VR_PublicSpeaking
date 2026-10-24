@@ -21,6 +21,9 @@ EditorBuildSettings:
     path: Assets/Scenes/StageVenue.unity
     guid: 1f79b4100b0bc814490abbcfaa788b65
   - enabled: 1
+    path: Assets/Scenes/Interview.unity
+    guid: 4d6f8c02371e3d7428f7ba15b9eae0cc
+  - enabled: 1
     path: Assets/Scenes/DashboardScene.unity
     guid: 038435da4fb11414eaf13f39bf67868a
   m_configObjects:

@@ -21,6 +21,7 @@ public class InteractionManager : MonoBehaviour
     [SerializeField] private NPCPersona currentActiveNPC;
 
     [Header("UI Controls")]
+    [SerializeField] private GameObject startConfigPanel;
     [SerializeField] private Button startSessionButton;
     [SerializeField] private Button exitButton;
 
@@ -75,8 +76,18 @@ public class InteractionManager : MonoBehaviour
 
     public void OnUserConfirmedStart()
     {
-        if (startSessionButton != null) startSessionButton.interactable = false;
-        if (playerSeating != null) playerSeating.SnapPlayerToChair();
+        if (startSessionButton != null)
+            startSessionButton.interactable = false;
+
+        // Ensure global session mode accurately reflects Hands-Free mode
+        UserSession.InputMode = "Hands-Free";
+
+        if (startConfigPanel != null)
+            startConfigPanel.SetActive(false);
+
+        if (playerSeating != null)
+            playerSeating.SnapPlayerToChair();
+
         StartCoroutine(HandsFreeSessionInitiationRoutine());
     }
 
@@ -239,6 +250,31 @@ public class InteractionManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// ALGORITHM 7: Hand Gesture Hint Activation Callback Method
+    /// Invoked when GestureTracker detects an Open Palm > 1.0s.
+    /// </summary>
+    public void TriggerHintActivation()
+    {
+        if (!isSessionActive) return;
+
+        uiManager.SetStatus("Generating Hint...");
+        string lastUserScript = conversationHistory.Count > 0 ? conversationHistory[conversationHistory.Count - 1].dialogue : "";
+
+        // Fix CS7036: Pass conversationHistory into BuildHintPrompt
+        StartCoroutine(openAIManager.SendChatRequest(
+            PromptBuilder.BuildHintPrompt(activeConfig, conversationHistory), conversationHistory, lastUserScript,
+            res => {
+                if (res != null && !string.IsNullOrEmpty(res.npc_response))
+                {
+                    // Fix CS1061: Render hint to UI
+                    uiManager.SetStatus($"Hint: {res.npc_response}");
+                }
+            },
+            err => Debug.LogError($"[Hint Error] {err}")
+        ));
+    }
+
     private void CalculateAndSaveResults()
     {
         uiManager.SetStatus("Saving Results...");
@@ -254,7 +290,7 @@ public class InteractionManager : MonoBehaviour
         if (eyeContactTracker != null)
         {
             eyeContactTracker.StopTracking();
-            eyeContactPct = eyeContactTracker.CalculateEyeContactScore(); // EyeContactTracker method
+            eyeContactPct = eyeContactTracker.CalculateEyeContactScore();
         }
 
         int expressiveGestureCount = 0;
@@ -262,7 +298,7 @@ public class InteractionManager : MonoBehaviour
         if (gestureTracker != null)
         {
             gestureTracker.StopTracking();
-            var gestureMetrics = gestureTracker.CalculateGestureMetrics(); // GestureTracker method
+            var gestureMetrics = gestureTracker.CalculateGestureMetrics(sessionElapsedTimeSeconds);
             expressiveGestureCount = gestureMetrics.expressiveCount;
             gpm = gestureMetrics.gpm;
         }
@@ -275,8 +311,7 @@ public class InteractionManager : MonoBehaviour
             return;
         }
 
-        // 3. Compute speech metrics (WPM, Clarity, Scores)
-        float speakingMinutes = totalSpeakingTimeSeconds / 60.0f;
+        // 3. Compute speech metrics using MetricsCalculator methods
         int totalWordsSpoken = 0;
         List<DialogueTurnRecord> turnRecords = new List<DialogueTurnRecord>();
 
@@ -285,12 +320,11 @@ public class InteractionManager : MonoBehaviour
             string userText = conversationHistory[i].dialogue;
             string aiText = (i + 1 < conversationHistory.Count) ? conversationHistory[i + 1].dialogue : "";
             int turnFillers = conversationHistory[i].fillerWordCount;
-            float userDurationMin = conversationHistory[i].speechDuration / 60.0f;
+            float userDurationSec = conversationHistory[i].speechDuration;
+            float turnSilenceSec = conversationHistory[i].silenceDuration;
 
-            int wordCount = string.IsNullOrEmpty(userText) ? 0 : userText.Split(new[] { ' ', '\t', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
+            var (wordCount, turnWpm) = MetricsCalculator.CalculateSpeakingRate(userText, userDurationSec);
             totalWordsSpoken += wordCount;
-
-            float turnWpm = userDurationMin > 0 ? wordCount / userDurationMin : 0.0f;
 
             turnRecords.Add(new DialogueTurnRecord
             {
@@ -298,23 +332,62 @@ public class InteractionManager : MonoBehaviour
                 user_transcript = userText,
                 ai_response_text = aiText,
                 filler_word_count = turnFillers,
-                speaking_rate_wpm = turnWpm
+                speaking_rate_wpm = turnWpm,
+                silence_duration_seconds = turnSilenceSec
             });
         }
 
-        float overallWpm = speakingMinutes > 0 ? totalWordsSpoken / speakingMinutes : 0.0f;
-        float clarityScore = Mathf.Clamp(100.0f - (totalFillerWordsDetected * 5.0f), 0.0f, 100.0f);
+        float overallWpm = totalSpeakingTimeSeconds > 0 ? (totalWordsSpoken / totalSpeakingTimeSeconds) * 60.0f : 0.0f;
+        var (clarityScore, fwpm) = MetricsCalculator.CalculateSpeechClarity(totalFillerWordsDetected, totalSpeakingTimeSeconds, overallWpm);
         float gestureScore = Mathf.Clamp(expressiveGestureCount * 10.0f, 0.0f, 100.0f);
-        float overallScore = (clarityScore * 0.4f) + (eyeContactPct * 0.3f) + (gestureScore * 0.3f);
+
+        // Clean the scene name (e.g. "CafeteriaScene" -> "Cafeteria") so it matches scenario weights
+        string rawScenario = activeConfig != null ? activeConfig.scenario : "Normal Conversation";
+        string currentScenario = rawScenario.Replace("Scene", "").Trim();
+
+        float overallScore = MetricsCalculator.CalculateOverallScore(currentScenario, clarityScore, eyeContactPct, gestureScore);
 
         string activeUserId = UserSession.IsLoggedIn ? UserSession.CurrentUserId : "00000000-0000-0000-0000-000000000000";
 
-        // 4. Save to Supabase using SaveSessionNormalized
+        // 4. Generate Dynamic AI Coaching Feedback Summary via OpenAI
+        uiManager.SetStatus("Generating AI Feedback...");
+
+        // Refined Prompt explicitly requesting coaching suggestions
+        string summaryPrompt = $"You are an expert VR speech coach. Provide a concise 2-3 sentence constructive feedback summary with actionable suggestions for improvement based on this participant's performance in a '{currentScenario}' simulation: " +
+                               $"Overall Score: {overallScore:F0}%, Speech Clarity: {clarityScore:F0}%, Speaking Rate: {overallWpm:F0} WPM, " +
+                               $"Filler Words Used: {totalFillerWordsDetected}, Eye Contact: {eyeContactPct:F0}%, Gestures Rate: {gpm:F1} GPM.";
+
+        StartCoroutine(openAIManager.SendChatRequest(
+            summaryPrompt,
+            conversationHistory,
+            "Generate Summary",
+            res => {
+                string aiSummary = (res != null && !string.IsNullOrEmpty(res.npc_response))
+                    ? res.npc_response
+                    : $"Your overall performance scored {overallScore:F0}%. Speech clarity was {clarityScore:F0}% with {totalFillerWordsDetected} filler words detected. Practice maintaining eye contact and reducing disfluencies.";
+
+                SaveSessionToSupabase(activeUserId, currentScenario, startTimeIso, endTimeIso, overallScore, clarityScore, eyeContactPct, gestureScore, overallWpm, totalFillerWordsDetected, gpm, totalSilenceTimeSeconds, aiSummary, turnRecords);
+            },
+            err => {
+                // Fallback constructive coaching string if API request fails
+                string fallbackSummary = $"Your overall performance scored {overallScore:F0}%. Speech clarity reached {clarityScore:F0}%. To improve, focus on reducing filler words ('um', 'uh') during speech pauses and keeping steady visual focus on your audience.";
+                SaveSessionToSupabase(activeUserId, currentScenario, startTimeIso, endTimeIso, overallScore, clarityScore, eyeContactPct, gestureScore, overallWpm, totalFillerWordsDetected, gpm, totalSilenceTimeSeconds, fallbackSummary, turnRecords);
+            }
+        ));
+    }
+
+    // Helper method to execute the database save call cleanly
+    private void SaveSessionToSupabase(
+        string activeUserId, string currentScenario, string startTimeIso, string endTimeIso,
+        float overallScore, float clarityScore, float eyeContactPct, float gestureScore,
+        float overallWpm, int totalFillers, float gpm, float totalSilenceSec,
+        string aiSummary, List<DialogueTurnRecord> turnRecords)
+    {
         if (supabaseManager != null)
         {
             StartCoroutine(supabaseManager.SaveSessionNormalized(
                 userId: activeUserId,
-                scenarioType: activeConfig != null ? activeConfig.scenario : "Unknown",
+                scenarioType: currentScenario,
                 selectedRole: activeConfig != null ? activeConfig.participantRole : "User",
                 topic: activeConfig != null ? activeConfig.topic : "General",
                 difficulty: activeConfig != null ? activeConfig.difficulty : "Medium",
@@ -327,9 +400,10 @@ public class InteractionManager : MonoBehaviour
                 eyeContactPct: eyeContactPct,
                 gestureScore: gestureScore,
                 wpm: overallWpm,
-                totalFillers: totalFillerWordsDetected,
+                totalFillers: totalFillers,
                 gpm: gpm,
-                feedbackSummary: $"Overall Performance: {overallScore:F0}%. Speech clarity was {clarityScore:F0}% with {totalFillerWordsDetected} filler words.",
+                totalSilenceSeconds: totalSilenceSec, // ADDED: Pass total silence duration
+                feedbackSummary: aiSummary,           // Uses dynamic AI summary
                 dialogueTurns: turnRecords,
                 onSuccess: () =>
                 {
