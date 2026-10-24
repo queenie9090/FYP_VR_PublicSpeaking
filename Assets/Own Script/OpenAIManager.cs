@@ -98,11 +98,53 @@ public class OpenAIManager : MonoBehaviour
                 var chatRes = Newtonsoft.Json.JsonConvert.DeserializeObject<ChatCompletionResponse>(rawJson);
                 string contentJson = chatRes.choices[0].message.content;
 
-                LLMResponse response = Newtonsoft.Json.JsonConvert.DeserializeObject<LLMResponse>(contentJson);
+                // Return to NEUTRAL when the AI give the emotion not suitable with the 6 basic emmotion.
+                LLMResponse response;
+
+                try
+                {
+                    response =
+                        Newtonsoft.Json.JsonConvert.DeserializeObject<LLMResponse>(
+                            contentJson
+                        );
+                }
+                catch (Exception ex)
+                {
+                    onError?.Invoke("Invalid NPC response JSON: " + ex.Message);
+                    yield break;
+                }
+
+                if (response == null ||
+                    string.IsNullOrWhiteSpace(response.npc_response))
+                {
+                    onError?.Invoke("NPC response is missing or empty.");
+                    yield break;
+                }
+
+                if (string.IsNullOrWhiteSpace(response.emotion))
+                {
+                    onError?.Invoke("NPC emotion is missing.");
+                    yield break;
+                }
+
+                response.emotion = response.emotion.Trim().ToUpperInvariant();
+
+                if (!IsValidEmotion(response.emotion))
+                {
+                    Debug.LogWarning(
+                        "Unsupported NPC emotion: " + response.emotion
+                    );
+
+                    response.emotion = "NEUTRAL";
+                }
+
+                // Return the validated response.
                 onSuccess?.Invoke(response);
+
             }
         }
     }
+
 
     public IEnumerator SendHintRequest(string hintPrompt, Action<string> onSuccess, Action<string> onError = null)
     {
@@ -135,6 +177,7 @@ public class OpenAIManager : MonoBehaviour
                 string rawJson = www.downloadHandler.text;
                 var chatRes = Newtonsoft.Json.JsonConvert.DeserializeObject<ChatCompletionResponse>(rawJson);
                 string contentJson = chatRes.choices[0].message.content;
+                Debug.Log("[AI Response JSON] " + contentJson); //Debug
 
                 HintResponse res = Newtonsoft.Json.JsonConvert.DeserializeObject<HintResponse>(contentJson);
                 onSuccess?.Invoke(res.hint);
@@ -218,4 +261,22 @@ public class OpenAIManager : MonoBehaviour
         public float confidence;
     }
     #endregion
+
+    private static bool IsValidEmotion(string emotion)
+    {
+        switch (emotion)
+        {
+            case "HAPPY":
+            case "SAD":
+            case "ANGRY":
+            case "NERVOUS":
+            case "THINKING":
+            case "NEUTRAL":
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
 }

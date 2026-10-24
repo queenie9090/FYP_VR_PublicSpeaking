@@ -20,6 +20,11 @@ public class InteractionManager : MonoBehaviour
     [SerializeField] private AudioSource npcAudioSource;
     [SerializeField] private NPCPersona currentActiveNPC;
 
+    [Header("NPC Emotion")]
+    [SerializeField] private NPCEmotionController npcEmotionController;
+
+    private string previousEmotion = "NEUTRAL";
+
     [Header("UI Controls")]
     [SerializeField] private GameObject startConfigPanel;
     [SerializeField] private Button startSessionButton;
@@ -108,10 +113,12 @@ public class InteractionManager : MonoBehaviour
         isSessionActive = true;
         conversationHistory.Clear();
         sessionElapsedTimeSeconds = 0f; totalSpeakingTimeSeconds = 0f; totalSilenceTimeSeconds = 0f; totalFillerWordsDetected = 0;
+        previousEmotion = "NEUTRAL";
 
         // Capture precise start time (ISO 8601 string format for Supabase timestamptz)
         sessionStartTimestamp = DateTime.UtcNow;
 
+        if (npcEmotionController != null) npcEmotionController.SetEmotion("NEUTRAL", 0);
         if (eyeContactTracker != null) eyeContactTracker.StartTracking();
         if (gestureTracker != null) gestureTracker.ResetTracker();
 
@@ -204,17 +211,60 @@ public class InteractionManager : MonoBehaviour
     private IEnumerator ProcessLLMTurnRoutine(string userTranscript)
     {
         uiManager.SetStatus("NPC Thinking...");
-        int turnCounter = (conversationHistory.Count / 2) + 1;
+        //int turnCounter = (conversationHistory.Count / 2) + 1;
+        int turnCounter = conversationHistory.Count / 2;
+        int expectedTurnNumber = turnCounter + 1;
 
         LLMResponse response = null; bool llmDone = false;
         StartCoroutine(openAIManager.SendChatRequest(
-            PromptBuilder.BuildSystemPrompt(activeConfig, turnCounter), conversationHistory, userTranscript,
+            PromptBuilder.BuildSystemPrompt(activeConfig, turnCounter, previousEmotion), conversationHistory, userTranscript,
             res => { response = res; llmDone = true; },
             err => { Debug.LogError($"[LLM Error] {err}"); llmDone = true; }
         ));
 
         yield return new WaitUntil(() => llmDone);
         if (response == null || string.IsNullOrEmpty(response.npc_response)) yield break;
+
+        // Check that the response belongs to the expected turn.
+        if (response.turn_number != expectedTurnNumber)
+        {
+            Debug.LogWarning(
+                $"Unexpected turn_number: {response.turn_number}. " +
+                $"Expected: {expectedTurnNumber}"
+            );
+
+            uiManager.SetStatus("NPC Turn Validation Error.");
+            yield break;
+        }
+
+        // AI emotion has already been checked by OpenAIManager.
+        // Save it for emotion continuity in the next turn.
+        string validatedEmotion = response.emotion;
+        previousEmotion = validatedEmotion;
+
+        // TEMPORARY intensity for integration testing.
+        // Replace with Unity's actual intensity calculation later.
+        int testIntensity =
+            validatedEmotion == "NEUTRAL" ? 0 : 60;
+
+        if (npcEmotionController != null)
+        {
+            npcEmotionController.SetEmotion(
+                validatedEmotion,
+                testIntensity
+            );
+
+            Debug.Log(
+                $"[NPC Emotion] Turn {expectedTurnNumber}: " +
+                $"{validatedEmotion}, Intensity: {testIntensity}"
+            );
+        }
+        else
+        {
+            Debug.LogWarning(
+                "NPCEmotionController is not assigned."
+            );
+        }
 
         conversationHistory.Add(new DialogueTurn { speaker = "NPC", dialogue = response.npc_response });
         uiManager.RenderDialogue(conversationHistory);
