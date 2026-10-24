@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 public static class PromptBuilder
 {
-    public static string BuildSystemPrompt(ScenarioConfig config, int currentTurnCount)
+    public static string BuildSystemPrompt(ScenarioConfig config, int currentTurnCount, string previousEmotion = "NEUTRAL")
     {
         string difficultyInstruction = config.difficulty switch
         {
@@ -37,6 +37,7 @@ ROLE AND SESSION INSTRUCTIONS
 - Follow the communication requirements defined by the selected Difficulty level ({config.difficulty}). 
 - Do not introduce unrelated topics or information that conflicts with the session context.
 - Keep responses concise (1 to 2 sentences maximum, under 35 words).
+- Respond with empathy appropriate to the character's role and conversation context.
 
 RESPONSE CONDITION RULES 
 
@@ -61,19 +62,58 @@ If the participant's response is unclear or insufficient to determine the intend
 Final Turn Rule (HIGHEST PRIORITY): 
 If TurnCounter reaches Maximum Turn Limit ({config.maxTurnLimit}), the Final Turn condition takes priority over all other response conditions. The NPC must end the conversation immediately after acknowledging the participant's latest response. Do not ask a question, request additional information, or introduce a new discussion topic. Set end_conversation to true. 
 
+//Emotion Part
+NPC EMOTION GENERATION RULES
+- Generate one emotion representing the NPC's emotional state while delivering npc_response.
+- The emotion must be exactly one of:
+  HAPPY, SAD, ANGRY, NERVOUS, THINKING, NEUTRAL.
+- Do not generate unsupported emotion labels.
+- Select the emotion based on the meaning of the participant's message, the NPC's response, the character persona, the scenario, and the conversation history.
+- Interpret the semantic meaning of the conversation rather than relying only on individual emotion keywords.
+- The NPC must respond with appropriate empathy.
+- Use THINKING when the NPC is considering or processing information.
+- Use NEUTRAL when there is no sufficiently clear emotional trigger.
+- Do not automatically classify every positive answer as HAPPY or every negative answer as SAD.
+- Do not generate multiple emotion labels.
+- Do not return emotion intensity, valence, arousal, or additional emotion fields.
+- Emotion intensity is calculated separately by Unity after validating the generated emotion.
+
+EMOTION CONTINUITY RULES
+- Previous NPC Emotion: {previousEmotion}
+- Consider the previous emotion when selecting the next emotion.
+- Maintain emotional continuity across conversation turns.
+- Avoid sudden emotional changes without a meaningful contextual trigger.
+- An emotion change is allowed when the conversation provides a reasonable cause.
+- Emotion selection must remain appropriate to the assigned NPC persona and situation.
+
+RELEVANCE RULES
+- is_relevant describes whether the generated npc_response is relevant to the assigned scenario, topic, and session objective.
+- If the participant provides an off-topic message, the NPC should redirect the conversation appropriately.
+- A relevant redirection is considered a relevant NPC response.
+- Do not automatically set is_relevant to false merely because the participant's message is off-topic.
+
 TURN MANAGEMENT RULES 
 - TurnCounter is currently at: {currentTurnCount}.
 - Current interaction number is: {currentTurnCount + 1} of {config.maxTurnLimit}.
 - The generated turn_number must equal {currentTurnCount + 1}.
+- If the current interaction number is less than {config.maxTurnLimit}, set end_conversation to false.
+- If the current interaction number is greater than or equal to {config.maxTurnLimit}, set end_conversation to true.
 
 OUTPUT FORMAT
 Return ONLY a valid JSON object matching:
+The JSON must contain exactly five fields.
+Do not include markdown, explanations, or additional properties.
 {{ 
   ""npc_response"": ""string"",
+  ""emotion"": ""NEUTRAL"", //degault emotion
   ""is_relevant"": true,
   ""turn_number"": {currentTurnCount + 1},
   ""end_conversation"": false 
-}}";
+}}
+The emotion field above is an example placeholder.
+Replace it with the most appropriate validated-category emotion.
+Ensure end_conversation follows the final-turn rule.
+";
     }
 
     public static string BuildHintPrompt(ScenarioConfig config, List<DialogueTurn> history)
