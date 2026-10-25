@@ -326,7 +326,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NPCEmotionIndicatorUI
   emotionController: {fileID: 104038262}
-  emotionIcon: {fileID: 0}
+  emotionIcon: {fileID: 1455280395}
   happySprite: {fileID: 21300000, guid: afd7645aa9ff32c468289bea0016df3b, type: 3}
   sadSprite: {fileID: 21300000, guid: a8059af7fd4e52746b6f9e71ebad5dfe, type: 3}
   angrySprite: {fileID: 21300000, guid: f590b2592d8f2ed49b7c78f2cffd6327, type: 3}
