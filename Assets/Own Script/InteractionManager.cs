@@ -27,6 +27,7 @@ public class InteractionManager : MonoBehaviour
 
     [Header("UI Controls")]
     [SerializeField] private GameObject startConfigPanel;
+    [SerializeField] private GameObject emotionPanel;
     [SerializeField] private Button startSessionButton;
     [SerializeField] private Button exitButton;
 
@@ -77,7 +78,13 @@ public class InteractionManager : MonoBehaviour
         {
             activeConfig = UserSession.SelectedScenarioConfig;
         }
+
+        if (emotionPanel != null)
+        {
+            emotionPanel.SetActive(false);
+        }
     }
+
 
     public void OnUserConfirmedStart()
     {
@@ -112,6 +119,7 @@ public class InteractionManager : MonoBehaviour
     {
         isSessionActive = true;
         conversationHistory.Clear();
+        if (emotionPanel != null) emotionPanel.SetActive(true);
         sessionElapsedTimeSeconds = 0f; totalSpeakingTimeSeconds = 0f; totalSilenceTimeSeconds = 0f; totalFillerWordsDetected = 0;
         previousEmotion = "NEUTRAL";
 
@@ -482,11 +490,18 @@ public class InteractionManager : MonoBehaviour
         isSessionActive = false;
         StopAllCoroutines();
         uiManager.SetStatus("Chat Ended.");
+
+        if (emotionPanel != null) emotionPanel.SetActive(false);
     }
 
     private void OnSessionCompletedSequence()
     {
         isSessionActive = false;
+
+        if (emotionPanel != null)
+        {
+            emotionPanel.SetActive(false);
+        }
 
         if (UserSession.IsRunningTutorial)
         {
