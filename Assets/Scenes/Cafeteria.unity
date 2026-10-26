@@ -5155,7 +5155,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &569169981
 Transform:
   m_ObjectHideFlags: 0
@@ -9745,7 +9745,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Conversation Title
+  m_text: NPC Dialogue Chatbox
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: f8802cdf5316acb45b71a160083153ee, type: 2}
   m_sharedMaterial: {fileID: -6269700506862428983, guid: f8802cdf5316acb45b71a160083153ee, type: 2}
@@ -10446,7 +10446,6 @@ MonoBehaviour:
   conversationTimerText: {fileID: 2077236416}
   dialogueText: {fileID: 584391804}
   dialogueScrollRect: {fileID: 969039463}
-  hintTextDisplay: {fileID: 2041003282}
 --- !u!114 &930735362
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10501,6 +10500,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 48c04d7ff3f518f41843a14e3e36597d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GestureTracker
+  hintCanvas: {fileID: 0}
+  hintText: {fileID: 0}
+  hintDisplayDuration: 5
+  interactionManager: {fileID: 0}
 --- !u!114 &930735366
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10560,10 +10563,13 @@ MonoBehaviour:
   playerSeating: {fileID: 930735362}
   eyeContactTracker: {fileID: 930735366}
   gestureTracker: {fileID: 930735365}
-  npcAudioSource: {fileID: 396279233}
+  roomNPCs:
+  - {fileID: 1169285437}
   currentActiveNPC: {fileID: 1169285437}
+  fallbackNpcAudioSource: {fileID: 396279233}
   npcEmotionController: {fileID: 0}
   startConfigPanel: {fileID: 2086405919}
+  emotionPanel: {fileID: 0}
   startSessionButton: {fileID: 816843955}
   exitButton: {fileID: 1548586336}
   defaultDashboardScene: DashboardScene

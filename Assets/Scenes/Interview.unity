@@ -844,7 +844,6 @@ MonoBehaviour:
   conversationTimerText: {fileID: 1585870566}
   dialogueText: {fileID: 2013591337}
   dialogueScrollRect: {fileID: 1489079576}
-  hintTextDisplay: {fileID: 1159147713}
 --- !u!114 &237275925
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -899,6 +898,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 48c04d7ff3f518f41843a14e3e36597d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GestureTracker
+  hintCanvas: {fileID: 0}
+  hintText: {fileID: 0}
+  hintDisplayDuration: 5
+  interactionManager: {fileID: 0}
 --- !u!114 &237275929
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -958,8 +961,10 @@ MonoBehaviour:
   playerSeating: {fileID: 237275925}
   eyeContactTracker: {fileID: 237275929}
   gestureTracker: {fileID: 237275928}
-  npcAudioSource: {fileID: 973571341}
-  currentActiveNPC: {fileID: 0}
+  roomNPCs:
+  - {fileID: 921862431}
+  currentActiveNPC: {fileID: 921862431}
+  fallbackNpcAudioSource: {fileID: 973571341}
   npcEmotionController: {fileID: 104038262}
   startConfigPanel: {fileID: 355607159}
   emotionPanel: {fileID: 828402924}
@@ -3593,7 +3598,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0, g: 0, b: 0, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -4220,7 +4225,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NPCPersona
   characterName: Friend
-  voiceId: alloy
+  voiceId: echo
   npcAudioSource: {fileID: 973571341}
 --- !u!4 &921862432 stripped
 Transform:
@@ -6437,7 +6442,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1472843509
 Transform:
   m_ObjectHideFlags: 0
