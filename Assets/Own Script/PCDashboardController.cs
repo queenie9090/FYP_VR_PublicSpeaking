@@ -58,7 +58,13 @@ public class PCDashboardController : MonoBehaviour
     private void Start()
     {
         if (backToMenuButton != null)
-            backToMenuButton.onClick.AddListener(() => SceneManager.LoadScene("MainMenu"));
+        {
+            backToMenuButton.onClick.AddListener(() =>
+            {
+                // If logged in, route directly back to your Main Menu / Dashboard scene
+                SceneManager.LoadScene("MainMenu");
+            });
+        }
 
         if (exportCsvButton != null)
             exportCsvButton.onClick.AddListener(OnExportCSVClicked);
