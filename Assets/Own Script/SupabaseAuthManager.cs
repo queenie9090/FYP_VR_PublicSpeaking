@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Networking;
+using UnityEngine.SceneManagement;
 using TMPro;
 using Supabase;
 
@@ -49,7 +50,8 @@ public class SupabaseAuthManager : MonoBehaviour
     {
         Instance = this;
 
-        // Default to first panel immediately
+        // Reset all panel input fields and status messages cleanly
+        ClearAllInputs();
         ShowFirstPanel();
 
         await InitializeSupabase();
@@ -59,7 +61,6 @@ public class SupabaseAuthManager : MonoBehaviour
     {
         IsReady = false;
 
-        // Retrieve Supabase URL and Anon Key from config.json
         string trimmedUrl = ConfigLoader.GetSupabaseUrl().Trim();
         string trimmedKey = ConfigLoader.GetSupabaseAnonKey().Trim();
 
@@ -83,14 +84,12 @@ public class SupabaseAuthManager : MonoBehaviour
 
             IsReady = true;
 
-            // Auto-Login Check: If an active session is saved on disk, skip login UI
+            // Auto-Login Check: If an active session is saved on disk
             if (Client.Auth.CurrentSession != null && !string.IsNullOrEmpty(Client.Auth.CurrentSession.AccessToken))
             {
-                // Store active user ID into global UserSession
-                UserSession.CurrentUserId = Client.Auth.CurrentUser.Id;
-                UserSession.CurrentUserEmail = Client.Auth.CurrentUser.Email;
+                ExtractUserMetaDataAndSetSession();
 
-                Debug.Log($"[Auth] Active session found! Logged in as User ID: {UserSession.CurrentUserId}");
+                Debug.Log($"[Auth] Active session found! User: {UserSession.CurrentUserId} | Role: {UserSession.UserRole}");
                 OpenMainMenuPanel();
             }
             else
@@ -119,7 +118,7 @@ public class SupabaseAuthManager : MonoBehaviour
 
     public void ShowLoginPanel()
     {
-        ClearAllInputs();
+        ClearAllInputs(); // Clears any leftover keys or previous error messages
         if (firstPanel != null) firstPanel.SetActive(false);
         if (loginPanel != null) loginPanel.SetActive(true);
         if (signUpPanel != null) signUpPanel.SetActive(false);
@@ -130,7 +129,7 @@ public class SupabaseAuthManager : MonoBehaviour
 
     public void ShowSignUpPanel()
     {
-        ClearAllInputs();
+        ClearAllInputs(); // Clears any leftover keys or previous error messages
         if (firstPanel != null) firstPanel.SetActive(false);
         if (loginPanel != null) loginPanel.SetActive(false);
         if (signUpPanel != null) signUpPanel.SetActive(true);
@@ -158,9 +157,7 @@ public class SupabaseAuthManager : MonoBehaviour
 
             if (session != null && !string.IsNullOrEmpty(session.AccessToken))
             {
-                // Save authenticated user ID to global session tracker
-                UserSession.CurrentUserId = Client.Auth.CurrentUser.Id;
-                UserSession.CurrentUserEmail = Client.Auth.CurrentUser.Email;
+                ExtractUserMetaDataAndSetSession();
 
                 SetStatus("Login successful!", isSignUp: false, isError: false);
                 OpenMainMenuPanel();
@@ -201,9 +198,7 @@ public class SupabaseAuthManager : MonoBehaviour
 
             if (session != null && !string.IsNullOrEmpty(session.AccessToken))
             {
-                // Auto-login upon registration
-                UserSession.CurrentUserId = Client.Auth.CurrentUser.Id;
-                UserSession.CurrentUserEmail = Client.Auth.CurrentUser.Email;
+                ExtractUserMetaDataAndSetSession();
 
                 SetStatus("Account created successfully!", isSignUp: true, isError: false);
                 OpenMainMenuPanel();
@@ -226,7 +221,7 @@ public class SupabaseAuthManager : MonoBehaviour
         }
     }
 
-    // --- GOOGLE OAUTH SIGN IN ---
+    // --- GOOGLE OAUTH SIGN IN WITH TIMEOUT ---
     public async void ContinueWithGoogle(bool isFromSignUp)
     {
         if (!CanStartAuthentication(isFromSignUp)) return;
@@ -256,7 +251,14 @@ public class SupabaseAuthManager : MonoBehaviour
                 Application.OpenURL(state.Uri.ToString());
             }
 
-            HttpListenerContext context1 = await listener.GetContextAsync();
+            // ADD 30-SECOND TIMEOUT SO CLOSING THE BROWSER DOESN'T STUCK UNITY IN "LOGGING IN..."
+            Task<HttpListenerContext> contextTask = listener.GetContextAsync();
+            if (await Task.WhenAny(contextTask, Task.Delay(30000)) != contextTask)
+            {
+                throw new Exception("Google sign-in timed out or was cancelled by user.");
+            }
+
+            HttpListenerContext context1 = await contextTask;
             HttpListenerRequest req1 = context1.Request;
             HttpListenerResponse res1 = context1.Response;
 
@@ -277,7 +279,13 @@ public class SupabaseAuthManager : MonoBehaviour
                 res1.OutputStream.Write(b1, 0, b1.Length);
                 res1.OutputStream.Close();
 
-                HttpListenerContext context2 = await listener.GetContextAsync();
+                Task<HttpListenerContext> contextTask2 = listener.GetContextAsync();
+                if (await Task.WhenAny(contextTask2, Task.Delay(15000)) != contextTask2)
+                {
+                    throw new Exception("Google sign-in token exchange timed out.");
+                }
+
+                HttpListenerContext context2 = await contextTask2;
                 req1 = context2.Request;
                 res1 = context2.Response;
             }
@@ -294,8 +302,7 @@ public class SupabaseAuthManager : MonoBehaviour
 
                 if (Client.Auth.CurrentSession != null)
                 {
-                    UserSession.CurrentUserId = Client.Auth.CurrentUser.Id;
-                    UserSession.CurrentUserEmail = Client.Auth.CurrentUser.Email;
+                    ExtractUserMetaDataAndSetSession();
 
                     SetStatus("Google Sign-In Successful!", isFromSignUp, isError: false);
                     OpenMainMenuPanel();
@@ -304,19 +311,44 @@ public class SupabaseAuthManager : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogWarning("[Auth] Google Sign-In failed: " + ex.Message);
+            Debug.LogWarning("[Auth] Google Sign-In failed/cancelled: " + ex.Message);
             string friendlyError = FormatAuthError(ex.Message, isFromSignUp, isOAuth: true);
             SetStatus(friendlyError, isFromSignUp, isError: true);
         }
         finally
         {
-            if (listener != null && listener.IsListening) listener.Stop();
+            if (listener != null && listener.IsListening)
+                listener.Stop();
+
             isBusy = false;
         }
     }
 
     public void ContinueWithGoogleLogin() => ContinueWithGoogle(false);
     public void ContinueWithGoogleSignUp() => ContinueWithGoogle(true);
+
+    // --- EXTRACT USER METADATA (ROLE, EMAIL, ID) ---
+    private void ExtractUserMetaDataAndSetSession()
+    {
+        var user = Client.Auth.CurrentUser;
+        if (user == null) return;
+
+        UserSession.CurrentUserId = user.Id;
+        UserSession.CurrentUserEmail = user.Email;
+
+        // Default role fallback
+        string role = "student";
+
+        if (user.UserMetadata != null)
+        {
+            if (user.UserMetadata.TryGetValue("role", out object roleObj) && roleObj != null)
+            {
+                role = roleObj.ToString().ToLower();
+            }
+        }
+
+        UserSession.UserRole = role;
+    }
 
     // --- LOGOUT LOGIC ---
     public async void Logout()
@@ -331,9 +363,9 @@ public class SupabaseAuthManager : MonoBehaviour
                 await Client.Auth.SignOut();
             }
 
-            // Clear active user session
             UserSession.CurrentUserId = null;
             UserSession.CurrentUserEmail = null;
+            UserSession.UserRole = "student";
 
             if (userNameText != null) userNameText.text = "";
             if (profileAvatarImage != null && defaultAvatarSprite != null)
@@ -354,9 +386,18 @@ public class SupabaseAuthManager : MonoBehaviour
         }
     }
 
-    // --- MAIN MENU PANEL INITIALIZATION ---
+    // --- MAIN MENU / EDUCATOR PANEL NAVIGATION ---
     private void OpenMainMenuPanel()
     {
+        // ROUTE BASED ON ROLE:
+        if (UserSession.IsEducator)
+        {
+            Debug.Log("[Auth] Educator detected. Redirecting to Educator Dashboard...");
+            SceneManager.LoadScene("EducatorDashboardScene");
+            return;
+        }
+
+        // STANDARD STUDENT MAIN MENU NAVIGATION:
         if (firstPanel != null) firstPanel.SetActive(false);
         if (loginPanel != null) loginPanel.SetActive(false);
         if (signUpPanel != null) signUpPanel.SetActive(false);
@@ -452,9 +493,6 @@ public class SupabaseAuthManager : MonoBehaviour
         return true;
     }
 
-    /// <summary>
-    /// Parses raw exception messages into user-friendly status text.
-    /// </summary>
     private string FormatAuthError(string rawMessage, bool isSignUp, bool isOAuth = false)
     {
         if (string.IsNullOrEmpty(rawMessage)) return "An unexpected error occurred.";
@@ -463,14 +501,13 @@ public class SupabaseAuthManager : MonoBehaviour
 
         if (isOAuth)
         {
-            if (msg.Contains("access_denied") || msg.Contains("cancelled") || msg.Contains("canceled"))
-                return "Google sign-in was cancelled.";
+            if (msg.Contains("timed out") || msg.Contains("cancelled") || msg.Contains("canceled"))
+                return "Google sign-in timed out or was cancelled.";
             if (msg.Contains("listener") || msg.Contains("port") || msg.Contains("prefix"))
                 return "Browser redirect failed. Please try again.";
             return "Google sign-in failed. Please try again.";
         }
 
-        // Common Supabase/GoTrue error mappings
         if (msg.Contains("already registered") || msg.Contains("already exists") || msg.Contains("422"))
             return "An account with this email already exists.";
         if (msg.Contains("invalid login credentials") || msg.Contains("invalid_grant") || msg.Contains("400"))
