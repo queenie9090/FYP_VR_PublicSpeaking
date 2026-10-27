@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using TMPro;
 
 public class InteractionManager : MonoBehaviour
 {
@@ -33,6 +34,7 @@ public class InteractionManager : MonoBehaviour
     [SerializeField] private GameObject emotionPanel;
     [SerializeField] private Button startSessionButton;
     [SerializeField] private Button exitButton;
+    [SerializeField] private ScenarioBriefingUI scenarioBriefingUI;
 
     [Header("VR Locomotion Control")]
     [SerializeField] private UnityEngine.XR.Interaction.Toolkit.Locomotion.LocomotionProvider moveProvider;
@@ -62,7 +64,9 @@ public class InteractionManager : MonoBehaviour
             SelectActiveNPC(roomNPCs[0]);
         }
 
-        if (exitButton != null) exitButton.onClick.AddListener(ExitSession);
+        if (exitButton != null) exitButton.onClick.AddListener(ExitSession);      
+
+
         if (startSessionButton != null)
         {
             startSessionButton.onClick.RemoveAllListeners();
@@ -79,6 +83,9 @@ public class InteractionManager : MonoBehaviour
 
     private void InitScenarioConfig()
     {
+        string currentSceneName = SceneManager.GetActiveScene().name;
+        bool isTutorial = UserSession.IsRunningTutorial || currentSceneName == "TutorialScene";
+
         if (UserSession.IsRunningTutorial)
         {
             activeConfig = new ScenarioConfig
@@ -97,6 +104,11 @@ public class InteractionManager : MonoBehaviour
         {
             activeConfig = UserSession.SelectedScenarioConfig;
         }
+        
+        if (scenarioBriefingUI != null)
+        {
+            scenarioBriefingUI.SetupBriefing(activeConfig);
+        }
 
         if (emotionPanel != null)
         {
@@ -111,8 +123,6 @@ public class InteractionManager : MonoBehaviour
             startSessionButton.interactable = false;
 
         SetLocomotionEnabled(false);
-        // Ensure global session mode accurately reflects Hands-Free mode
-        UserSession.InputMode = "Hands-Free";
 
         if (startConfigPanel != null)
             startConfigPanel.SetActive(false);
@@ -161,8 +171,11 @@ public class InteractionManager : MonoBehaviour
     {
         while (isSessionActive)
         {
-            sessionElapsedTimeSeconds += Time.deltaTime;
-            uiManager.UpdateTimerDisplay(sessionElapsedTimeSeconds);
+            if (Time.timeScale > 0f)
+            {
+                sessionElapsedTimeSeconds += Time.deltaTime;
+                uiManager.UpdateTimerDisplay(sessionElapsedTimeSeconds);
+            }
             yield return null;
         }
     }
@@ -171,7 +184,6 @@ public class InteractionManager : MonoBehaviour
     {
         while (isSessionActive)
         {
-
             AudioSource activeAudio = (currentActiveNPC != null && currentActiveNPC.npcAudioSource != null)
                 ? currentActiveNPC.npcAudioSource
                 : fallbackNpcAudioSource;
@@ -182,7 +194,7 @@ public class InteractionManager : MonoBehaviour
                 yield return null;
             }
 
-            if (!isSessionActive) yield break;            
+            if (!isSessionActive) yield break;
 
             uiManager.SetStatus("Listening...");
 
@@ -190,12 +202,18 @@ public class InteractionManager : MonoBehaviour
             float speechDuration = 0f, silenceDuration = 0f;
             bool recDone = false;
 
-            StartCoroutine(audioRecorder.RecordUserSpeechRoutine((bytes, sDuration, silDuration) => {
-                wavBytes = bytes; speechDuration = sDuration; silenceDuration = silDuration;
-                recDone = true;
-            }));
+            // Pass live remaining time directly into the UI status text bar
+            StartCoroutine(audioRecorder.RecordUserSpeechRoutine(
+                (bytes, sDuration, silDuration) => {
+                    wavBytes = bytes; speechDuration = sDuration; silenceDuration = silDuration;
+                    recDone = true;
+                },
+                (currentSec, maxSec) => {
+                    int remainingSec = Mathf.CeilToInt(maxSec - currentSec);
+                    uiManager.SetStatus($"Recording... {remainingSec}s remaining");
+                }
+            ));
 
-            uiManager.SetStatus("Recording...");
             yield return new WaitUntil(() => recDone);
 
             if (!isSessionActive) yield break;
@@ -611,18 +629,30 @@ public class InteractionManager : MonoBehaviour
             startConfigPanel.SetActive(false);
         }
 
-        if (UserSession.IsRunningTutorial)
+        bool isQuickExit = AppSystemManager.Instance != null && AppSystemManager.Instance.isQuickExitEnabled;
+
+        if (isQuickExit)
         {
             if (uiManager != null)
             {
-                uiManager.SetStatus("Tutorial Completed! Walk to the Exit Zone to begin your scenario.");
+                uiManager.SetStatus("Session Ended. Click 'Exit Session' on UI to leave or walk to the door.");
+            }
+
+            // Point UI exit button directly to scene transition
+            if (exitButton != null)
+            {
+                exitButton.onClick.RemoveAllListeners();
+                exitButton.onClick.AddListener(ConfirmExitFromDoor);
             }
         }
         else
         {
             if (uiManager != null)
             {
-                uiManager.SetStatus("Session Ended. Walk to the Exit Zone to leave.");
+                if (UserSession.IsRunningTutorial)
+                    uiManager.SetStatus("Tutorial Completed! Walk to the Exit Zone to begin your scenario.");
+                else
+                    uiManager.SetStatus("Session Ended. Walk to the Exit Zone to leave.");
             }
         }
     }

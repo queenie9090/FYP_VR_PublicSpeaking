@@ -206,8 +206,6 @@ public class PCDashboardController : MonoBehaviour
         switch (cleanScenario)
         {
             case "Hall":
-            case "Stage Venue":
-            case "StageVenue":
                 scenarioWeightsSubtext.text = "Weights: Clarity (40%)\nEye Contact (20%)\nGestures (40%)";
                 break;
             case "Classroom":

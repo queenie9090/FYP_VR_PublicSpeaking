@@ -108,8 +108,7 @@ public static class MetricsCalculator
 
         switch (cleanScenario)
         {
-            case "hall":
-            case "stagevenue":
+            case "hall":            
                 wClarity = 0.40f;
                 wEye = 0.20f;
                 wGesture = 0.40f;
