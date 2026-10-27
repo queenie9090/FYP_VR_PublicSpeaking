@@ -15,8 +15,7 @@ public class ScenarioCardUI : MonoBehaviour
     {
         switch (selectedScenarioName)
         {
-            case "Stage Venue":
-            case "StageVenue":
+            case "Hall":
                 SetWeights("40%", "20%", "40%");
                 SetExplanation("Large-room scenario: Prioritizes open gestures and speech articulation over close eye tracking.");
                 break;

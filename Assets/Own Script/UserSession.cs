@@ -8,7 +8,7 @@ public static class UserSession
 
     // Configured scenario parameters from Setup UI
     public static ScenarioConfig SelectedScenarioConfig { get; set; } = new ScenarioConfig();
-    public static string InputMode { get; set; } = "Hands-Free";
+    public static string InputMode { get; set; } = "Hands-Tracking";
 
     // Session control flags
     public static bool IsRunningTutorial { get; set; } = false;
