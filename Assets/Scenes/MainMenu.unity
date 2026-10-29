@@ -7119,7 +7119,7 @@ MonoBehaviour:
   difficultyDropdown: {fileID: 1725843865}
   participantRoleInput: {fileID: 278377011}
   npcPersonaInput: {fileID: 1770195601}
-  inputModeToggle: {fileID: 1969409504}
+  inputModeToggle: {fileID: 2019157699}
   dontShowTutorialAgainToggle: {fileID: 1862631168}
 --- !u!4 &362763786
 Transform:
@@ -34629,7 +34629,19 @@ MonoBehaviour:
   m_Group: {fileID: 253772707}
   onValueChanged:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 1677590602}
+        m_TargetAssemblyTypeName: UnityEngine.AudioSource, UnityEngine
+        m_MethodName: Play
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
   m_IsOn: 0
 --- !u!1 &1971723345
 GameObject:
@@ -35871,7 +35883,19 @@ MonoBehaviour:
   m_Group: {fileID: 253772707}
   onValueChanged:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 1677590602}
+        m_TargetAssemblyTypeName: UnityEngine.AudioSource, UnityEngine
+        m_MethodName: Play
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
   m_IsOn: 1
 --- !u!1 &2022779278
 GameObject:

@@ -15,7 +15,10 @@ public class InteractionManager : MonoBehaviour
     [SerializeField] private DialogueUIManager uiManager;
     [SerializeField] private VRPlayerSeating playerSeating;
     [SerializeField] private EyeContactTracker eyeContactTracker;
-    [SerializeField] private GestureTracker gestureTracker;
+    [SerializeField] private GestureTracker gestureTracker;    
+    [SerializeField] private ObjectiveManager objectiveManager;
+    [SerializeField] private HintManager hintManager;
+
 
     [Header("Multi-NPC Setup")]
     [Tooltip("Assign all NPCs available in this scene. Leave size = 1 for single-NPC scenes.")]
@@ -64,8 +67,10 @@ public class InteractionManager : MonoBehaviour
             SelectActiveNPC(roomNPCs[0]);
         }
 
-        if (exitButton != null) exitButton.onClick.AddListener(ExitSession);      
+        if (exitButton != null) exitButton.onClick.AddListener(ExitSession);
 
+        if (hintManager == null)
+            hintManager = FindObjectOfType<HintManager>();
 
         if (startSessionButton != null)
         {
@@ -124,6 +129,11 @@ public class InteractionManager : MonoBehaviour
 
         SetLocomotionEnabled(false);
 
+        if (objectiveManager != null)
+        {
+            objectiveManager.OnConversationStarted();
+        }
+
         if (startConfigPanel != null)
             startConfigPanel.SetActive(false);
 
@@ -152,6 +162,12 @@ public class InteractionManager : MonoBehaviour
 
         SetLocomotionEnabled(false);
 
+        if (hintManager != null)
+        {
+            hintManager.SyncInputModeFromUserSession();
+            hintManager.SetDialogueState(true, "Press Y or raise Open Palm to request a dialogue hint.");
+        }
+
         if (emotionPanel != null) emotionPanel.SetActive(true);
         sessionElapsedTimeSeconds = 0f; totalSpeakingTimeSeconds = 0f; totalSilenceTimeSeconds = 0f; totalFillerWordsDetected = 0;
         previousEmotion = "NEUTRAL";
@@ -162,6 +178,7 @@ public class InteractionManager : MonoBehaviour
         if (npcEmotionController != null) npcEmotionController.SetEmotion("NEUTRAL", 0);
         if (eyeContactTracker != null) eyeContactTracker.StartTracking();
         if (gestureTracker != null) gestureTracker.ResetTracker();
+        if (uiManager != null && activeConfig != null) uiManager.InitTurnCounter(activeConfig.maxTurnLimit);       
 
         StartCoroutine(TrackSessionTimerRoutine());
         StartCoroutine(HandsFreeSpeechInteractionLoop());
@@ -323,6 +340,11 @@ public class InteractionManager : MonoBehaviour
         conversationHistory.Add(new DialogueTurn { speaker = "NPC", dialogue = response.npc_response });
         uiManager.RenderDialogue(conversationHistory);
 
+        if (hintManager != null)
+        {
+            hintManager.SetDialogueState(true, $"Respond clearly to {currentActiveNPC?.name ?? "NPC"}'s question.");
+        }
+
         uiManager.SetStatus("NPC Speaking...");
         yield return StartCoroutine(PlayNPCAudioRoutine(response.npc_response));
 
@@ -368,45 +390,43 @@ public class InteractionManager : MonoBehaviour
         }
     }
 
-    /// <summary>
     /// ALGORITHM 7: Hand Gesture Hint Activation Callback Method
     /// Invoked when GestureTracker detects an Open Palm > 1.0s.
-    /// </summary>
     public void TriggerHintActivation()
     {
         if (!isSessionActive) return;
 
-        if (gestureTracker != null)
+        // 1. Immediately show loading feedback on the active VR canvas
+        if (hintManager != null)
         {
-            gestureTracker.ShowHint("Generating hint...");
+            hintManager.ShowDirectMessage("Generating AI hint...");
         }
 
+        // 2. Build context prompt from conversation history
         string lastUserScript = conversationHistory.Count > 0 ? conversationHistory[conversationHistory.Count - 1].dialogue : "";
         string hintPrompt = PromptBuilder.BuildHintPrompt(activeConfig, conversationHistory, lastUserScript);
 
+        // 3. Send API request to OpenAI
         StartCoroutine(openAIManager.SendHintRequest(
             hintPrompt,
             generatedHint => {
                 if (!string.IsNullOrEmpty(generatedHint))
                 {
-                    Debug.Log($"[Hint Received] {generatedHint}");
+                    Debug.Log($"[AI Hint Received] {generatedHint}");
 
-                    // Display directly on the VR Hand Canvas
-                    if (gestureTracker != null)
+                    // Update HintManager so it stores AND displays the new AI hint!
+                    if (hintManager != null)
                     {
-                        gestureTracker.ShowHint(generatedHint);
+                        hintManager.SetDialogueState(true, generatedHint);
+                        hintManager.ShowDirectMessage(generatedHint);
                     }
 
-                    // Optional: Mirror on Dialogue UI status bar
-                    if (uiManager != null)
-                    {
-                        uiManager.SetStatus($"Hint Generated");
-                    }
+                    if (uiManager != null) uiManager.SetStatus("Hint Generated");
                 }
             },
             err => {
                 Debug.LogError($"[Hint Error] {err}");
-                if (gestureTracker != null) gestureTracker.ShowHint("Failed to load hint.");
+                if (hintManager != null) hintManager.ShowDirectMessage("Failed to generate hint.");
             }
         ));
     }
@@ -613,7 +633,12 @@ public class InteractionManager : MonoBehaviour
         isSessionActive = false;
         isSavingSession = false;
         SetLocomotionEnabled(true);
-        
+
+        if (hintManager != null)
+        {
+            hintManager.HideHintCanvas();            
+        }
+
         if (audioRecorder != null)
         {
             audioRecorder.StopRecording();
@@ -630,6 +655,16 @@ public class InteractionManager : MonoBehaviour
         }
 
         bool isQuickExit = AppSystemManager.Instance != null && AppSystemManager.Instance.isQuickExitEnabled;
+
+        if (objectiveManager != null)
+        {
+            objectiveManager.ShowExitObjective(isQuickExit);
+        }
+
+        if (uiManager != null)
+        {
+            uiManager.HideTurnCounter();
+        }
 
         if (isQuickExit)
         {
