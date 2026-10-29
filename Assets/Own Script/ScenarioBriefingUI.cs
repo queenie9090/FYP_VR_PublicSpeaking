@@ -11,18 +11,23 @@ public class ScenarioBriefingUI : MonoBehaviour
     {
         if (config == null || fullBriefingText == null) return;
 
-        // Combine all scenario details into a single formatted text block using Rich Text formatting
+        // Clean, readable formatting with clear visual hierarchy
         fullBriefingText.text =
-            $"Scenario: {config.scenario}\n" +
-            $"Your Role: {config.participantRole}\n" +
-            $"Persona: {config.persona}\n" +
-            $"Topic: {config.topic}\n" +
-            $"Difficulty: {config.difficulty}\n\n" +
-            $"<size=110%><b>OBJECTIVE</b></size>\n" +
+            $"<b><size=120%>{CleanScenarioName(config.scenario)}</size></b>\n" +
+            $"<color=#AAAAAA>Role: {config.participantRole}  |  Difficulty: {config.difficulty}</color>\n\n" +
+
+            $"<b>TARGET OBJECTIVE</b>\n" +
             $"{config.sessionObjective}\n\n" +
-            $"<size=110%><b>SESSION RULES</b></size>\n" +
-            $"• <b>Maximum Turns:</b> {config.maxTurnLimit} turns total.\n" +
-            $"• <b>Speaking Limit:</b> Up to 60 seconds per response.\n" +
-            $"• Focus on concrete examples and detailed explanations when answering.";
+
+            $"<b>KEY DETAILS</b>\n" +
+            $"• <b>Speaking With:</b> {config.persona} ({config.topic})\n" +
+            $"• <b>Turn Limit:</b> {config.maxTurnLimit} Turns";
+    }
+
+    // Helper to turn "CafeteriaScene" into "Cafeteria"
+    private string CleanScenarioName(string rawName)
+    {
+        if (string.IsNullOrEmpty(rawName)) return "Scenario Briefing";
+        return rawName.Replace("Scene", "").Trim();
     }
 }
