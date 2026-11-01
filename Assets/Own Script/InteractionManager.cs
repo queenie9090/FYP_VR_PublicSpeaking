@@ -1,9 +1,10 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using TMPro;
 
 public class InteractionManager : MonoBehaviour
 {
@@ -14,11 +15,17 @@ public class InteractionManager : MonoBehaviour
     [SerializeField] private DialogueUIManager uiManager;
     [SerializeField] private VRPlayerSeating playerSeating;
     [SerializeField] private EyeContactTracker eyeContactTracker;
-    [SerializeField] private GestureTracker gestureTracker;
+    [SerializeField] private GestureTracker gestureTracker;    
+    [SerializeField] private ObjectiveManager objectiveManager;
+    [SerializeField] private HintManager hintManager;
 
-    [Header("Audio Output")]
-    [SerializeField] private AudioSource npcAudioSource;
+
+    [Header("Multi-NPC Setup")]
+    [Tooltip("Assign all NPCs available in this scene. Leave size = 1 for single-NPC scenes.")]
+    [SerializeField] private List<NPCPersona> roomNPCs = new List<NPCPersona>();
     [SerializeField] private NPCPersona currentActiveNPC;
+    [SerializeField] private AudioSource fallbackNpcAudioSource;
+    private int currentNPCIndex = 0;
 
     [Header("NPC Emotion")]
     [SerializeField] private NPCEmotionController npcEmotionController;
@@ -30,6 +37,11 @@ public class InteractionManager : MonoBehaviour
     [SerializeField] private GameObject emotionPanel;
     [SerializeField] private Button startSessionButton;
     [SerializeField] private Button exitButton;
+    [SerializeField] private ScenarioBriefingUI scenarioBriefingUI;
+
+    [Header("VR Locomotion Control")]
+    [SerializeField] private UnityEngine.XR.Interaction.Toolkit.Locomotion.LocomotionProvider moveProvider;
+    [SerializeField] private UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation.TeleportationProvider teleportProvider;
 
     [Header("Navigation")]
     [SerializeField] private string defaultDashboardScene = "DashboardScene";
@@ -37,6 +49,7 @@ public class InteractionManager : MonoBehaviour
     private ScenarioConfig activeConfig;
     private List<DialogueTurn> conversationHistory = new List<DialogueTurn>();
     private bool isSessionActive = false;
+    private bool isSavingSession = false;
 
     private float sessionElapsedTimeSeconds = 0.0f;
     private float totalSpeakingTimeSeconds = 0.0f;
@@ -49,7 +62,16 @@ public class InteractionManager : MonoBehaviour
     {
         InitScenarioConfig();
 
+        if (roomNPCs != null && roomNPCs.Count > 0)
+        {
+            SelectActiveNPC(roomNPCs[0]);
+        }
+
         if (exitButton != null) exitButton.onClick.AddListener(ExitSession);
+
+        if (hintManager == null)
+            hintManager = FindObjectOfType<HintManager>();
+
         if (startSessionButton != null)
         {
             startSessionButton.onClick.RemoveAllListeners();
@@ -58,8 +80,17 @@ public class InteractionManager : MonoBehaviour
         }
     }
 
+    public void SetLocomotionEnabled(bool enabled)
+    {
+        if (moveProvider != null) moveProvider.enabled = enabled;
+        if (teleportProvider != null) teleportProvider.enabled = enabled;
+    }
+
     private void InitScenarioConfig()
     {
+        string currentSceneName = SceneManager.GetActiveScene().name;
+        bool isTutorial = UserSession.IsRunningTutorial || currentSceneName == "TutorialScene";
+
         if (UserSession.IsRunningTutorial)
         {
             activeConfig = new ScenarioConfig
@@ -69,7 +100,7 @@ public class InteractionManager : MonoBehaviour
                 difficulty = "Easy",
                 participantRole = "Trainee",
                 persona = "VR Guide",
-                sessionObjective = "Practice speech.",
+                sessionObjective = "Guide the user to test their microphone. Ask the user to introduce themselves, state their name, and describe how they are feeling today in 1-2 sentences.",
                 maxTurnLimit = 2,
                 sessionStartSignal = "Start Tutorial"
             };
@@ -77,6 +108,11 @@ public class InteractionManager : MonoBehaviour
         else
         {
             activeConfig = UserSession.SelectedScenarioConfig;
+        }
+        
+        if (scenarioBriefingUI != null)
+        {
+            scenarioBriefingUI.SetupBriefing(activeConfig);
         }
 
         if (emotionPanel != null)
@@ -91,8 +127,12 @@ public class InteractionManager : MonoBehaviour
         if (startSessionButton != null)
             startSessionButton.interactable = false;
 
-        // Ensure global session mode accurately reflects Hands-Free mode
-        UserSession.InputMode = "Hands-Free";
+        SetLocomotionEnabled(false);
+
+        if (objectiveManager != null)
+        {
+            objectiveManager.OnConversationStarted();
+        }
 
         if (startConfigPanel != null)
             startConfigPanel.SetActive(false);
@@ -119,6 +159,15 @@ public class InteractionManager : MonoBehaviour
     {
         isSessionActive = true;
         conversationHistory.Clear();
+
+        SetLocomotionEnabled(false);
+
+        if (hintManager != null)
+        {
+            hintManager.SyncInputModeFromUserSession();
+            hintManager.SetDialogueState(true, "Press Y or raise Open Palm to request a dialogue hint.");
+        }
+
         if (emotionPanel != null) emotionPanel.SetActive(true);
         sessionElapsedTimeSeconds = 0f; totalSpeakingTimeSeconds = 0f; totalSilenceTimeSeconds = 0f; totalFillerWordsDetected = 0;
         previousEmotion = "NEUTRAL";
@@ -129,6 +178,7 @@ public class InteractionManager : MonoBehaviour
         if (npcEmotionController != null) npcEmotionController.SetEmotion("NEUTRAL", 0);
         if (eyeContactTracker != null) eyeContactTracker.StartTracking();
         if (gestureTracker != null) gestureTracker.ResetTracker();
+        if (uiManager != null && activeConfig != null) uiManager.InitTurnCounter(activeConfig.maxTurnLimit);       
 
         StartCoroutine(TrackSessionTimerRoutine());
         StartCoroutine(HandsFreeSpeechInteractionLoop());
@@ -138,8 +188,11 @@ public class InteractionManager : MonoBehaviour
     {
         while (isSessionActive)
         {
-            sessionElapsedTimeSeconds += Time.deltaTime;
-            uiManager.UpdateTimerDisplay(sessionElapsedTimeSeconds);
+            if (Time.timeScale > 0f)
+            {
+                sessionElapsedTimeSeconds += Time.deltaTime;
+                uiManager.UpdateTimerDisplay(sessionElapsedTimeSeconds);
+            }
             yield return null;
         }
     }
@@ -148,9 +201,13 @@ public class InteractionManager : MonoBehaviour
     {
         while (isSessionActive)
         {
-            while (npcAudioSource != null && npcAudioSource.isPlaying)
+            AudioSource activeAudio = (currentActiveNPC != null && currentActiveNPC.npcAudioSource != null)
+                ? currentActiveNPC.npcAudioSource
+                : fallbackNpcAudioSource;
+
+            while (activeAudio != null && activeAudio.isPlaying)
             {
-                uiManager.SetStatus("NPC Speaking...");
+                uiManager.SetStatus($"{currentActiveNPC?.name ?? "NPC"} Speaking...");
                 yield return null;
             }
 
@@ -162,12 +219,18 @@ public class InteractionManager : MonoBehaviour
             float speechDuration = 0f, silenceDuration = 0f;
             bool recDone = false;
 
-            StartCoroutine(audioRecorder.RecordUserSpeechRoutine((bytes, sDuration, silDuration) => {
-                wavBytes = bytes; speechDuration = sDuration; silenceDuration = silDuration;
-                recDone = true;
-            }));
+            // Pass live remaining time directly into the UI status text bar
+            StartCoroutine(audioRecorder.RecordUserSpeechRoutine(
+                (bytes, sDuration, silDuration) => {
+                    wavBytes = bytes; speechDuration = sDuration; silenceDuration = silDuration;
+                    recDone = true;
+                },
+                (currentSec, maxSec) => {
+                    int remainingSec = Mathf.CeilToInt(maxSec - currentSec);
+                    uiManager.SetStatus($"Recording... {remainingSec}s remaining");
+                }
+            ));
 
-            uiManager.SetStatus("Recording...");
             yield return new WaitUntil(() => recDone);
 
             if (!isSessionActive) yield break;
@@ -277,6 +340,11 @@ public class InteractionManager : MonoBehaviour
         conversationHistory.Add(new DialogueTurn { speaker = "NPC", dialogue = response.npc_response });
         uiManager.RenderDialogue(conversationHistory);
 
+        if (hintManager != null)
+        {
+            hintManager.SetDialogueState(true, $"Respond clearly to {currentActiveNPC?.name ?? "NPC"}'s question.");
+        }
+
         uiManager.SetStatus("NPC Speaking...");
         yield return StartCoroutine(PlayNPCAudioRoutine(response.npc_response));
 
@@ -287,54 +355,86 @@ public class InteractionManager : MonoBehaviour
             yield break;
         }
 
+        SelectNextNPC();
         uiManager.SetStatus("Recording...");
     }
 
     private IEnumerator PlayNPCAudioRoutine(string textToSpeak)
     {
         bool downloaded = false; AudioClip clip = null;
-        string voice = (currentActiveNPC != null && !string.IsNullOrEmpty(currentActiveNPC.voiceId)) ? currentActiveNPC.voiceId : "nova";
+
+        // Use current active NPC's specific Voice ID (e.g., "echo" vs "nova")
+        string voice = (currentActiveNPC != null && !string.IsNullOrEmpty(currentActiveNPC.voiceId))
+            ? currentActiveNPC.voiceId
+            : "nova";
 
         StartCoroutine(openAIManager.TextToSpeech(textToSpeak, voice, c => { clip = c; downloaded = true; }, err => downloaded = true));
         yield return new WaitUntil(() => downloaded);
 
         if (clip != null)
         {
-            AudioSource targetSource = (currentActiveNPC != null && currentActiveNPC.npcAudioSource != null) ? currentActiveNPC.npcAudioSource : npcAudioSource;
+            // Play audio directly from the active NPC's mouth/desk AudioSource
+            AudioSource targetSource = (currentActiveNPC != null && currentActiveNPC.npcAudioSource != null)
+                ? currentActiveNPC.npcAudioSource
+                : fallbackNpcAudioSource;
+
+            Animator npcAnimator = currentActiveNPC != null ? currentActiveNPC.GetComponent<Animator>() : null;
+            if (npcAnimator != null) npcAnimator.SetBool("IsTalking", true);
+
             targetSource.clip = clip;
             targetSource.Play();
             yield return new WaitForSeconds(0.1f);
             while (targetSource != null && targetSource.isPlaying) yield return null;
+
+            if (npcAnimator != null) npcAnimator.SetBool("IsTalking", false);
         }
     }
 
-    /// <summary>
     /// ALGORITHM 7: Hand Gesture Hint Activation Callback Method
     /// Invoked when GestureTracker detects an Open Palm > 1.0s.
-    /// </summary>
     public void TriggerHintActivation()
     {
         if (!isSessionActive) return;
 
-        uiManager.SetStatus("Generating Hint...");
-        string lastUserScript = conversationHistory.Count > 0 ? conversationHistory[conversationHistory.Count - 1].dialogue : "";
+        // 1. Immediately show loading feedback on the active VR canvas
+        if (hintManager != null)
+        {
+            hintManager.ShowDirectMessage("Generating AI hint...");
+        }
 
-        // Fix CS7036: Pass conversationHistory into BuildHintPrompt
-        StartCoroutine(openAIManager.SendChatRequest(
-            PromptBuilder.BuildHintPrompt(activeConfig, conversationHistory), conversationHistory, lastUserScript,
-            res => {
-                if (res != null && !string.IsNullOrEmpty(res.npc_response))
+        // 2. Build context prompt from conversation history
+        string lastUserScript = conversationHistory.Count > 0 ? conversationHistory[conversationHistory.Count - 1].dialogue : "";
+        string hintPrompt = PromptBuilder.BuildHintPrompt(activeConfig, conversationHistory, lastUserScript);
+
+        // 3. Send API request to OpenAI
+        StartCoroutine(openAIManager.SendHintRequest(
+            hintPrompt,
+            generatedHint => {
+                if (!string.IsNullOrEmpty(generatedHint))
                 {
-                    // Fix CS1061: Render hint to UI
-                    uiManager.SetStatus($"Hint: {res.npc_response}");
+                    Debug.Log($"[AI Hint Received] {generatedHint}");
+
+                    // Update HintManager so it stores AND displays the new AI hint!
+                    if (hintManager != null)
+                    {
+                        hintManager.SetDialogueState(true, generatedHint);
+                        hintManager.ShowDirectMessage(generatedHint);
+                    }
+
+                    if (uiManager != null) uiManager.SetStatus("Hint Generated");
                 }
             },
-            err => Debug.LogError($"[Hint Error] {err}")
+            err => {
+                Debug.LogError($"[Hint Error] {err}");
+                if (hintManager != null) hintManager.ShowDirectMessage("Failed to generate hint.");
+            }
         ));
     }
 
     private void CalculateAndSaveResults()
     {
+        if (isSavingSession) return;
+        isSavingSession = true;
         uiManager.SetStatus("Saving Results...");
 
         // Capture session completion timestamp
@@ -410,10 +510,13 @@ public class InteractionManager : MonoBehaviour
         // 4. Generate Dynamic AI Coaching Feedback Summary via OpenAI
         uiManager.SetStatus("Generating AI Feedback...");
 
-        // Refined Prompt explicitly requesting coaching suggestions
+        int unprofessionalCount = gestureTracker != null ? gestureTracker.GetUnprofessionalCount() : 0;
+
+        // Pass unprofessional gesture count to the AI feedback prompt
         string summaryPrompt = $"You are an expert VR speech coach. Provide a concise 2-3 sentence constructive feedback summary with actionable suggestions for improvement based on this participant's performance in a '{currentScenario}' simulation: " +
                                $"Overall Score: {overallScore:F0}%, Speech Clarity: {clarityScore:F0}%, Speaking Rate: {overallWpm:F0} WPM, " +
-                               $"Filler Words Used: {totalFillerWordsDetected}, Eye Contact: {eyeContactPct:F0}%, Gestures Rate: {gpm:F1} GPM.";
+                               $"Filler Words Used: {totalFillerWordsDetected}, Eye Contact: {eyeContactPct:F0}%, Gestures Rate: {gpm:F1} GPM, " +
+                               $"Unprofessional Gestures Flagged: {unprofessionalCount}.";
 
         StartCoroutine(openAIManager.SendChatRequest(
             summaryPrompt,
@@ -486,35 +589,105 @@ public class InteractionManager : MonoBehaviour
 
     public void ExitSession()
     {
-        if (!isSessionActive) return;
-        isSessionActive = false;
-        StopAllCoroutines();
-        uiManager.SetStatus("Chat Ended.");
+        SetLocomotionEnabled(true);
 
-        if (emotionPanel != null) emotionPanel.SetActive(false);
+        // Stop active mic hardware immediately on exit
+        if (audioRecorder != null)
+        {
+            audioRecorder.StopRecording();
+        }
+
+        if (startConfigPanel != null)
+        {
+            startConfigPanel.SetActive(false);
+        }
+
+        // 1. If the session is actively running with dialogue history, calculate and save scores first
+        if (isSessionActive && conversationHistory != null && conversationHistory.Count > 0)
+        {
+            isSessionActive = false;
+            CalculateAndSaveResults();
+        }
+        else
+        {
+
+            // Set UI status when ending manually or exiting after conversation is complete
+            if (uiManager != null)
+            {
+                uiManager.SetStatus("Chat ended. Transitioning to scenario...");
+            }
+            if (emotionPanel != null)
+            {
+                emotionPanel.SetActive(false);
+            }
+
+            isSessionActive = false;
+            StopAllCoroutines();
+            OnSessionCompletedSequence();
+        }
+
     }
 
     private void OnSessionCompletedSequence()
     {
         isSessionActive = false;
+        isSavingSession = false;
+        SetLocomotionEnabled(true);
+
+        if (hintManager != null)
+        {
+            hintManager.HideHintCanvas();            
+        }
+
+        if (audioRecorder != null)
+        {
+            audioRecorder.StopRecording();
+        }
 
         if (emotionPanel != null)
         {
             emotionPanel.SetActive(false);
         }
 
-        if (UserSession.IsRunningTutorial)
+        if (startConfigPanel != null)
+        {
+            startConfigPanel.SetActive(false);
+        }
+
+        bool isQuickExit = AppSystemManager.Instance != null && AppSystemManager.Instance.isQuickExitEnabled;
+
+        if (objectiveManager != null)
+        {
+            objectiveManager.ShowExitObjective(isQuickExit);
+        }
+
+        if (uiManager != null)
+        {
+            uiManager.HideTurnCounter();
+        }
+
+        if (isQuickExit)
         {
             if (uiManager != null)
             {
-                uiManager.SetStatus("Tutorial Completed! Walk to the Exit Zone to begin your scenario.");
+                uiManager.SetStatus("Session Ended. Click 'Exit Session' on UI to leave or walk to the door.");
+            }
+
+            // Point UI exit button directly to scene transition
+            if (exitButton != null)
+            {
+                exitButton.onClick.RemoveAllListeners();
+                exitButton.onClick.AddListener(ConfirmExitFromDoor);
             }
         }
         else
         {
             if (uiManager != null)
             {
-                uiManager.SetStatus("Session Ended. Walk to the Exit Zone to leave.");
+                if (UserSession.IsRunningTutorial)
+                    uiManager.SetStatus("Tutorial Completed! Walk to the Exit Zone to begin your scenario.");
+                else
+                    uiManager.SetStatus("Session Ended. Walk to the Exit Zone to leave.");
             }
         }
     }
@@ -522,17 +695,32 @@ public class InteractionManager : MonoBehaviour
     // Call this method when the player interacts with or walks into the Exit Door / Zone
     public void ConfirmExitFromDoor()
     {
+        Debug.Log("[InteractionManager] Door interaction triggered successfully!");
+        StartCoroutine(ConfirmExitRoutine());
+    }
+
+    private IEnumerator ConfirmExitRoutine()
+    {
+        // 1. If results are still saving to database/metrics, wait briefly for completion
+        while (isSavingSession)
+        {
+            if (uiManager != null) uiManager.SetStatus("Saving progress... Please wait.");
+            yield return new WaitForSeconds(0.5f);
+        }
+
+        // 2. Disable session flag so interaction loops exit naturally
         isSessionActive = false;
-        StopAllCoroutines();
 
-        string targetScene = defaultDashboardScene; // "DashboardScene"
+        // DO NOT call StopAllCoroutines() here as it kills this exit coroutine!
 
-        // Check if exiting from Tutorial
+        // 3. Determine the target scene
+        string targetScene = defaultDashboardScene;
+
         if (UserSession.IsRunningTutorial || (activeConfig != null && activeConfig.scenario == "TutorialScene"))
         {
-            UserSession.IsRunningTutorial = false; // Turn off tutorial flag
+            UserSession.IsRunningTutorial = false; // Reset tutorial flag
 
-            // Route to the scenario selected before entering tutorial (if set)
+            // Check if user pre-selected a scenario (e.g. Interview, Classroom) from the dashboard
             if (UserSession.SelectedScenarioConfig != null &&
                 !string.IsNullOrEmpty(UserSession.SelectedScenarioConfig.scenario) &&
                 UserSession.SelectedScenarioConfig.scenario != "TutorialScene")
@@ -540,19 +728,12 @@ public class InteractionManager : MonoBehaviour
                 targetScene = UserSession.SelectedScenarioConfig.scenario;
             }
         }
-        else
-        {
-            // Exiting from regular scenario -> ALWAYS go to Dashboard
-            targetScene = defaultDashboardScene;
-        }
 
-        // Safety check: Fix old scene names dynamically
-        if (targetScene == "PCDashboardScene")
-        {
-            targetScene = defaultDashboardScene; // Force "DashboardScene"
-        }
+        if (targetScene == "PCDashboardScene") targetScene = defaultDashboardScene;
 
-        Debug.Log($"[InteractionManager] Exiting scenario. Transitioning to target scene: {targetScene}");
+        Debug.Log($"[InteractionManager] Exiting to target scene: '{targetScene}'");
+
+        // 4. Force load the target scene (Unity will automatically clean up scene coroutines)
         SceneManager.LoadScene(targetScene);
     }
 
@@ -583,5 +764,22 @@ public class InteractionManager : MonoBehaviour
         }
 
         return records;
+    }
+
+    public void SelectActiveNPC(NPCPersona targetNPC)
+    {
+        if (targetNPC == null) return;
+        currentActiveNPC = targetNPC;
+        if (roomNPCs.Contains(targetNPC))
+        {
+            currentNPCIndex = roomNPCs.IndexOf(targetNPC);
+        }
+    }
+
+    public void SelectNextNPC()
+    {
+        if (roomNPCs == null || roomNPCs.Count <= 1) return;
+        currentNPCIndex = (currentNPCIndex + 1) % roomNPCs.Count;
+        SelectActiveNPC(roomNPCs[currentNPCIndex]);
     }
 }

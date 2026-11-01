@@ -12,9 +12,9 @@ public class AudioRecorder : MonoBehaviour
         stopRequested = true;
     }
 
-    public IEnumerator RecordUserSpeechRoutine(Action<byte[], float, float> onRecordingComplete)
+    public IEnumerator RecordUserSpeechRoutine(Action<byte[], float, float> onRecordingComplete, Action<float, float> onProgress = null)
     {
-        stopRequested = false; // Reset flag
+        stopRequested = false;
         string selectedMic = Microphone.devices.Length > 0 ? Microphone.devices[0] : null;
 
         if (string.IsNullOrEmpty(selectedMic))
@@ -26,30 +26,33 @@ public class AudioRecorder : MonoBehaviour
 
         float turnStartTime = Time.time;
 
-        // 1. Lower sample rate to 16000 Hz (speech-to-text optimal, drastically reduces size)
         int targetSampleRate = 16000;
-        int maxClipSeconds = 15;
+        int maxClipSeconds = 60;
         AudioClip recordedClip = Microphone.Start(selectedMic, false, maxClipSeconds, targetSampleRate);
 
         if (micVolumeMeter != null)
             micVolumeMeter.EnableVolumeMeter(true, recordedClip, selectedMic);
 
-        yield return new WaitForSeconds(0.2f); // Initial buffer
+        yield return new WaitForSeconds(0.2f);
 
         float speechStart = Time.time;
         float silenceDuration = speechStart - turnStartTime;
 
-        // 2. Tighter silence & duration limits for low-latency responsiveness
-        float dynamicSilenceTimer = 2.0f;  // Reduced from 4.5s to 2.0s
+        float dynamicSilenceTimer = 2.0f;
         float totalRecordingTimer = 0.0f;
-        float maxAllowedDuration = 10.0f;  // Reduced safety cap from 20s to 10s
+        float maxAllowedDuration = 60.0f;
         float[] sampleBuffer = new float[128];
 
-        // Loop runs until VAD times out, max limit is reached, OR user hits Stop
         while (dynamicSilenceTimer > 0.0f && totalRecordingTimer < maxAllowedDuration && !stopRequested)
         {
             yield return new WaitForSeconds(0.1f);
-            totalRecordingTimer += 0.1f;
+
+            // FIXED: Removed duplicate timer addition lines
+            if (Time.timeScale > 0f)
+            {
+                totalRecordingTimer += 0.1f;
+                onProgress?.Invoke(totalRecordingTimer, maxAllowedDuration);
+            }
 
             if (Microphone.IsRecording(selectedMic) && recordedClip != null)
             {
@@ -82,7 +85,6 @@ public class AudioRecorder : MonoBehaviour
 
         float speechDuration = Time.time - speechStart;
 
-        // 3. Trim the clip to actual recorded duration before converting to WAV
         AudioClip trimmedClip = TrimAudioClip(recordedClip, lastMicPosition);
         byte[] wavBytes = SavWav.GetWavBytes(trimmedClip);
 
@@ -106,5 +108,25 @@ public class AudioRecorder : MonoBehaviour
         );
         trimmedClip.SetData(samples, 0);
         return trimmedClip;
+    }
+
+    public void StopRecording()
+    {
+        stopRequested = true;
+        StopAllCoroutines(); // Stop RecordUserSpeechRoutine on this component
+
+        // 1. Terminate the active microphone device stream
+        string selectedMic = Microphone.devices.Length > 0 ? Microphone.devices[0] : null;
+        if (!string.IsNullOrEmpty(selectedMic) && Microphone.IsRecording(selectedMic))
+        {
+            Microphone.End(selectedMic);
+            Debug.Log("[AudioRecorder] Microphone capture forcibly stopped.");
+        }
+
+        // 2. Turn off the UI volume meter if active
+        if (micVolumeMeter != null)
+        {
+            micVolumeMeter.EnableVolumeMeter(false, null, null);
+        }
     }
 }

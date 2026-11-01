@@ -5,9 +5,34 @@ using UnityEngine;
 
 public class GestureTracker : MonoBehaviour
 {
+    [Header("Manager References")]
+    [SerializeField] private InteractionManager interactionManager;
+    [SerializeField] private HandTrackingTutorialManager tutorialManager;
+    [SerializeField] private HintManager hintManager; // Reference to Central Hint Manager
+
+    [Header("Unprofessional Gesture Tracking")]
+    private int unprofessionalGestureCount = 0;
+
     private List<Tuple<string, float>> validExpressiveGestures = new List<Tuple<string, float>>();
     private float activeTrackingDurationSeconds = 0.0f;
     private bool isTracking = false;
+
+    private void Awake()
+    {
+        StartTracking();
+    }
+
+    private void Start()
+    {
+        if (interactionManager == null)
+            interactionManager = FindObjectOfType<InteractionManager>();
+
+        if (tutorialManager == null)
+            tutorialManager = FindObjectOfType<HandTrackingTutorialManager>();
+
+        if (hintManager == null)
+            hintManager = FindObjectOfType<HintManager>();
+    }
 
     private void Update()
     {
@@ -17,81 +42,84 @@ public class GestureTracker : MonoBehaviour
         }
     }
 
-    // Called when the VR interaction session starts or resets
-    public void StartTracking()
-    {
-        ResetTracker();
-    }
+    public void StartTracking() => ResetTracker();
+    public void StopTracking() => isTracking = false;
 
     public void ResetTracker()
     {
         validExpressiveGestures.Clear();
+        unprofessionalGestureCount = 0;
         activeTrackingDurationSeconds = 0.0f;
         isTracking = true;
-        Debug.Log("[GestureTracker] Gesture tracking started/reset.");
     }
 
-    // Called when the VR session ends
-    public void StopTracking()
-    {
-        isTracking = false;
-        Debug.Log($"[GestureTracker] Tracking stopped. Expressive Gestures recorded: {validExpressiveGestures.Count}");
-    }
+    // -------------------------------------------------------------
+    // UnityEvent Entry Points (for XR Hand Tracking Events)
+    // -------------------------------------------------------------
+    public void TriggerOpenPalmGesture() => ProcessGestureEvent("Open Palm", 1.2f);
+    public void TriggerPinchGesture() => ProcessGestureEvent("Pinch", 0.5f);
+    public void TriggerPointPinchGesture() => ProcessGestureEvent("Point + Pinch", 0.5f);
+    public void TriggerGrabGesture() => ProcessGestureEvent("Grab", 0.5f);
+    public void TriggerSocialGreetingGesture() => ProcessGestureEvent("Wave", 1.0f);
 
-    /// <summary>
-    /// Processes gesture events detected by the Meta Quest hand tracking SDK.
-    /// ALGORITHM 6 & ALGORITHM 7 Implementation.
-    /// </summary>
-    public void ProcessGestureEvent(string gestureType, float gestureDuration, Action onTriggerHintCallback)
+    public void ProcessGestureEvent(string gestureType, float gestureDuration)
     {
         if (!isTracking) return;
 
-        // 1. Exclude VR interaction gestures (Algorithm 6: Lines 4-5)
-        if (gestureType == "Pinch" || gestureType == "Point + Pinch" || gestureType == "Grab" || gestureType == "Handshake")
+        // 1. Tutorial Progress
+        if (tutorialManager != null)
         {
-            return; // Excluded from movement analysis
+            switch (gestureType)
+            {
+                case "Open Palm":
+                    if (gestureDuration > 1.0f) tutorialManager.OnOpenPalmDetected();
+                    break;
+                case "Pinch": tutorialManager.OnPinchConfirmed(); break;
+                case "Point + Pinch": tutorialManager.OnPointPinchTeleportCompleted(); break;
+                case "Grab": tutorialManager.OnObjectGrabbed(); break;
+                case "Wave":
+                case "Handshake": tutorialManager.OnSocialGreetingCompleted(); break;
+            }
         }
 
-        // 2. Open Palm classification rule (Algorithm 6: Lines 6-13 / Algorithm 7: Lines 3-12)
-        if (gestureType == "Open Palm")
+        // 2. Ignore VR Navigation Gestures for Expressive Metrics
+        if (gestureType == "Pinch" || gestureType == "Point + Pinch" || gestureType == "Grab" || gestureType == "Handshake")
         {
-            if (gestureDuration > 1.0f)
-            {
-                // ALGORITHM 7: Classified as Hint Activation (> 1.0s)
-                Debug.Log("[GestureTracker] Open Palm > 1.0s detected -> Triggering Hint Activation.");
-                onTriggerHintCallback?.Invoke();
-                return; // Excluded from expressive movement count
-            }
-            else
-            {
-                // Classified as Expressive Communication Gesture (<= 1.0s)
-                validExpressiveGestures.Add(new Tuple<string, float>(gestureType, gestureDuration));
-            }
+            return;
         }
-        else
+
+        // 3. Process Open Palm Hint Request
+        if (gestureType == "Open Palm" && gestureDuration > 1.0f)
         {
-            // 3. Other recognized expressive communication gestures
-            validExpressiveGestures.Add(new Tuple<string, float>(gestureType, gestureDuration));
+            if (interactionManager != null) interactionManager.TriggerHintActivation();
+
+            // Delegate to Central Manager (which enforces HandTracking mode check)
+            if (hintManager != null) hintManager.OnOpenPalmGestureTriggered();
+            return;
+        }
+
+        validExpressiveGestures.Add(new Tuple<string, float>(gestureType, gestureDuration));
+    }
+
+    public void ProcessUnprofessionalGesture(string gestureType)
+    {
+        if (!isTracking) return;
+        unprofessionalGestureCount++;
+        Debug.LogWarning($"[GestureTracker] Flagged unprofessional gesture: {gestureType}");
+
+        if (hintManager != null)
+        {
+            hintManager.ShowDirectMessage("Please maintain appropriate hand posture.");
         }
     }
 
-    /// <summary>
-    /// ALGORITHM 6: Computes total expressive count and Gestures Per Minute (GPM).
-    /// </summary>
-    public (int expressiveCount, float gpm) CalculateGestureMetrics(float overrideDurationSeconds = -1.0f)
+    public int GetUnprofessionalCount() => unprofessionalGestureCount;
+
+    public (int expressiveCount, float gpm) CalculateGestureMetrics(float sessionDurationSeconds)
     {
         int expressiveCount = validExpressiveGestures.Count;
-
-        // Use override session duration if provided, otherwise use tracked active duration
-        float durationSec = overrideDurationSeconds > 0.0f ? overrideDurationSeconds : activeTrackingDurationSeconds;
-        float simulationDurationMinutes = durationSec / 60.0f;
-
-        float gpm = 0.0f;
-        if (simulationDurationMinutes > 0.0f)
-        {
-            gpm = expressiveCount / simulationDurationMinutes;
-        }
-
+        float durationMinutes = sessionDurationSeconds > 0 ? sessionDurationSeconds / 60.0f : 0.0f;
+        float gpm = durationMinutes > 0 ? expressiveCount / durationMinutes : 0.0f;
         return (expressiveCount, gpm);
     }
 }

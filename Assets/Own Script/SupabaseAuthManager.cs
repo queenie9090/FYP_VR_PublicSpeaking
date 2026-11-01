@@ -50,11 +50,19 @@ public class SupabaseAuthManager : MonoBehaviour
     {
         Instance = this;
 
-        // Reset all panel input fields and status messages cleanly
-        ClearAllInputs();
-        ShowFirstPanel();
-
+        // 1. Initialize Supabase first so Client & Auth objects exist!
         await InitializeSupabase();
+
+        // 2. Now check if the user is logged in
+        if (UserSession.IsLoggedIn || (Client != null && Client.Auth.CurrentSession != null))
+        {
+            OpenMainMenuPanel();
+        }
+        else
+        {
+            ClearAllInputs();
+            ShowFirstPanel();
+        }
     }
 
     private async Task InitializeSupabase()
@@ -389,7 +397,6 @@ public class SupabaseAuthManager : MonoBehaviour
     // --- MAIN MENU / EDUCATOR PANEL NAVIGATION ---
     private void OpenMainMenuPanel()
     {
-        // ROUTE BASED ON ROLE:
         if (UserSession.IsEducator)
         {
             Debug.Log("[Auth] Educator detected. Redirecting to Educator Dashboard...");
@@ -397,7 +404,6 @@ public class SupabaseAuthManager : MonoBehaviour
             return;
         }
 
-        // STANDARD STUDENT MAIN MENU NAVIGATION:
         if (firstPanel != null) firstPanel.SetActive(false);
         if (loginPanel != null) loginPanel.SetActive(false);
         if (signUpPanel != null) signUpPanel.SetActive(false);
@@ -408,38 +414,43 @@ public class SupabaseAuthManager : MonoBehaviour
             profileAvatarImage.sprite = defaultAvatarSprite;
         }
 
-        var user = Client.Auth.CurrentUser;
-        if (user != null)
+        // SAFELY CHECK Client AND CurrentUser TO PREVENT NULL EXCEPTIONS
+        if (Client == null || Client.Auth == null || Client.Auth.CurrentUser == null)
         {
-            string displayName = "User";
-            string avatarUrl = "";
-
-            if (user.UserMetadata != null)
-            {
-                if (user.UserMetadata.TryGetValue("full_name", out object nameObj))
-                    displayName = nameObj?.ToString();
-                else if (user.UserMetadata.TryGetValue("name", out object altNameObj))
-                    displayName = altNameObj?.ToString();
-
-                if (user.UserMetadata.TryGetValue("avatar_url", out object avatarObj))
-                    avatarUrl = avatarObj?.ToString();
-                else if (user.UserMetadata.TryGetValue("picture", out object altAvatarObj))
-                    avatarUrl = altAvatarObj?.ToString();
-            }
-
-            if (string.IsNullOrEmpty(displayName) || displayName == "User")
-            {
-                if (!string.IsNullOrEmpty(user.Email))
-                    displayName = user.Email.Split('@')[0];
-            }
-
             if (userNameText != null)
-                userNameText.text = displayName;
+                userNameText.text = !string.IsNullOrEmpty(UserSession.CurrentUserEmail) ? UserSession.CurrentUserEmail.Split('@')[0] : "Student";
+            return;
+        }
 
-            if (!string.IsNullOrEmpty(avatarUrl) && profileAvatarImage != null)
-            {
-                StartCoroutine(DownloadAvatarTexture(avatarUrl));
-            }
+        var user = Client.Auth.CurrentUser;
+        string displayName = "User";
+        string avatarUrl = "";
+
+        if (user.UserMetadata != null)
+        {
+            if (user.UserMetadata.TryGetValue("full_name", out object nameObj))
+                displayName = nameObj?.ToString();
+            else if (user.UserMetadata.TryGetValue("name", out object altNameObj))
+                displayName = altNameObj?.ToString();
+
+            if (user.UserMetadata.TryGetValue("avatar_url", out object avatarObj))
+                avatarUrl = avatarObj?.ToString();
+            else if (user.UserMetadata.TryGetValue("picture", out object altAvatarObj))
+                avatarUrl = altAvatarObj?.ToString();
+        }
+
+        if (string.IsNullOrEmpty(displayName) || displayName == "User")
+        {
+            if (!string.IsNullOrEmpty(user.Email))
+                displayName = user.Email.Split('@')[0];
+        }
+
+        if (userNameText != null)
+            userNameText.text = displayName;
+
+        if (!string.IsNullOrEmpty(avatarUrl) && profileAvatarImage != null)
+        {
+            StartCoroutine(DownloadAvatarTexture(avatarUrl));
         }
     }
 

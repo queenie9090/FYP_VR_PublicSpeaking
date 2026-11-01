@@ -116,7 +116,7 @@ Ensure end_conversation follows the final-turn rule.
 ";
     }
 
-    public static string BuildHintPrompt(ScenarioConfig config, List<DialogueTurn> history)
+    public static string BuildHintPrompt(ScenarioConfig config, List<DialogueTurn> history, string userTranscript = "")
     {
         string conversationContext = "";
         if (history != null && history.Count > 0)
@@ -126,6 +126,10 @@ Ensure end_conversation follows the final-turn rule.
                 conversationContext += $"{turn.speaker}: {turn.dialogue}\n";
             }
         }
+
+        string transcriptContext = string.IsNullOrEmpty(userTranscript)
+            ? "No current participant transcript available. Rely on the latest NPC response or question as primary context."
+            : $"Current Participant Transcript: \"{userTranscript}\"";
 
         return $@"
 You are a communication coach assisting a user in a VR training simulation.
@@ -139,17 +143,21 @@ CONTEXT:
 RECENT CONVERSATION HISTORY:
 {conversationContext}
 
+TRANSCRIPT:
+{transcriptContext}
+
 HINT GENERATION INSTRUCTIONS:
-- Generate one concise and contextually relevant hint based on the current conversation state.
+- Generate one concise and contextually relevant hint based on the current conversation state and transcript.
 - Provide a complete sample script that the participant can use as a guide.
 - Format: ""Try explaining [relevant response direction]. Example Script: '[complete sample response]'""
-- Do not use placeholders, fill-in-the-blanks, or keywords.
+- The Example Script must contain full sentences and must not use placeholders, incomplete phrases, keywords, or fill-in-the-blank formats.
+- Do not invent highly specific personal experiences, qualifications, achievements, or personal facts about the user.
 - Do not generate NPC dialogue or ask questions.
 
 OUTPUT FORMAT:
 Return ONLY a valid JSON object:
 {{
-  ""npc_response"": ""string""
+  ""hint"": ""string""
 }}";
     }
 }

@@ -36,7 +36,7 @@ public class SetupUIController : MonoBehaviour
         // Initialize toggle position based on current UserSession preference
         if (inputModeToggle != null)
         {
-            inputModeToggle.isOn = (UserSession.InputMode == "Hands-Free");
+            inputModeToggle.isOn = (UserSession.InputMode == "Hands-Tracking");
         }
 
         // 2. Add dropdown listener to auto-populate defaults and update scenario weights
@@ -71,8 +71,7 @@ public class SetupUIController : MonoBehaviour
         // Auto-populate default topic/role presets
         switch (selectedScenario)
         {
-            case "Stage Venue":
-            case "StageVenue":
+            case "Hall":
                 SetPresetIfEmpty("Keynote Presentation", "Presenter", "Audience Member");
                 break;
             case "Interview":
@@ -117,7 +116,7 @@ public class SetupUIController : MonoBehaviour
         };
 
         // Reads the actual state of the UI toggle
-        UserSession.InputMode = (inputModeToggle != null && inputModeToggle.isOn) ? "Hands-Free" : "Controller";
+        UserSession.InputMode = (inputModeToggle != null && inputModeToggle.isOn) ? "Hands-Tracking" : "Controller";
 
         Debug.Log($"[SetupUIController] Configured: {UserSession.SelectedScenarioConfig.scenario} | Topic: {UserSession.SelectedScenarioConfig.topic} | Input: {UserSession.InputMode}");
 
@@ -179,16 +178,4 @@ public class SetupUIController : MonoBehaviour
         Debug.Log("[SetupUIController] Tutorial preference reset.");
     }
 
-    // Cancel / Back Button Logic
-    public void OnClickBack()
-    {
-        if (tutorialModalPanel != null && tutorialModalPanel.activeSelf)
-        {
-            tutorialModalPanel.SetActive(false);
-        }
-        else if (configurationPanel != null)
-        {
-            configurationPanel.SetActive(false);
-        }
-    }
 }
