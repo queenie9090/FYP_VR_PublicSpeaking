@@ -16,38 +16,111 @@ public class NPCEmotionController : MonoBehaviour
     [Range(1f, 10f)]
     public float transitionSpeed = 4f;
 
-    private Dictionary<string, int> shapeIndices = new();
-    private Dictionary<string, float> targets = new();
+    private readonly Dictionary<string, List<int>> shapeIndices = new();
+    private readonly Dictionary<string, float> targets = new();
 
-    private string[] expressionShapes =
+    // Logical blendshape names used by the existing Businessman.
+    private readonly string[] expressionShapes =
     {
         "mouthSmileLeft", "mouthSmileRight",
         "cheekSquintLeft", "cheekSquintRight",
         "mouthFrownLeft", "mouthFrownRight",
-        "browInnerUp", "browDownLeft", "browDownRight",
+        "browInnerUp",
+        "browDownLeft", "browDownRight",
         "eyeSquintLeft", "eyeSquintRight",
         "mouthPressLeft", "mouthPressRight",
         "eyeWideLeft", "eyeWideRight",
         "mouthPucker"
     };
 
-    void Start()
+    // Alternative names for Business Girl (CC_Base).
+    private readonly Dictionary<string, string[]> alternateNames = new()
+    {
+        { "mouthSmileLeft", new[] { "Mouth_Smile_L" } },
+        { "mouthSmileRight", new[] { "Mouth_Smile_R" } },
+
+        { "cheekSquintLeft", new[] { "Cheek_Raise_L" } },
+        { "cheekSquintRight", new[] { "Cheek_Raise_R" } },
+
+        { "mouthFrownLeft", new[] { "Mouth_Frown_L" } },
+        { "mouthFrownRight", new[] { "Mouth_Frown_R" } },
+
+        { "browInnerUp", new[]
+            {
+                "Brow_Raise_Inner_L",
+                "Brow_Raise_Inner_R"
+            }
+        },
+
+        { "browDownLeft", new[] { "Brow_Drop_L" } },
+        { "browDownRight", new[] { "Brow_Drop_R" } },
+
+        { "eyeSquintLeft", new[] { "Eye_Squint_L" } },
+        { "eyeSquintRight", new[] { "Eye_Squint_R" } },
+
+        { "mouthPressLeft", new[] { "Mouth_Press_L" } },
+        { "mouthPressRight", new[] { "Mouth_Press_R" } },
+
+        { "eyeWideLeft", new[] { "Eye_Wide_L" } },
+        { "eyeWideRight", new[] { "Eye_Wide_R" } },
+
+        { "mouthPucker", new[]
+            {
+                "Mouth_Pucker_Up_L",
+                "Mouth_Pucker_Up_R",
+                "Mouth_Pucker_Down_L",
+                "Mouth_Pucker_Down_R"
+            }
+        }
+    };
+
+    private void Start()
     {
         if (headMesh == null || headMesh.sharedMesh == null)
         {
-            Debug.LogError("NPC Head_Mesh is not assigned!");
+            Debug.LogError(
+                $"[{name}] Facial SkinnedMeshRenderer missing!"
+            );
             enabled = false;
             return;
         }
 
-        foreach (string shape in expressionShapes)
+        foreach (string logicalName in expressionShapes)
         {
-            int index = headMesh.sharedMesh.GetBlendShapeIndex(shape);
+            List<int> indices = new();
 
-            if (index >= 0)
+            // First try the original Businessman name.
+            int originalIndex =
+                headMesh.sharedMesh.GetBlendShapeIndex(logicalName);
+
+            if (originalIndex >= 0)
             {
-                shapeIndices[shape] = index;
-                targets[shape] = 0f;
+                indices.Add(originalIndex);
+            }
+            else if (alternateNames.TryGetValue(
+                logicalName, out string[] alternatives))
+            {
+                // Otherwise find matching Business Girl shapes.
+                foreach (string alternate in alternatives)
+                {
+                    int index =
+                        headMesh.sharedMesh.GetBlendShapeIndex(alternate);
+
+                    if (index >= 0)
+                        indices.Add(index);
+                }
+            }
+
+            if (indices.Count > 0)
+            {
+                shapeIndices[logicalName] = indices;
+                targets[logicalName] = 0f;
+            }
+            else
+            {
+                Debug.LogWarning(
+                    $"[{name}] Missing BlendShape: {logicalName}"
+                );
             }
         }
 
@@ -68,15 +141,19 @@ public class NPCEmotionController : MonoBehaviour
             emotion != "THINKING" &&
             emotion != "NEUTRAL")
         {
-            Debug.LogWarning("Invalid emotion: " + emotion);
+            Debug.LogWarning(
+                $"[{name}] Invalid emotion: {emotion}"
+            );
             return;
         }
 
         currentEmotion = emotion;
+
         emotionIntensity = emotion == "NEUTRAL"
             ? 0
             : Mathf.Clamp(intensity, 0, 100);
 
+        // Clear previous emotion targets.
         foreach (string shape in expressionShapes)
         {
             if (targets.ContainsKey(shape))
@@ -88,66 +165,73 @@ public class NPCEmotionController : MonoBehaviour
         switch (emotion)
         {
             case "HAPPY":
-                SetTarget("mouthSmileLeft", 80 * strength);
-                SetTarget("mouthSmileRight", 80 * strength);
-                SetTarget("cheekSquintLeft", 30 * strength);
-                SetTarget("cheekSquintRight", 30 * strength);
+                SetTarget("mouthSmileLeft", 80f * strength);
+                SetTarget("mouthSmileRight", 80f * strength);
+                SetTarget("cheekSquintLeft", 30f * strength);
+                SetTarget("cheekSquintRight", 30f * strength);
                 break;
 
             case "SAD":
-                SetTarget("mouthFrownLeft", 65 * strength);
-                SetTarget("mouthFrownRight", 65 * strength);
-                SetTarget("browInnerUp", 45 * strength);
+                SetTarget("mouthFrownLeft", 65f * strength);
+                SetTarget("mouthFrownRight", 65f * strength);
+                SetTarget("browInnerUp", 45f * strength);
                 break;
 
             case "ANGRY":
-                SetTarget("browDownLeft", 75 * strength);
-                SetTarget("browDownRight", 75 * strength);
-                SetTarget("eyeSquintLeft", 35 * strength);
-                SetTarget("eyeSquintRight", 35 * strength);
+                SetTarget("browDownLeft", 75f * strength);
+                SetTarget("browDownRight", 75f * strength);
+                SetTarget("eyeSquintLeft", 35f * strength);
+                SetTarget("eyeSquintRight", 35f * strength);
                 break;
 
             case "NERVOUS":
-                SetTarget("browInnerUp", 45 * strength);
-                SetTarget("mouthPressLeft", 55 * strength);
-                SetTarget("mouthPressRight", 55 * strength);
-                SetTarget("eyeWideLeft", 25 * strength);
-                SetTarget("eyeWideRight", 25 * strength);
+                SetTarget("browInnerUp", 45f * strength);
+                SetTarget("mouthPressLeft", 55f * strength);
+                SetTarget("mouthPressRight", 55f * strength);
+                SetTarget("eyeWideLeft", 25f * strength);
+                SetTarget("eyeWideRight", 25f * strength);
                 break;
 
             case "THINKING":
-                SetTarget("browInnerUp", 25 * strength);
-                SetTarget("mouthPucker", 20 * strength);
+                SetTarget("browInnerUp", 25f * strength);
+                SetTarget("mouthPucker", 20f * strength);
                 break;
+
+                // NEUTRAL keeps all expression targets at zero.
         }
 
         Debug.Log(
-            $"[NPCEmotionController] {currentEmotion}, " +
+            $"[{name}] Emotion: {currentEmotion}, " +
             $"Intensity: {emotionIntensity}"
         );
     }
 
-    private void SetTarget(string name, float value)
+    private void SetTarget(string shape, float value)
     {
-        if (targets.ContainsKey(name))
-            targets[name] = value;
+        if (targets.ContainsKey(shape))
+            targets[shape] = value;
     }
 
-    void LateUpdate()
+    private void LateUpdate()
     {
+        if (headMesh == null)
+            return;
+
         foreach (var item in targets)
         {
-            int index = shapeIndices[item.Key];
+            foreach (int index in shapeIndices[item.Key])
+            {
+                float current =
+                    headMesh.GetBlendShapeWeight(index);
 
-            float current = headMesh.GetBlendShapeWeight(index);
+                float next = Mathf.MoveTowards(
+                    current,
+                    item.Value,
+                    transitionSpeed * 100f * Time.deltaTime
+                );
 
-            float next = Mathf.MoveTowards(
-                current,
-                item.Value,
-                transitionSpeed * 100f * Time.deltaTime
-            );
-
-            headMesh.SetBlendShapeWeight(index, next);
+                headMesh.SetBlendShapeWeight(index, next);
+            }
         }
     }
 }
