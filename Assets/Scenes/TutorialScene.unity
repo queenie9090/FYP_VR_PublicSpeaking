@@ -1438,6 +1438,11 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 109979108}
   m_CullTransparentMesh: 1
+--- !u!137 &114156409 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 2895739407836466014, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+  m_PrefabInstance: {fileID: 994672992}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &128824886
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -10097,10 +10102,46 @@ PrefabInstance:
       propertyPath: m_Name
       value: Businessman
       objectReference: {fileID: 0}
+    - target: {fileID: 2895739407836466014, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[0]'
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2895739407836466014, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[4]'
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2895739407836466014, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[8]'
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2895739407836466014, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[9]'
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3538195099067420415, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[0]'
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 5161946668030584482, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: m_Controller
       value: 
       objectReference: {fileID: 9100000, guid: 321b0f3e9a62b974ea1851af55d50b27, type: 2}
+    - target: {fileID: 5168952830452399159, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[0]'
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5168952830452399159, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[9]'
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5168952830452399159, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[18]'
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5168952830452399159, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[27]'
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 5179854686499666364, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: 'm_BlendShapeWeights.Array.data[0]'
       value: 0
@@ -10112,6 +10153,9 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: 1243776288163151064, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2143302284}
     - targetCorrespondingSourceObject: {fileID: 7818192139683728312, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1709510119}
@@ -10128,6 +10172,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 1876056408625309282, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       insertIndex: -1
       addedObject: {fileID: 994672999}
+    - targetCorrespondingSourceObject: {fileID: 1876056408625309282, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 994673000}
     - targetCorrespondingSourceObject: {fileID: 7511532309142717120, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1787168129}
@@ -10192,9 +10239,9 @@ MonoBehaviour:
   mouthBlendShape: jawOpen
   teethBlendShape: jawOpen
   teethMovementMultiplier: 1
-  maxMouthOpen: 65
-  sensitivity: 35
-  smoothSpeed: 12
+  maxMouthOpen: 61.8
+  sensitivity: 26.8
+  smoothSpeed: 1
 --- !u!114 &994672999
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10214,6 +10261,32 @@ MonoBehaviour:
   maxBlinkInterval: 5.5
   blinkDuration: 0.18
   blinkStrength: 100
+--- !u!114 &994673000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 854672535}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 67a2cf74dccb04e4bbdc2b2d9ee37415, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NPCEyeContactController
+  eyeMesh: {fileID: 114156409}
+  gazeReference: {fileID: 2143302284}
+  playerHead: {fileID: 310991316}
+  emotionController: {fileID: 994672995}
+  maxHorizontalAngle: 25
+  maxVerticalAngle: 15
+  maxBlendShapeWeight: 25
+  movementSpeed: 8
+  invertHorizontal: 0
+  invertVertical: 0
+  enableEmotionGaze: 1
+  thinkingGazeAngle: 12
+  nervousGazeAngle: 9
+  sadGazeAngle: 8
 --- !u!1 &1013533425
 GameObject:
   m_ObjectHideFlags: 0
@@ -19189,6 +19262,37 @@ RectTransform:
   m_AnchoredPosition: {x: -0.000002682209, y: -0.0000006109476}
   m_SizeDelta: {x: 729.104, y: 272.443}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1 &2143302283
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2143302284}
+  m_Layer: 0
+  m_Name: GazeReference
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2143302284
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2143302283}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: 0.12558556, z: -0, w: 0.99208283}
+  m_LocalPosition: {x: 0.0021, y: 1.282, z: 0.0286}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 994672993}
+  m_LocalEulerAnglesHint: {x: 0, y: 14.429, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
