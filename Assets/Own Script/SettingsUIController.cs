@@ -12,6 +12,13 @@ public class SettingsUIController : MonoBehaviour
 
     [Header("Action Buttons")]
     [SerializeField] private Button resetTutorialButton;
+    [SerializeField] private LocomotionApplier locomotionApplier;
+
+    private void ApplyNow()
+    {
+        if (locomotionApplier == null) locomotionApplier = FindObjectOfType<LocomotionApplier>();
+        if (locomotionApplier != null) locomotionApplier.ApplyAllVRPreferences();
+    }
 
     private void Start()
     {
@@ -95,19 +102,28 @@ public class SettingsUIController : MonoBehaviour
     public void OnLocomotionDropdownChanged(int index)
     {
         if (AppSystemManager.Instance != null)
+        {
             AppSystemManager.Instance.SaveLocomotionModeSetting((LocomotionMode)index);
+            ApplyNow();
+        }
     }
 
     public void OnTurningDropdownChanged(int index)
     {
         if (AppSystemManager.Instance != null)
+        {
             AppSystemManager.Instance.SaveTurningModeSetting((TurningMode)index);
+            ApplyNow();
+        }
     }
 
     public void OnSeatedModeToggled(bool value)
     {
         if (AppSystemManager.Instance != null)
+        {
             AppSystemManager.Instance.SaveSeatedModeSetting(value);
+            ApplyNow();
+        }
     }
 
     public void OnQuickExitToggled(bool value)

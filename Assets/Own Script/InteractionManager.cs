@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using TMPro;
+using UnityEngine.XR.Management;
 
 public class InteractionManager : MonoBehaviour
 {
@@ -18,7 +19,7 @@ public class InteractionManager : MonoBehaviour
     [SerializeField] private GestureTracker gestureTracker;    
     [SerializeField] private ObjectiveManager objectiveManager;
     [SerializeField] private HintManager hintManager;
-
+    private LocomotionApplier locoApplier;
 
     [Header("Multi-NPC Setup")]
     [Tooltip("Assign all NPCs available in this scene. Leave size = 1 for single-NPC scenes.")]
@@ -39,9 +40,9 @@ public class InteractionManager : MonoBehaviour
     [SerializeField] private Button exitButton;
     [SerializeField] private ScenarioBriefingUI scenarioBriefingUI;
 
-    [Header("VR Locomotion Control")]
-    [SerializeField] private UnityEngine.XR.Interaction.Toolkit.Locomotion.LocomotionProvider moveProvider;
-    [SerializeField] private UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation.TeleportationProvider teleportProvider;
+    //[Header("VR Locomotion Control")]
+    //[SerializeField] private UnityEngine.XR.Interaction.Toolkit.Locomotion.LocomotionProvider moveProvider;
+    //[SerializeField] private UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation.TeleportationProvider teleportProvider;
 
     [Header("Navigation")]
     [SerializeField] private string defaultDashboardScene = "DashboardScene";
@@ -60,7 +61,85 @@ public class InteractionManager : MonoBehaviour
 
     private void Start()
     {
+#if UNITY_EDITOR
+        // 1. If playing directly in Editor without Main Menu VRSceneLoader, start XR first
+        if (XRGeneralSettings.Instance != null && XRGeneralSettings.Instance.Manager != null)
+        {
+            if (!XRGeneralSettings.Instance.Manager.isInitializationComplete)
+            {
+                Debug.Log("[InteractionManager Debug] Playing VR scene directly in Editor. Initializing XR...");
+                StartCoroutine(DebugInitializeXRRoutine());
+                return; // Stop Start() here; DebugInitializeXRRoutine will invoke InitializeSceneComponents when ready!
+            }
+        }
+#endif
+
+        InitializeSceneComponents();
+    }
+
+#if UNITY_EDITOR
+private IEnumerator DebugInitializeXRRoutine()
+{
+#if UNITY_EDITOR
+    // In Editor mode (especially with XR Device Simulator), skip hardware XR loader initialization
+    Debug.Log("[InteractionManager] Running in Unity Editor / Simulator mode. Skipping hardware XR Loader init.");
+    yield break;
+#else
+    // Hardware XR loader initialization for Quest build / Meta Quest Link
+    if (UnityEngine.XR.Management.XRGeneralSettings.Instance != null && 
+        UnityEngine.XR.Management.XRGeneralSettings.Instance.Manager != null)
+    {
+        var manager = UnityEngine.XR.Management.XRGeneralSettings.Instance.Manager;
+        if (!manager.isInitializationComplete)
+        {
+            yield return manager.InitializeLoader();
+            if (manager.activeLoader == null)
+            {
+                Debug.LogError("[InteractionManager Debug] Failed to initialize XR Loader!");
+            }
+            else
+            {
+                manager.StartSubsystems();
+            }
+        }
+    }
+#endif
+}
+
+    private void OnApplicationQuit()
+    {
+        // Shuts down OpenXR cleanly so Meta Link doesn't get stuck on "3 dots loading" when stopping Play Mode
+        if (XRGeneralSettings.Instance != null && XRGeneralSettings.Instance.Manager != null)
+        {
+            if (XRGeneralSettings.Instance.Manager.isInitializationComplete)
+            {
+                XRGeneralSettings.Instance.Manager.StopSubsystems();
+                XRGeneralSettings.Instance.Manager.DeinitializeLoader();
+                Debug.Log("[InteractionManager] Editor Play Mode stopped. OpenXR cleanly deinitialized.");
+            }
+        }
+    }
+#endif
+
+    private void InitializeSceneComponents()
+    {
         InitScenarioConfig();
+        locoApplier = FindObjectOfType<LocomotionApplier>();
+        if (locoApplier != null)
+        {
+            locoApplier.ApplyAllVRPreferences();
+        }
+
+        TutorialPanelManager tutorialManager = FindObjectOfType<TutorialPanelManager>();
+        if (tutorialManager != null)
+        {
+            string modeStr = UserSession.InputMode;
+            InputMode mode = (!string.IsNullOrEmpty(modeStr) && modeStr.Contains("Hand"))
+                ? InputMode.HandTracking
+                : InputMode.Controller;
+
+            tutorialManager.InitializeForInputMode(mode);
+        }
 
         if (roomNPCs != null && roomNPCs.Count > 0)
         {
@@ -72,6 +151,7 @@ public class InteractionManager : MonoBehaviour
         if (hintManager == null)
             hintManager = FindObjectOfType<HintManager>();
 
+
         if (startSessionButton != null)
         {
             startSessionButton.onClick.RemoveAllListeners();
@@ -82,8 +162,22 @@ public class InteractionManager : MonoBehaviour
 
     public void SetLocomotionEnabled(bool enabled)
     {
-        if (moveProvider != null) moveProvider.enabled = enabled;
-        if (teleportProvider != null) teleportProvider.enabled = enabled;
+        if (locoApplier == null) locoApplier = FindObjectOfType<LocomotionApplier>();
+
+        if (enabled)
+        {
+            // Re-enable player movement & turning based on user settings
+            if (locoApplier != null)
+                locoApplier.ApplyAllVRPreferences();
+        }
+        else
+        {
+            // Disable ALL movement & turning while panels or dialogues are open
+            if (locoApplier != null)
+            {
+                locoApplier.DisableAllLocomotion();
+            }
+        }
     }
 
     private void InitScenarioConfig()
@@ -165,7 +259,7 @@ public class InteractionManager : MonoBehaviour
         if (hintManager != null)
         {
             hintManager.SyncInputModeFromUserSession();
-            hintManager.SetDialogueState(true, "Press Y or raise Open Palm to request a dialogue hint.");
+            hintManager.SetDialogueState(true, "Press Y/B or raise Open Palm to request a dialogue hint.");
         }
 
         if (emotionPanel != null) emotionPanel.SetActive(true);
@@ -733,8 +827,14 @@ public class InteractionManager : MonoBehaviour
 
         Debug.Log($"[InteractionManager] Exiting to target scene: '{targetScene}'");
 
-        // 4. Force load the target scene (Unity will automatically clean up scene coroutines)
-        SceneManager.LoadScene(targetScene);
+        if (targetScene == defaultDashboardScene || targetScene == "DashboardScene" || targetScene == "PCDashboardScene")
+        {
+            VRSceneLoader.DisableVRAndReturnToMenu(targetScene);
+        }
+        else
+        {
+            yield return StartCoroutine(VRSceneLoader.EnableVROnDemandAndLoad(targetScene));
+        }
     }
 
     private List<DialogueTurnRecord> MapDialogueTurnsToRecords()

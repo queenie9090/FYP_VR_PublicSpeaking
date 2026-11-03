@@ -17,7 +17,7 @@ public class HintManager : MonoBehaviour
     [SerializeField] private GameObject controllerHintCanvas;
     [SerializeField] private TextMeshProUGUI controllerHintText;
     // Assign 'XRI LeftHand Interaction/SecondaryButton' (Y Button)
-    [SerializeField] private InputActionProperty controllerHintAction;
+   // [SerializeField] private InputActionProperty controllerHintAction;
 
     [Header("Hand Tracking Hint UI")]
     [SerializeField] private GameObject handTrackingHintCanvas;
@@ -30,6 +30,28 @@ public class HintManager : MonoBehaviour
     private bool isDialogueActive = false;
     private string currentDialogueHint = "";
 
+    //private float nextDebugTime;
+
+    private void Update()
+    {
+        if (currentInputMode != InputMode.Controller) return;
+
+        var l = UnityEngine.InputSystem.XR.XRController.leftHand;
+        var r = UnityEngine.InputSystem.XR.XRController.rightHand;
+
+        var lb = l?.TryGetChildControl<UnityEngine.InputSystem.Controls.ButtonControl>("secondaryButton");
+        var rb = r?.TryGetChildControl<UnityEngine.InputSystem.Controls.ButtonControl>("secondaryButton");
+
+        bool pressed = (lb != null && lb.wasPressedThisFrame) ||
+                       (rb != null && rb.wasPressedThisFrame);
+
+        if (pressed)
+        {
+            Debug.Log($"[HintManager] Secondary pressed | DialogueActive: {isDialogueActive}");
+            ProcessHintTrigger();
+        }
+    }
+
     private void Start()
     {
         HideAllCanvases();
@@ -39,31 +61,46 @@ public class HintManager : MonoBehaviour
             interactionManager = FindObjectOfType<InteractionManager>();
     }
 
+    //private void OnEnable()
+    //{
+    //    Debug.Log("[HintManager] OnEnable");
+    //    if (controllerHintAction.action != null)
+    //    {
+    //        controllerHintAction.action.Enable();
+    //        controllerHintAction.action.performed += OnControllerHintPressed;
+    //        Debug.Log($"[HintManager] Action '{controllerHintAction.action.name}' enabled. " +
+    //                  $"Bindings: {controllerHintAction.action.bindings.Count}, " +
+    //                  $"Bound controls: {controllerHintAction.action.controls.Count}");
+    //    }
+    //    else
+    //    {
+    //        Debug.LogError("[HintManager] controllerHintAction.action is NULL (nothing assigned or reference broken)");
+    //    }
+    //}
+
+    //private void OnDisable()
+    //{
+    //    Debug.Log("[HintManager] OnDisable (something deactivated this object)");
+    //    if (controllerHintAction.action != null)
+    //    {
+    //        controllerHintAction.action.performed -= OnControllerHintPressed;
+    //        controllerHintAction.action.Disable();
+    //    }
+    //}
+
     private void OnEnable()
     {
-        if (controllerHintAction.action != null)
-        {
-            controllerHintAction.action.Enable();
-            controllerHintAction.action.performed += OnControllerHintPressed;
-        }
+        Debug.Log("[HintManager] OnEnable");
     }
 
     private void OnDisable()
     {
-        if (controllerHintAction.action != null)
-        {
-            controllerHintAction.action.performed -= OnControllerHintPressed;
-            controllerHintAction.action.Disable();
-        }
+        Debug.Log("[HintManager] OnDisable (something deactivated this object)");
     }
 
-    // -------------------------------------------------------------
-    // Input Entry Points
-    // -------------------------------------------------------------
-
-    // Triggered via Y Button on Controller
     private void OnControllerHintPressed(InputAction.CallbackContext context)
     {
+        Debug.Log($"[HintManager] PRESSED: {context.control.path} | Mode: {currentInputMode} | DialogueActive: {isDialogueActive}");
         if (currentInputMode != InputMode.Controller) return;
         ProcessHintTrigger();
     }
@@ -139,7 +176,7 @@ public class HintManager : MonoBehaviour
             }
             else
             {
-                activeText.text = "Press Y (or hold Open Palm) to request a dialogue hint.";
+                activeText.text = "Press Y/B (or hold Open Palm) to request a dialogue hint.";
             }
         }
         else
