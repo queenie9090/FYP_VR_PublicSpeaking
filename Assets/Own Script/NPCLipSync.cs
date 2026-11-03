@@ -6,14 +6,24 @@ public class NPCLipSync : MonoBehaviour
     [Header("NPC Face")]
     [SerializeField] private SkinnedMeshRenderer faceMesh;
 
+    [Header("NPC Teeth")]
+    [SerializeField] private SkinnedMeshRenderer teethMesh;
+
     [Header("NPC Voice")]
     [SerializeField] private AudioSource npcAudioSource;
 
-    [Header("Mouth Settings")]
+    [Header("Face BlendShape")]
     [SerializeField] private string mouthBlendShape = "jawOpen";
 
+    [Header("Teeth BlendShape")]
+    [SerializeField] private string teethBlendShape = "jawOpen";
+
+    [Range(0f, 1f)]
+    [SerializeField] private float teethMovementMultiplier = 1f;
+
+    [Header("Lip Sync Settings")]
     [Range(0f, 100f)]
-    [SerializeField] private float maxMouthOpen = 65f;
+    [SerializeField] private float maxMouthOpen = 60f;
 
     [Range(1f, 100f)]
     [SerializeField] private float sensitivity = 35f;
@@ -22,42 +32,69 @@ public class NPCLipSync : MonoBehaviour
     [SerializeField] private float smoothSpeed = 12f;
 
     private int mouthIndex = -1;
+    private int teethIndex = -1;
+
     private readonly float[] samples = new float[256];
+
     private float currentWeight;
-    private float originalWeight;
+    private float originalMouthWeight;
+    private float originalTeethWeight;
 
     private void Start()
     {
         if (faceMesh == null || faceMesh.sharedMesh == null)
         {
-            Debug.LogError("[LipSync] Face Mesh not assigned.");
+            Debug.LogError("[LipSync] Face Mesh not assigned!");
             enabled = false;
             return;
         }
 
         if (npcAudioSource == null)
         {
-            Debug.LogError("[LipSync] AudioSource not assigned.");
+            Debug.LogError("[LipSync] AudioSource not assigned!");
             enabled = false;
             return;
         }
 
-        mouthIndex = faceMesh.sharedMesh.GetBlendShapeIndex(
-            mouthBlendShape
-        );
+        mouthIndex =
+            faceMesh.sharedMesh.GetBlendShapeIndex(mouthBlendShape);
 
         if (mouthIndex < 0)
         {
             Debug.LogError(
-                "[LipSync] BlendShape not found: " +
+                "[LipSync] Face BlendShape not found: " +
                 mouthBlendShape
             );
+
             enabled = false;
             return;
         }
 
-        originalWeight = faceMesh.GetBlendShapeWeight(mouthIndex);
-        currentWeight = originalWeight;
+        originalMouthWeight =
+            faceMesh.GetBlendShapeWeight(mouthIndex);
+
+        currentWeight = originalMouthWeight;
+
+        if (teethMesh != null && teethMesh.sharedMesh != null)
+        {
+            teethIndex =
+                teethMesh.sharedMesh.GetBlendShapeIndex(
+                    teethBlendShape
+                );
+
+            if (teethIndex >= 0)
+            {
+                originalTeethWeight =
+                    teethMesh.GetBlendShapeWeight(teethIndex);
+            }
+            else
+            {
+                Debug.LogWarning(
+                    "[LipSync] Teeth BlendShape not found: " +
+                    teethBlendShape
+                );
+            }
+        }
     }
 
     private void LateUpdate()
@@ -65,7 +102,7 @@ public class NPCLipSync : MonoBehaviour
         if (mouthIndex < 0 || npcAudioSource == null)
             return;
 
-        float targetWeight = originalWeight;
+        float targetWeight = originalMouthWeight;
 
         if (npcAudioSource.isPlaying)
         {
@@ -85,7 +122,7 @@ public class NPCLipSync : MonoBehaviour
             );
 
             targetWeight = Mathf.Lerp(
-                originalWeight,
+                originalMouthWeight,
                 maxMouthOpen,
                 mouthAmount
             );
@@ -97,10 +134,25 @@ public class NPCLipSync : MonoBehaviour
             smoothSpeed * 100f * Time.deltaTime
         );
 
+        // Move face mouth
         faceMesh.SetBlendShapeWeight(
             mouthIndex,
             currentWeight
         );
+
+        // Move teeth together with mouth
+        if (teethMesh != null && teethIndex >= 0)
+        {
+            float teethWeight =
+                originalTeethWeight +
+                (currentWeight - originalMouthWeight)
+                * teethMovementMultiplier;
+
+            teethMesh.SetBlendShapeWeight(
+                teethIndex,
+                Mathf.Clamp(teethWeight, 0f, 100f)
+            );
+        }
     }
 
     private void OnDisable()
@@ -108,8 +160,14 @@ public class NPCLipSync : MonoBehaviour
         if (faceMesh != null && mouthIndex >= 0)
         {
             faceMesh.SetBlendShapeWeight(
-                mouthIndex,
-                originalWeight
+                mouthIndex, originalMouthWeight
+            );
+        }
+
+        if (teethMesh != null && teethIndex >= 0)
+        {
+            teethMesh.SetBlendShapeWeight(
+                teethIndex, originalTeethWeight
             );
         }
     }
