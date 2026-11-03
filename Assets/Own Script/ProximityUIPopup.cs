@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.Events;
 using System.Collections;
+using Unity.XR.CoreUtils; // Needed for XROrigin check
 
 [RequireComponent(typeof(Collider))]
 public class ProximityUIPopup : MonoBehaviour
@@ -25,6 +26,7 @@ public class ProximityUIPopup : MonoBehaviour
     private Vector3 hiddenPos;
     private Vector3 visiblePos;
     private Coroutine activeAnimCoroutine;
+    private bool isPlayerInside = false;
 
     private void Start()
     {
@@ -46,6 +48,17 @@ public class ProximityUIPopup : MonoBehaviour
     {
         if (IsPlayer(other))
         {
+            isPlayerInside = true;
+            AnimateUI(true);
+        }
+    }
+
+    // ADDED: Handles instant teleportation directly into the trigger zone
+    private void OnTriggerStay(Collider other)
+    {
+        if (!isPlayerInside && IsPlayer(other))
+        {
+            isPlayerInside = true;
             AnimateUI(true);
         }
     }
@@ -54,14 +67,18 @@ public class ProximityUIPopup : MonoBehaviour
     {
         if (IsPlayer(other))
         {
+            isPlayerInside = false;
             AnimateUI(false);
         }
     }
 
     private bool IsPlayer(Collider other)
     {
+        // Checks Tag, XROrigin parent, Camera, or XRI Controller components
         return other.CompareTag(playerTag) ||
-               other.GetComponentInParent<UnityEngine.XR.Interaction.Toolkit.XRBaseController>() != null;
+               other.GetComponentInParent<XROrigin>() != null ||
+               other.GetComponentInParent<Camera>() != null ||
+               other.GetComponentInParent<UnityEngine.XR.Interaction.Toolkit.Interactors.XRBaseInputInteractor>() != null;
     }
 
     private void AnimateUI(bool show)
