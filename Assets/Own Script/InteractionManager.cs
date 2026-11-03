@@ -83,7 +83,8 @@ private IEnumerator DebugInitializeXRRoutine()
 #if UNITY_EDITOR
     // In Editor mode (especially with XR Device Simulator), skip hardware XR loader initialization
     Debug.Log("[InteractionManager] Running in Unity Editor / Simulator mode. Skipping hardware XR Loader init.");
-    yield break;
+    yield return null;
+    InitializeSceneComponents();
 #else
     // Hardware XR loader initialization for Quest build / Meta Quest Link
     if (UnityEngine.XR.Management.XRGeneralSettings.Instance != null && 
@@ -123,6 +124,7 @@ private IEnumerator DebugInitializeXRRoutine()
 
     private void InitializeSceneComponents()
     {
+        Debug.Log("[InteractionManager] InitializeSceneComponents ran");
         InitScenarioConfig();
         locoApplier = FindObjectOfType<LocomotionApplier>();
         if (locoApplier != null)
@@ -218,21 +220,22 @@ private IEnumerator DebugInitializeXRRoutine()
 
     public void OnUserConfirmedStart()
     {
+        Debug.Log("[InteractionManager] OnUserConfirmedStart called");
         if (startSessionButton != null)
             startSessionButton.interactable = false;
-
-        SetLocomotionEnabled(false);
-
-        if (objectiveManager != null)
-        {
-            objectiveManager.OnConversationStarted();
-        }
 
         if (startConfigPanel != null)
             startConfigPanel.SetActive(false);
 
+        // 1. Snap player into position FIRST while offsets and transforms are clear
         if (playerSeating != null)
             playerSeating.SnapPlayerToChair();
+
+        // 2. Disable locomotion SECOND so player cannot walk out of the chair
+        SetLocomotionEnabled(false);
+
+        if (objectiveManager != null)
+            objectiveManager.OnConversationStarted();
 
         StartCoroutine(HandsFreeSessionInitiationRoutine());
     }
