@@ -26,7 +26,7 @@ RenderSettings:
   m_AmbientIntensity: 1
   m_AmbientMode: 0
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
-  m_SkyboxMaterial: {fileID: 2100000, guid: e1ffe3cfdbc8ed048a7d599ce6aac0cd, type: 2}
+  m_SkyboxMaterial: {fileID: 2100000, guid: 149730eb8dad5494586a8b7355daafe0, type: 2}
   m_HaloStrength: 0.5
   m_FlareStrength: 1
   m_FlareFadeSpeed: 3
@@ -412,6 +412,46 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NPCEmotionKeyboardTest
   emotionController: {fileID: 104038262}
+--- !u!114 &104038264
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 104038261}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 51822b5e9f56ef44bad44271db359edc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NPCLipSync
+  faceMesh: {fileID: 921862430}
+  teethMesh: {fileID: 1673687191}
+  npcAudioSource: {fileID: 973571341}
+  mouthBlendShape: jawOpen
+  teethBlendShape: jawOpen
+  teethMovementMultiplier: 1
+  maxMouthOpen: 61.8
+  sensitivity: 26.8
+  smoothSpeed: 1
+--- !u!114 &104038265
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 104038261}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f52a20e7be6818946809850b046ce483, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NPCEyeBlinkController
+  faceMesh: {fileID: 921862430}
+  leftBlink: eyeBlinkLeft
+  rightBlink: eyeBlinkRight
+  minBlinkInterval: 2.5
+  maxBlinkInterval: 5.5
+  blinkDuration: 0.18
+  blinkStrength: 100
 --- !u!1 &106502351
 GameObject:
   m_ObjectHideFlags: 0
@@ -8694,10 +8734,21 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 1876056408625309282, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       insertIndex: -1
       addedObject: {fileID: 104038263}
+    - targetCorrespondingSourceObject: {fileID: 1876056408625309282, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 104038264}
+    - targetCorrespondingSourceObject: {fileID: 1876056408625309282, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 104038265}
     - targetCorrespondingSourceObject: {fileID: 7511532309142717120, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       insertIndex: -1
       addedObject: {fileID: 921862431}
   m_SourcePrefab: {fileID: 100100000, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+--- !u!137 &1673687191 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 5179854686499666364, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+  m_PrefabInstance: {fileID: 1673687190}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &1679287035 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1401522003198950462, guid: 7396d52c8dc22104abb0d3f433e92b4d, type: 3}
