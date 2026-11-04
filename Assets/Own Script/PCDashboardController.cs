@@ -122,8 +122,12 @@ public class PCDashboardController : MonoBehaviour
         if (sessionMetaText != null)
         {
             float talkTime = data.duration_seconds > 0 ? data.duration_seconds : 0f;
-            sessionMetaText.text = $"Topic: {data.scenario_topic} | Difficulty: {data.difficulty_level} | Mode: {data.input_mode_used}\n" +
-                                   $"Date: {System.DateTime.Now:MMM dd, yyyy} | Duration: {talkTime:F0}s";
+            string statusStr = string.Equals(data.status, "Incomplete", System.StringComparison.OrdinalIgnoreCase)
+            ? "<color=#FF8A65>[Incomplete - Ended Early]</color>"
+            : "<color=#81C784>[Completed]</color>";
+
+            sessionMetaText.text = $"Status: {statusStr} | Topic: {data.scenario_topic} | Difficulty: {data.difficulty_level}\n" +
+                                   $"Mode: {data.input_mode_used} | Date: {System.DateTime.Now:MMM dd, yyyy} | Duration: {talkTime:F0}s";
         }
 
         // 2. Donut Gauge Chart

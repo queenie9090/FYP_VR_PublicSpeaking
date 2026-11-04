@@ -20,10 +20,12 @@ public class DataExporter : MonoBehaviour
         var metric = data.performance_metric[0];
         StringBuilder sb = new StringBuilder();
 
-        // 1. Session Summary Section
+        // 1. Session Summary Section (Includes Session Status)
+        string sessionStatus = string.IsNullOrEmpty(data.status) ? "Completed" : data.status;
+
         sb.AppendLine("=== VR COMMUNICATION EVALUATION SUMMARY ===");
-        sb.AppendLine("Scenario,Topic,Difficulty,InputMode,Date,DurationSeconds");
-        sb.AppendLine($"\"{data.scenario_type}\",\"{data.scenario_topic}\",\"{data.difficulty_level}\",\"{data.input_mode_used}\",\"{DateTime.Now:yyyy-MM-dd HH:mm:ss}\",{data.duration_seconds:F1}");
+        sb.AppendLine("Scenario,Topic,Difficulty,InputMode,Status,Date,DurationSeconds");
+        sb.AppendLine($"\"{data.scenario_type}\",\"{data.scenario_topic}\",\"{data.difficulty_level}\",\"{data.input_mode_used}\",\"{sessionStatus}\",\"{DateTime.Now:yyyy-MM-dd HH:mm:ss}\",{data.duration_seconds:F1}");
         sb.AppendLine();
 
         // 2. Performance Scores Breakdown
@@ -94,6 +96,9 @@ public class DataExporter : MonoBehaviour
         var metric = data.performance_metric[0];
         StringBuilder html = new StringBuilder();
 
+        string sessionStatus = string.IsNullOrEmpty(data.status) ? "Completed" : data.status;
+        string statusColor = string.Equals(sessionStatus, "Incomplete", StringComparison.OrdinalIgnoreCase) ? "#ef4444" : "#22c55e";
+
         html.AppendLine("<!DOCTYPE html><html><head><meta charset='UTF-8'><style>");
         html.AppendLine("body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background: #0f172a; color: #f8fafc; }");
         html.AppendLine(".header { border-bottom: 2px solid #38bdf8; padding-bottom: 10px; margin-bottom: 20px; }");
@@ -111,9 +116,9 @@ public class DataExporter : MonoBehaviour
         html.AppendLine($"<div class='header'><h1>VR Communication Evaluation Report</h1>");
         html.AppendLine($"<p><b>Date Generated:</b> {DateTime.Now:MMMM dd, yyyy HH:mm} | <b>Session Duration:</b> {data.duration_seconds:F0}s</p></div>");
 
-        // Scenario Metadata Card
+        // Scenario Metadata Card (Includes Status Badge)
         html.AppendLine($"<div class='card'><h2>Scenario Configuration</h2>");
-        html.AppendLine($"<p><b>Scenario Type:</b> {data.scenario_type}</p>");
+        html.AppendLine($"<p><b>Scenario Type:</b> {data.scenario_type} | <b>Status:</b> <span style='color:{statusColor}; font-weight:bold;'>{sessionStatus.ToUpper()}</span></p>");
         html.AppendLine($"<p><b>Topic:</b> {data.scenario_topic} | <b>Difficulty:</b> {data.difficulty_level} | <b>Input Mode:</b> {data.input_mode_used}</p>");
         html.AppendLine($"<p><b>Overall Composite Score:</b> <span style='font-size: 20px; color: #38bdf8; font-weight: bold;'>{metric.overall_score:F0}%</span></p></div>");
 

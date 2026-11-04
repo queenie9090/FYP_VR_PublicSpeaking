@@ -5,14 +5,14 @@ using System.Collections.Generic;
 [Serializable]
 public class ScenarioConfig
 {
-    public string scenario = "Classroom"; // "Hall", "Normal Conversation", "Classroom", "Interview"
-    public string participantRole = "Student";
-    public string topic = "General Presentation";
-    public string difficulty = "Medium";
-    public string persona = "Teacher";
-    public string sessionObjective = "Engage effectively with the evaluator.";
-    public int maxTurnLimit = 5;
-    public string sessionStartSignal = "Session Start";
+    public string scenario; //= "Classroom"; // "Hall", "Normal Conversation", "Classroom", "Interview"
+    public string participantRole; //= "Student";
+    public string topic; //= "General Presentation";
+    public string difficulty; //= "Medium";
+    public string persona;// = "Teacher";
+    public string sessionObjective;// = "Engage effectively with the evaluator.";
+    public int maxTurnLimit; //= 5;
+    public string sessionStartSignal;// = "Session Start";
 }
 
 [Serializable]
@@ -45,7 +45,7 @@ public class DialogueTurnRecord
     public string ai_response_text;
     public int filler_word_count;
     public float speaking_rate_wpm;
-    public float silence_duration_seconds; // <-- ADDED SILENCE FIELD
+    public float silence_duration_seconds; 
 }
 
 [Serializable]
@@ -60,7 +60,7 @@ public class PerformanceMetricRecord
     public float average_wpm;
     public int filler_word_count;
     public float gestures_per_minute;
-    public float total_silence_seconds; // <-- ADDED SILENCE FIELD
+    public float total_silence_seconds; 
     public string ai_feedback_summary;
 }
 
@@ -74,6 +74,7 @@ public class NormalizedSessionData
     public string scenario_topic;
     public string difficulty_level;
     public string input_mode_used;
+    public string status;
     public string start_time;
     public string end_time;
     public float duration_seconds;

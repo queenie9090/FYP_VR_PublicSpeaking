@@ -129,6 +129,10 @@ public class SessionHistoryController : MonoBehaviour
                 formattedDateTime = parsedDate.ToString("MMM dd, yyyy · HH:mm");
             }
 
+            string statusText = string.Equals(data.status, "Incomplete", System.StringComparison.OrdinalIgnoreCase)
+    ? "<color=#FF8A65><b>Incomplete (Ended Early)</b></color>"
+    : "<color=#81C784><b>Completed</b></color>";
+
             selectedSessionDetailsText.text =
                 $"<color=#94A3B8>Session ID :</color> <color=#FFFFFF><b>{shortSessionId}</b></color>\n" +
                 $"<color=#94A3B8>Date & Time :</color> <color=#FFFFFF><b>{formattedDateTime}</b></color>\n" +

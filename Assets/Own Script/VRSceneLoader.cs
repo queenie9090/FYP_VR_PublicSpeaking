@@ -46,17 +46,21 @@ public class VRSceneLoader : MonoBehaviour
     /// <summary>
     /// Deinitializes XR subsystems when returning to the 2D desktop Main Menu.
     /// </summary>
-    public static void DisableVRAndReturnToMenu(string menuSceneName = "DashboardScene")
+    public static IEnumerator DisableVRAndReturnToMenu(string menuSceneName)
     {
         if (XRGeneralSettings.Instance != null && XRGeneralSettings.Instance.Manager != null)
         {
-            if (XRGeneralSettings.Instance.Manager.isInitializationComplete)
+            var manager = XRGeneralSettings.Instance.Manager;
+            if (manager.isInitializationComplete)
             {
-                XRGeneralSettings.Instance.Manager.StopSubsystems();
-                XRGeneralSettings.Instance.Manager.DeinitializeLoader();
-                Debug.Log("[VR Loader] XR Subsystems Stopped. Returned to 2D Desktop mode.");
+                manager.StopSubsystems();
+                manager.DeinitializeLoader();
             }
         }
+
+        yield return null;                                   // let XR finish shutting down
+        yield return new WaitForSecondsRealtime(0.25f);      // give the audio device time to switch
+        AudioSettings.Reset(AudioSettings.GetConfiguration());  // re-pick default output
 
         SceneManager.LoadScene(menuSceneName);
     }

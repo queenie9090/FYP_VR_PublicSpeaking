@@ -142,6 +142,9 @@ public class EducatorDashboardController : MonoBehaviour
         int fillers = metric != null ? metric.filler_word_count : 0;
         string paceEvaluation = wpm < 110 ? "Slow" : (wpm <= 160 ? "Optimal Pace" : "Fast");
 
+        string statusText = string.Equals(session.status, "Incomplete", System.StringComparison.OrdinalIgnoreCase)
+    ? "<color=#FF8A65>Incomplete (Ended Early)</color>"
+    : "<color=#81C784>Completed</color>";
         // 1. Render Left Panel: Sensor Details
         if (selectedRecordDetailsText != null)
         {
