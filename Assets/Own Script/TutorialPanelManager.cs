@@ -26,6 +26,9 @@ public class TutorialPanelManager : MonoBehaviour
     [SerializeField] private Button handPrevButton;
     [SerializeField] private Button handCloseButton;
     [SerializeField] private Button completionDoneButton; // Final Panel "Done" button
+    
+    [Header("Interactive Test Button")]
+    [SerializeField] private Button testPinchButton;
 
     [Header("Status Panel")]
     [SerializeField] private GameObject statusPanelContainer;
@@ -314,5 +317,13 @@ public class TutorialPanelManager : MonoBehaviour
         {
             handTutorialContainer.SetActive(false);
         }
+    }
+
+    public void OnTestPinchButtonPressed()
+    {
+        Debug.Log("[Tutorial] 'Press Here!' button pressed via UI Pinch interactor!");
+
+        // Trigger the exact same success flow as physical gesture recognition
+        OnGesturePerformed("Pinch");
     }
 }

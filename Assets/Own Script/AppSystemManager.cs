@@ -22,7 +22,7 @@ public class AppSystemManager : MonoBehaviour
     public LocomotionMode selectedLocomotionMode = LocomotionMode.Dynamic;
     public TurningMode selectedTurningMode = TurningMode.Snap;
     public bool isSeatedModeEnabled = false;
-    public bool isQuickExitEnabled = false;
+   // public bool isQuickExitEnabled = false;
 
     // PlayerPrefs Keys
     public const string KEY_LOCOMOTION_MODE = "VR_LocomotionMode";
@@ -50,9 +50,9 @@ public class AppSystemManager : MonoBehaviour
         selectedLocomotionMode = (LocomotionMode)PlayerPrefs.GetInt(KEY_LOCOMOTION_MODE, (int)LocomotionMode.Dynamic);
         selectedTurningMode = (TurningMode)PlayerPrefs.GetInt(KEY_TURNING_MODE, (int)TurningMode.Continuous);
         isSeatedModeEnabled = PlayerPrefs.GetInt(KEY_SEATED_MODE, 0) == 1;
-        isQuickExitEnabled = PlayerPrefs.GetInt(KEY_QUICK_EXIT, 0) == 1;
+       // isQuickExitEnabled = PlayerPrefs.GetInt(KEY_QUICK_EXIT, 0) == 1;
 
-        Debug.Log($"[AppSystemManager] Loaded -> Loco: {selectedLocomotionMode} | Turn: {selectedTurningMode} | Seated: {isSeatedModeEnabled} | QuickExit: {isQuickExitEnabled}");
+        Debug.Log($"[AppSystemManager] Loaded -> Loco: {selectedLocomotionMode} | Turn: {selectedTurningMode} | Seated: {isSeatedModeEnabled}"); //| QuickExit: {isQuickExitEnabled}");
     }
 
     public void SaveLocomotionModeSetting(LocomotionMode mode)
@@ -78,7 +78,7 @@ public class AppSystemManager : MonoBehaviour
 
     public void SaveQuickExitSetting(bool enabled)
     {
-        isQuickExitEnabled = enabled;
+       // isQuickExitEnabled = enabled;
         PlayerPrefs.SetInt(KEY_QUICK_EXIT, enabled ? 1 : 0);
         PlayerPrefs.Save();
     }

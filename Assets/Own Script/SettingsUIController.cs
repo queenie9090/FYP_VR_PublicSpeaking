@@ -60,10 +60,10 @@ public class SettingsUIController : MonoBehaviour
         }
 
         // Quick Exit Toggle
-        if (quickExitToggle != null)
-        {
-            quickExitToggle.SetIsOnWithoutNotify(AppSystemManager.Instance.isQuickExitEnabled);
-        }
+        //if (quickExitToggle != null)
+        //{
+        //    quickExitToggle.SetIsOnWithoutNotify(AppSystemManager.Instance.isQuickExitEnabled);
+        //}
     }
 
     private void BindUIListeners()

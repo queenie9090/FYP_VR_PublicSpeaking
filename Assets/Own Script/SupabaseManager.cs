@@ -18,6 +18,7 @@ public class SupabaseManager : MonoBehaviour
         string topic,
         string difficulty,
         string inputMode,
+        string sessionStatus,
         string startTime,        // ISO 8601 string e.g. "2026-10-22T14:30:00.000Z"
         string endTime,          // ISO 8601 string
         float durationSeconds,
@@ -50,6 +51,7 @@ public class SupabaseManager : MonoBehaviour
             scenario_topic = topic,
             difficulty_level = difficulty,
             input_mode_used = inputMode,
+            status = sessionStatus,
             start_time = startTime,
             end_time = endTime,
             duration_seconds = durationSeconds

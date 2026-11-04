@@ -149,7 +149,7 @@ TRANSCRIPT:
 HINT GENERATION INSTRUCTIONS:
 - Generate one concise and contextually relevant hint based on the current conversation state and transcript.
 - Provide a complete sample script that the participant can use as a guide.
-- Format: ""Try explaining [relevant response direction]. Example Script: '[complete sample response]'""
+- Format: ""Try explaining [relevant response direction].\n\nExample Script:\n'[complete sample response]'""
 - The Example Script must contain full sentences and must not use placeholders, incomplete phrases, keywords, or fill-in-the-blank formats.
 - Do not invent highly specific personal experiences, qualifications, achievements, or personal facts about the user.
 - Do not generate NPC dialogue or ask questions.
