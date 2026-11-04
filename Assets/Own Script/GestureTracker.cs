@@ -7,8 +7,8 @@ public class GestureTracker : MonoBehaviour
 {
     [Header("Manager References")]
     [SerializeField] private InteractionManager interactionManager;
-    [SerializeField] private HandTrackingTutorialManager tutorialManager;
-    [SerializeField] private HintManager hintManager; // Reference to Central Hint Manager
+    [SerializeField] private TutorialPanelManager tutorialManager;
+    [SerializeField] private HintManager hintManager;
 
     [Header("Unprofessional Gesture Tracking")]
     private int unprofessionalGestureCount = 0;
@@ -28,7 +28,7 @@ public class GestureTracker : MonoBehaviour
             interactionManager = FindObjectOfType<InteractionManager>();
 
         if (tutorialManager == null)
-            tutorialManager = FindObjectOfType<HandTrackingTutorialManager>();
+            tutorialManager = FindObjectOfType<TutorialPanelManager>();
 
         if (hintManager == null)
             hintManager = FindObjectOfType<HintManager>();
@@ -56,7 +56,7 @@ public class GestureTracker : MonoBehaviour
     // -------------------------------------------------------------
     // UnityEvent Entry Points (for XR Hand Tracking Events)
     // -------------------------------------------------------------
-    public void TriggerOpenPalmGesture() => ProcessGestureEvent("Open Palm", 1.2f);
+    public void TriggerOpenPalmGesture() => ProcessGestureEvent("Open Palm", 1.0f);
     public void TriggerPinchGesture() => ProcessGestureEvent("Pinch", 0.5f);
     public void TriggerPointPinchGesture() => ProcessGestureEvent("Point + Pinch", 0.5f);
     public void TriggerGrabGesture() => ProcessGestureEvent("Grab", 0.5f);
@@ -64,37 +64,47 @@ public class GestureTracker : MonoBehaviour
 
     public void ProcessGestureEvent(string gestureType, float gestureDuration)
     {
-        if (!isTracking) return;
-
-        // 1. Tutorial Progress
-        if (tutorialManager != null)
+        if (!isTracking)
         {
-            switch (gestureType)
-            {
-                case "Open Palm":
-                    if (gestureDuration > 1.0f) tutorialManager.OnOpenPalmDetected();
-                    break;
-                case "Pinch": tutorialManager.OnPinchConfirmed(); break;
-                case "Point + Pinch": tutorialManager.OnPointPinchTeleportCompleted(); break;
-                case "Grab": tutorialManager.OnObjectGrabbed(); break;
-                case "Wave":
-                case "Handshake": tutorialManager.OnSocialGreetingCompleted(); break;
-            }
-        }
-
-        // 2. Ignore VR Navigation Gestures for Expressive Metrics
-        if (gestureType == "Pinch" || gestureType == "Point + Pinch" || gestureType == "Grab" || gestureType == "Handshake")
-        {
+            Debug.LogWarning("[GestureTracker Debug] ProcessGestureEvent ignored because isTracking == false!");
             return;
         }
 
-        // 3. Process Open Palm Hint Request
+        // 1. Log raw gesture input received from Meta Quest / XRI events
+        Debug.Log($"<color=cyan>[GestureTracker RAW]</color> Detected Gesture: '{gestureType}' | Duration: {gestureDuration}s");
+
+        // 2. Ensure TutorialPanelManager reference exists and forward the event
+        if (tutorialManager == null)
+            tutorialManager = FindObjectOfType<TutorialPanelManager>();
+
+        if (tutorialManager != null)
+        {
+            Debug.Log($"<color=yellow>[GestureTracker -> Tutorial]</color> Forwarding '{gestureType}' to TutorialPanelManager...");
+            tutorialManager.OnGesturePerformed(gestureType);
+        }
+        else
+        {
+            Debug.LogError("<color=red>[GestureTracker Error]</color> TutorialPanelManager is NULL! Cannot advance tutorial step.");
+        }
+
+        // 3. Handle Open Palm Hint Request
         if (gestureType == "Open Palm" && gestureDuration > 1.0f)
         {
-            if (interactionManager != null) interactionManager.TriggerHintActivation();
+            if (hintManager == null)
+                hintManager = FindObjectOfType<HintManager>();
 
-            // Delegate to Central Manager (which enforces HandTracking mode check)
-            if (hintManager != null) hintManager.OnOpenPalmGestureTriggered();
+            if (hintManager != null)
+            {
+                Debug.Log("<color=green>[GestureTracker -> Hint]</color> Triggering Open Palm Hint Activation.");
+                hintManager.OnOpenPalmGestureTriggered();
+            }
+            return;
+        }
+
+        // 4. Ignore navigation gestures for expressive metric scoring
+        if (gestureType == "Pinch" || gestureType == "Point + Pinch" || gestureType == "Grab" || gestureType == "Handshake")
+        {
+            Debug.Log($"[GestureTracker Debug] '{gestureType}' processed for tutorial, ignored for GPM score.");
             return;
         }
 
@@ -121,5 +131,14 @@ public class GestureTracker : MonoBehaviour
         float durationMinutes = sessionDurationSeconds > 0 ? sessionDurationSeconds / 60.0f : 0.0f;
         float gpm = durationMinutes > 0 ? expressiveCount / durationMinutes : 0.0f;
         return (expressiveCount, gpm);
+    }
+
+    // Add this method inside GestureTracker.cs if it's missing
+    public void TriggerOpenPalmEnded()
+    {
+        if (hintManager != null)
+        {
+            hintManager.HideHintCanvas();
+        }
     }
 }

@@ -138,11 +138,17 @@ public class SetupUIController : MonoBehaviour
     {
         SaveTutorialPreference();
 
+        // Ensure InputMode is captured even when launching directly into the Tutorial
+        if (inputModeToggle != null)
+        {
+            UserSession.InputMode = inputModeToggle.isOn ? "Hands-Tracking" : "Controller";
+        }
+
         UserSession.IsRunningTutorial = true;
         if (tutorialModalPanel != null) tutorialModalPanel.SetActive(false);
 
-        Debug.Log("[Flow] Starting Tutorial Session...");
-        SceneManager.LoadScene("TutorialScene");
+        Debug.Log($"[Flow] Starting Tutorial Session in VR with mode: {UserSession.InputMode}...");
+        StartCoroutine(VRSceneLoader.EnableVROnDemandAndLoad("TutorialScene"));
     }
 
     // Called when user clicks "NO / SKIP" in Tutorial Modal
@@ -155,7 +161,7 @@ public class SetupUIController : MonoBehaviour
 
         string targetScene = UserSession.SelectedScenarioConfig.scenario;
         Debug.Log($"[Flow] Skipping Tutorial. Loading target scene: {targetScene}");
-        SceneManager.LoadScene(targetScene);
+        StartCoroutine(VRSceneLoader.EnableVROnDemandAndLoad(targetScene));
     }
 
     // Save toggle preference into PlayerPrefs if checked
