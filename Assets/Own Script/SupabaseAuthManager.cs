@@ -36,6 +36,8 @@ public class SupabaseAuthManager : MonoBehaviour
     [SerializeField] private TMP_Text userNameText;
     [SerializeField] private Image profileAvatarImage;
     [SerializeField] private Sprite defaultAvatarSprite;
+    [Tooltip("Button that navigates to Educator Dashboard. Only visible to Educators.")]
+    [SerializeField] private GameObject educatorDashboardButton;
 
     [Header("Status Text Styling")]
     [SerializeField] private Color successColor = Color.green;
@@ -397,18 +399,21 @@ public class SupabaseAuthManager : MonoBehaviour
     // --- MAIN MENU / EDUCATOR PANEL NAVIGATION ---
     private void OpenMainMenuPanel()
     {
-        if (UserSession.IsEducator)
-        {
-            Debug.Log("[Auth] Educator detected. Redirecting to Educator Dashboard...");
-            SceneManager.LoadScene("EducatorDashboardScene");
-            return;
-        }
+        //if (UserSession.IsEducator)
+        //{
+        //    Debug.Log("[Auth] Educator detected. Redirecting to Educator Dashboard...");
+        //    SceneManager.LoadScene("EducatorDashboardScene");
+        //    return;
+        //}
 
         if (firstPanel != null) firstPanel.SetActive(false);
         if (loginPanel != null) loginPanel.SetActive(false);
         if (signUpPanel != null) signUpPanel.SetActive(false);
         if (mainMenuPanel != null) mainMenuPanel.SetActive(true);
-
+        if (educatorDashboardButton != null)
+        {
+            educatorDashboardButton.SetActive(UserSession.IsEducator);
+        }
         if (profileAvatarImage != null && defaultAvatarSprite != null)
         {
             profileAvatarImage.sprite = defaultAvatarSprite;
@@ -555,5 +560,10 @@ public class SupabaseAuthManager : MonoBehaviour
 
         if (loginStatusText != null) loginStatusText.text = "";
         if (signUpStatusText != null) signUpStatusText.text = "";
+    }
+
+    public void OpenEducatorDashboardScene()
+    {
+        SceneManager.LoadScene("EducatorDashboardScene");
     }
 }

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 using TMPro;
 
 public class EducatorDashboardController : MonoBehaviour
@@ -22,11 +23,22 @@ public class EducatorDashboardController : MonoBehaviour
     [SerializeField] private Button exportCsvButton;
     [SerializeField] private Button exportJsonButton;
 
+    [Header("Navigation")]
+    [SerializeField] private Button backToMenuButton;
+
     private List<NormalizedSessionData> allCohortSessions = new List<NormalizedSessionData>();
     private NormalizedSessionData currentlyInspectedSession;
 
     private void Start()
     {
+        if (backToMenuButton != null)
+        {
+            backToMenuButton.onClick.AddListener(() =>
+            {
+                SceneManager.LoadScene("MainMenu"); // Load back to Main Menu
+            });
+        }
+
         if (searchInputField != null)
             searchInputField.onValueChanged.AddListener(FilterCohortTable);
 
