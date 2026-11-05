@@ -88,7 +88,7 @@ public class GestureTracker : MonoBehaviour
         }
 
         // 3. Handle Open Palm Hint Request
-        if (gestureType == "Open Palm" && gestureDuration > 1.0f)
+        if (gestureType == "Open Palm" && gestureDuration >= 1.0f)
         {
             if (hintManager == null)
                 hintManager = FindObjectOfType<HintManager>();

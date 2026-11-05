@@ -58,90 +58,60 @@ namespace UnityEngine.XR.Hands.Samples.GestureSample
         Color m_BackgroundDefaultColor;
         Color m_BackgroundHighlightColor = new Color(0f, 0.627451f, 1f);
 
-        /// <summary>
-        /// The hand tracking events component to subscribe to receive updated joint data to be used for gesture detection.
-        /// </summary>
         public XRHandTrackingEvents handTrackingEvents
         {
             get => m_HandTrackingEvents;
             set => m_HandTrackingEvents = value;
         }
 
-        /// <summary>
-        /// The hand shape or pose that must be detected for the gesture to be performed.
-        /// </summary>
         public ScriptableObject handShapeOrPose
         {
             get => m_HandShapeOrPose;
             set => m_HandShapeOrPose = value;
         }
 
-        /// <summary>
-        /// The target Transform to user for target conditions in the hand shape or pose.
-        /// </summary>
         public Transform targetTransform
         {
             get => m_TargetTransform;
             set => m_TargetTransform = value;
         }
 
-        /// <summary>
-        /// The image component that draws the background for gesture icons.
-        /// </summary>
         public Image background
         {
             get => m_Background;
             set => m_Background = value;
         }
 
-        /// <summary>
-        /// The image component that draws the highlight state drawn on top of the gesture icon background.
-        /// </summary>
         public Image highlight
         {
             get => m_Highlight;
             set => m_Highlight = value;
         }
 
-        /// <summary>
-        /// The event fired when the gesture is performed.
-        /// </summary>
         public UnityEvent gesturePerformed
         {
             get => m_GesturePerformed;
             set => m_GesturePerformed = value;
         }
 
-        /// <summary>
-        /// The event fired when the gesture is ended.
-        /// </summary>
         public UnityEvent gestureEnded
         {
             get => m_GestureEnded;
             set => m_GestureEnded = value;
         }
 
-        /// <summary>
-        /// The minimum amount of time the hand must be held in the required shape and orientation for the gesture to be performed.
-        /// </summary>
         public float minimumHoldTime
         {
             get => m_MinimumHoldTime;
             set => m_MinimumHoldTime = value;
         }
 
-        /// <summary>
-        /// The interval at which the gesture detection is performed.
-        /// </summary>
         public float gestureDetectionInterval
         {
             get => m_GestureDetectionInterval;
             set => m_GestureDetectionInterval = value;
         }
 
-        /// <summary>
-        /// Sets any assigned highlight UI component as visible/hidden
-        /// </summary>
         public bool highlightVisible
         {
             set
@@ -153,7 +123,10 @@ namespace UnityEngine.XR.Hands.Samples.GestureSample
 
         void Awake()
         {
-            m_BackgroundDefaultColor = m_Background.color;
+            if (m_Background != null)
+            {
+                m_BackgroundDefaultColor = m_Background.color;
+            }
 
             if (m_Highlight)
             {
@@ -164,7 +137,10 @@ namespace UnityEngine.XR.Hands.Samples.GestureSample
 
         void OnEnable()
         {
-            m_HandTrackingEvents.jointsUpdated.AddListener(OnJointsUpdated);
+            if (m_HandTrackingEvents != null)
+            {
+                m_HandTrackingEvents.jointsUpdated.AddListener(OnJointsUpdated);
+            }
 
             m_HandShape = m_HandShapeOrPose as XRHandShape;
             m_HandPose = m_HandShapeOrPose as XRHandPose;
@@ -172,7 +148,13 @@ namespace UnityEngine.XR.Hands.Samples.GestureSample
                 m_HandPose.relativeOrientation.targetTransform = m_TargetTransform;
         }
 
-        void OnDisable() => m_HandTrackingEvents.jointsUpdated.RemoveListener(OnJointsUpdated);
+        void OnDisable()
+        {
+            if (m_HandTrackingEvents != null)
+            {
+                m_HandTrackingEvents.jointsUpdated.RemoveListener(OnJointsUpdated);
+            }
+        }
 
         void OnJointsUpdated(XRHandJointsUpdatedEventArgs eventArgs)
         {
@@ -180,9 +162,9 @@ namespace UnityEngine.XR.Hands.Samples.GestureSample
                 return;
 
             var detected =
-                m_HandTrackingEvents.handIsTracked &&
-                m_HandShape != null && m_HandShape.CheckConditions(eventArgs) ||
-                m_HandPose != null && m_HandPose.CheckConditions(eventArgs);
+                m_HandTrackingEvents != null && m_HandTrackingEvents.handIsTracked &&
+                ((m_HandShape != null && m_HandShape.CheckConditions(eventArgs)) ||
+                 (m_HandPose != null && m_HandPose.CheckConditions(eventArgs)));
 
             if (!m_WasDetected && detected)
             {
@@ -192,7 +174,11 @@ namespace UnityEngine.XR.Hands.Samples.GestureSample
             {
                 m_PerformedTriggered = false;
                 m_GestureEnded?.Invoke();
-                m_Background.color = m_BackgroundDefaultColor;
+
+                if (m_Background != null)
+                {
+                    m_Background.color = m_BackgroundDefaultColor;
+                }
             }
 
             m_WasDetected = detected;
@@ -204,15 +190,23 @@ namespace UnityEngine.XR.Hands.Samples.GestureSample
                 {
                     m_GesturePerformed?.Invoke();
                     m_PerformedTriggered = true;
-                    m_Background.color = m_BackgroundHighlightColor;
+
+                    // FIX: Wrapped in null check to prevent NullReferenceException
+                    if (m_Background != null)
+                    {
+                        m_Background.color = m_BackgroundHighlightColor;
+                    }
 
                     if (m_Highlight)
                         m_Highlight.enabled = true;
 
-                    foreach (var gesture in m_StaticGestures)
+                    if (m_StaticGestures != null)
                     {
-                        if (gesture != this)
-                            gesture.highlightVisible = false;
+                        foreach (var gesture in m_StaticGestures)
+                        {
+                            if (gesture != null && gesture != this)
+                                gesture.highlightVisible = false;
+                        }
                     }
                 }
             }
