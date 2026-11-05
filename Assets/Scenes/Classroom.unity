@@ -953,6 +953,51 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 3557653790486543205, guid: 8b55f4b13da640a458a5a4336c489584, type: 3}
   m_PrefabInstance: {fileID: 1186532356}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &144836515
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 144836516}
+  - component: {fileID: 144836517}
+  m_Layer: 0
+  m_Name: NPCEmotionSessionManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &144836516
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 144836515}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1077789985}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &144836517
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 144836515}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8306ffc00b7cd594eb94cb58daaad87f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NPCEmotionSessionManager
+  emotionHistory: []
 --- !u!1001 &174774532
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -22056,6 +22101,7 @@ Transform:
   - {fileID: 1557223303}
   - {fileID: 884749074}
   - {fileID: 1322682037}
+  - {fileID: 144836516}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1088013730
@@ -29464,6 +29510,8 @@ MonoBehaviour:
   conversationTimerText: {fileID: 848478167}
   dialogueText: {fileID: 2072002942}
   dialogueScrollRect: {fileID: 472432974}
+  turnPanel: {fileID: 0}
+  turnText: {fileID: 0}
 --- !u!114 &1557223305
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -29478,6 +29526,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::VRPlayerSeating
   playerXRRig: {fileID: 350184542}
   chairTargetTransform: {fileID: 336796199}
+  characterController: {fileID: 0}
 --- !u!114 &1557223306
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -29518,10 +29567,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 48c04d7ff3f518f41843a14e3e36597d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GestureTracker
-  hintCanvas: {fileID: 0}
-  hintText: {fileID: 0}
-  hintDisplayDuration: 5
   interactionManager: {fileID: 0}
+  tutorialManager: {fileID: 0}
+  hintManager: {fileID: 0}
 --- !u!114 &1557223309
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -29581,6 +29629,8 @@ MonoBehaviour:
   playerSeating: {fileID: 1557223305}
   eyeContactTracker: {fileID: 1557223309}
   gestureTracker: {fileID: 1557223308}
+  objectiveManager: {fileID: 0}
+  hintManager: {fileID: 0}
   roomNPCs:
   - {fileID: 792557450}
   - {fileID: 1982016545}
@@ -29592,8 +29642,6 @@ MonoBehaviour:
   startSessionButton: {fileID: 710794164}
   exitButton: {fileID: 517366106}
   scenarioBriefingUI: {fileID: 1692159788}
-  moveProvider: {fileID: 0}
-  teleportProvider: {fileID: 0}
   defaultDashboardScene: DashboardScene
 --- !u!4 &1561859745 stripped
 Transform:

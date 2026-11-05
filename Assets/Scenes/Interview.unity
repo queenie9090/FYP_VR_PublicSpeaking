@@ -1088,6 +1088,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::VRPlayerSeating
   playerXRRig: {fileID: 454368207}
   chairTargetTransform: {fileID: 661380141}
+  characterController: {fileID: 0}
 --- !u!114 &237275926
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1202,8 +1203,6 @@ MonoBehaviour:
   startSessionButton: {fileID: 416238118}
   exitButton: {fileID: 1464045856}
   scenarioBriefingUI: {fileID: 1713408877}
-  moveProvider: {fileID: 0}
-  teleportProvider: {fileID: 0}
   defaultDashboardScene: DashboardScene
 --- !u!1 &281409263
 GameObject:
@@ -3150,6 +3149,51 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 600028851}
   m_CullTransparentMesh: 1
+--- !u!1 &602982505
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 602982506}
+  - component: {fileID: 602982507}
+  m_Layer: 0
+  m_Name: NPCEmotionSessionManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &602982506
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 602982505}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 3.3361797, y: 0, z: 3.29685}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1997467008}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &602982507
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 602982505}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8306ffc00b7cd594eb94cb58daaad87f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NPCEmotionSessionManager
+  emotionHistory: []
 --- !u!1 &604968786
 GameObject:
   m_ObjectHideFlags: 0
@@ -10589,6 +10633,7 @@ Transform:
   - {fileID: 237275923}
   - {fileID: 1522871422}
   - {fileID: 106502352}
+  - {fileID: 602982506}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &2009333809 stripped

@@ -4767,7 +4767,7 @@ GameObject:
   - component: {fileID: 1036279910}
   - component: {fileID: 1036279909}
   m_Layer: 5
-  m_Name: ReturnMainMenuBttn
+  m_Name: EmotionDashboardBttn
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -7702,7 +7702,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Return to Main Menu
+  m_text: Emotion Dashboard
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: f8802cdf5316acb45b71a160083153ee, type: 2}
   m_sharedMaterial: {fileID: -6269700506862428983, guid: f8802cdf5316acb45b71a160083153ee, type: 2}
