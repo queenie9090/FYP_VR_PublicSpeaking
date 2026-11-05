@@ -5,6 +5,10 @@ using TMPro;
 
 public class DialogueUIManager : MonoBehaviour
 {
+    [Header("UI Canvas / Panel Container")]
+    [Tooltip("Assign the Canvas or child Panel GameObject here (NOT the Manager GameObject)")]
+    [SerializeField] private GameObject dialoguePanelContainer;
+
     [SerializeField] private TMP_Text statusText;
     [SerializeField] private TMP_Text conversationTimerText;
     [SerializeField] private TMP_Text dialogueText;
@@ -15,6 +19,19 @@ public class DialogueUIManager : MonoBehaviour
     [SerializeField] private TMP_Text turnText;
 
     private int activeMaxTurns = 5;
+
+    public void ShowUI()
+    {
+        if (dialoguePanelContainer != null)
+            dialoguePanelContainer.SetActive(true);
+    }
+
+    public void HideUI()
+    {
+        // Disables ONLY the visible UI Canvas/Panel, keeping all scripts active!
+        if (dialoguePanelContainer != null)
+            dialoguePanelContainer.SetActive(false);
+    }
 
     public void SetStatus(string message)
     {

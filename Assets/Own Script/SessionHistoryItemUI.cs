@@ -31,6 +31,10 @@ public class SessionHistoryItemUI : MonoBehaviour
                 cardDate = parsedDate.ToString("yyyy-MM-dd HH:mm");
             }
 
+            string statusTag = string.Equals(data.status, "Incomplete", System.StringComparison.OrdinalIgnoreCase)
+        ? "<color=#FF8A65>[Incomplete]</color>"
+        : "<color=#81C784>[Completed]</color>";
+
             metaText.text = $"<color=#94A3B8>Date:</color> {cardDate}\n<color=#94A3B8>Mode:</color> {data.input_mode_used}";
         }
 

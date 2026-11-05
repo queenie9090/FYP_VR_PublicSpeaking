@@ -33,14 +33,19 @@ public class EducatorCohortRowUI : MonoBehaviour
             ? data.performance_metric[0].overall_score
             : 0f;
 
+        string statusTag = string.Equals(data.status, "Incomplete", System.StringComparison.OrdinalIgnoreCase)
+        ? "<color=#FF8A65>Incomplete</color>"
+        : "<color=#81C784>Completed</color>";
+
         // Format single line with <pos> tags
         if (rowText != null)
         {
             rowText.text = $"<pos=3%>{shortId}" +
-                           $"<pos=26%>{cleanDate}" +
-                           $"<pos=48%>{data.scenario_type}" +
-                           $"<pos=72%>{durationStr}" +
-                           $"<pos=88%>{overallScore:F0}%";
+                           $"<pos=23%>{cleanDate}" +
+                           $"<pos=42%>{data.scenario_type}" +
+                           $"<pos=58%>{durationStr}" +
+                           $"<pos=73%>{overallScore:F0}%" +
+                           $"<pos=85%>{statusTag}";
         }
         else
         {

@@ -39,6 +39,7 @@ public class InteractionManager : MonoBehaviour
     [SerializeField] private Button startSessionButton;
     [SerializeField] private Button exitButton;
     [SerializeField] private ScenarioBriefingUI scenarioBriefingUI;
+    [SerializeField] private GameObject exitSessionPanel;
 
     //[Header("VR Locomotion Control")]
     //[SerializeField] private UnityEngine.XR.Interaction.Toolkit.Locomotion.LocomotionProvider moveProvider;
@@ -58,6 +59,9 @@ public class InteractionManager : MonoBehaviour
     private int totalFillerWordsDetected = 0;
     private DateTime sessionStartTimestamp;
     private DateTime sessionEndTimestamp;
+    private bool leaveAfterSessionEnds = false;
+    private string sessionCompletionStatus = "Completed";
+
 
     private void Start()
     {
@@ -211,6 +215,11 @@ private IEnumerator DebugInitializeXRRoutine()
             scenarioBriefingUI.SetupBriefing(activeConfig);
         }
 
+        if (objectiveManager != null)
+        {
+            objectiveManager.DisplayScenarioObjective(activeConfig);
+        }
+
         if (emotionPanel != null)
         {
             emotionPanel.SetActive(false);
@@ -234,9 +243,6 @@ private IEnumerator DebugInitializeXRRoutine()
         // 2. Disable locomotion SECOND so player cannot walk out of the chair
         SetLocomotionEnabled(false);
 
-        if (objectiveManager != null)
-            objectiveManager.OnConversationStarted();
-
         StartCoroutine(HandsFreeSessionInitiationRoutine());
     }
 
@@ -258,6 +264,11 @@ private IEnumerator DebugInitializeXRRoutine()
         conversationHistory.Clear();
 
         SetLocomotionEnabled(false);
+
+        if (uiManager != null)
+        {
+            uiManager.gameObject.SetActive(true);
+        }
 
         if (hintManager != null)
         {
@@ -617,6 +628,14 @@ private IEnumerator DebugInitializeXRRoutine()
             });
         }
 
+        if (sessionCompletionStatus != "Incomplete")
+        {
+            if (activeConfig != null && turnRecords.Count >= activeConfig.maxTurnLimit)
+            {
+                sessionCompletionStatus = "Completed";
+            }
+        }
+
         float overallWpm = totalSpeakingTimeSeconds > 0 ? (totalWordsSpoken / totalSpeakingTimeSeconds) * 60.0f : 0.0f;
         var (clarityScore, fwpm) = MetricsCalculator.CalculateSpeechClarity(totalFillerWordsDetected, totalSpeakingTimeSeconds, overallWpm);
         float gestureScore = Mathf.Clamp(expressiveGestureCount * 10.0f, 0.0f, 100.0f);
@@ -649,19 +668,19 @@ private IEnumerator DebugInitializeXRRoutine()
                     ? res.npc_response
                     : $"Your overall performance scored {overallScore:F0}%. Speech clarity was {clarityScore:F0}% with {totalFillerWordsDetected} filler words detected. Practice maintaining eye contact and reducing disfluencies.";
 
-                SaveSessionToSupabase(activeUserId, currentScenario, startTimeIso, endTimeIso, overallScore, clarityScore, eyeContactPct, gestureScore, overallWpm, totalFillerWordsDetected, gpm, totalSilenceTimeSeconds, aiSummary, turnRecords);
+                SaveSessionToSupabase(activeUserId, currentScenario, sessionCompletionStatus, startTimeIso, endTimeIso, overallScore, clarityScore, eyeContactPct, gestureScore, overallWpm, totalFillerWordsDetected, gpm, totalSilenceTimeSeconds, aiSummary, turnRecords);
             },
             err => {
                 // Fallback constructive coaching string if API request fails
                 string fallbackSummary = $"Your overall performance scored {overallScore:F0}%. Speech clarity reached {clarityScore:F0}%. To improve, focus on reducing filler words ('um', 'uh') during speech pauses and keeping steady visual focus on your audience.";
-                SaveSessionToSupabase(activeUserId, currentScenario, startTimeIso, endTimeIso, overallScore, clarityScore, eyeContactPct, gestureScore, overallWpm, totalFillerWordsDetected, gpm, totalSilenceTimeSeconds, fallbackSummary, turnRecords);
+                SaveSessionToSupabase(activeUserId, currentScenario, sessionCompletionStatus, startTimeIso, endTimeIso, overallScore, clarityScore, eyeContactPct, gestureScore, overallWpm, totalFillerWordsDetected, gpm, totalSilenceTimeSeconds, fallbackSummary, turnRecords);
             }
         ));
     }
 
     // Helper method to execute the database save call cleanly
     private void SaveSessionToSupabase(
-        string activeUserId, string currentScenario, string startTimeIso, string endTimeIso,
+        string activeUserId, string currentScenario, string status, string startTimeIso, string endTimeIso,
         float overallScore, float clarityScore, float eyeContactPct, float gestureScore,
         float overallWpm, int totalFillers, float gpm, float totalSilenceSec,
         string aiSummary, List<DialogueTurnRecord> turnRecords)
@@ -675,6 +694,7 @@ private IEnumerator DebugInitializeXRRoutine()
                 topic: activeConfig != null ? activeConfig.topic : "General",
                 difficulty: activeConfig != null ? activeConfig.difficulty : "Medium",
                 inputMode: UserSession.InputMode,
+                sessionStatus: status,
                 startTime: startTimeIso,
                 endTime: endTimeIso,
                 durationSeconds: sessionElapsedTimeSeconds,
@@ -709,11 +729,15 @@ private IEnumerator DebugInitializeXRRoutine()
         }
     }
 
-    public void ExitSession()
+    /// <summary>
+    /// "Close Session" / "End Conversation" Button: 
+    /// Stops dialogue, saves metrics, and leaves the player in the room with the Exit Waypoint ON.
+    /// </summary>
+    public void CloseSession()
     {
+        leaveAfterSessionEnds = false; // Stay in the scene!
         SetLocomotionEnabled(true);
 
-        // Stop active mic hardware immediately on exit
         if (audioRecorder != null)
         {
             audioRecorder.StopRecording();
@@ -724,19 +748,18 @@ private IEnumerator DebugInitializeXRRoutine()
             startConfigPanel.SetActive(false);
         }
 
-        // 1. If the session is actively running with dialogue history, calculate and save scores first
+        // Save results if session is active
         if (isSessionActive && conversationHistory != null && conversationHistory.Count > 0)
         {
+            sessionCompletionStatus = "Incomplete"; // User ended chat early
             isSessionActive = false;
             CalculateAndSaveResults();
         }
         else
         {
-
-            // Set UI status when ending manually or exiting after conversation is complete
             if (uiManager != null)
             {
-                uiManager.SetStatus("Chat ended. Transitioning to scenario...");
+                uiManager.SetStatus("Chat ended.");
             }
             if (emotionPanel != null)
             {
@@ -744,10 +767,17 @@ private IEnumerator DebugInitializeXRRoutine()
             }
 
             isSessionActive = false;
-            StopAllCoroutines();
             OnSessionCompletedSequence();
         }
+    }
 
+    /// <summary>
+    /// "Exit Session" Button: Immediately transitions back to the Dashboard.
+    /// </summary>
+    public void ExitSession()
+    {
+        leaveAfterSessionEnds = true; // Transition immediately!
+        CloseSession();
     }
 
     private void OnSessionCompletedSequence()
@@ -755,6 +785,13 @@ private IEnumerator DebugInitializeXRRoutine()
         isSessionActive = false;
         isSavingSession = false;
         SetLocomotionEnabled(true);
+
+        if (uiManager != null)
+        {
+            uiManager.HideTurnCounter();
+            uiManager.SetStatus(""); // Clear status text
+            uiManager.HideUI();
+        }
 
         if (hintManager != null)
         {
@@ -776,52 +813,76 @@ private IEnumerator DebugInitializeXRRoutine()
             startConfigPanel.SetActive(false);
         }
 
-        bool isQuickExit = AppSystemManager.Instance != null && AppSystemManager.Instance.isQuickExitEnabled;
-
         if (objectiveManager != null)
         {
-            objectiveManager.ShowExitObjective(isQuickExit);
+            objectiveManager.EnableExitWaypointOnly();
         }
+
+        // bool isQuickExit = AppSystemManager.Instance != null && AppSystemManager.Instance.isQuickExitEnabled;
+
+        bool isTutorial = UserSession.IsRunningTutorial;
 
         if (uiManager != null)
         {
             uiManager.HideTurnCounter();
         }
 
-        if (isQuickExit)
+        if (leaveAfterSessionEnds)
         {
-            if (uiManager != null)
-            {
-                uiManager.SetStatus("Session Ended. Click 'Exit Session' on UI to leave or walk to the door.");
-            }
-
-            // Point UI exit button directly to scene transition
-            if (exitButton != null)
-            {
-                exitButton.onClick.RemoveAllListeners();
-                exitButton.onClick.AddListener(ConfirmExitFromDoor);
-            }
+            leaveAfterSessionEnds = false;
+            ExecuteSceneTransition();
         }
         else
         {
-            if (uiManager != null)
+            if (exitSessionPanel != null)
             {
-                if (UserSession.IsRunningTutorial)
-                    uiManager.SetStatus("Tutorial Completed! Walk to the Exit Zone to begin your scenario.");
-                else
-                    uiManager.SetStatus("Session Ended. Walk to the Exit Zone to leave.");
+                exitSessionPanel.SetActive(true); // Pops up the exit panel in VR space
             }
         }
+
+        //if (isQuickExit)
+        //{
+        //    if (uiManager != null)
+        //    {
+        //        uiManager.SetStatus("Session Ended. Click 'Exit Session' on UI to leave or walk to the door.");
+        //    }
+
+        //    if (leaveAfterSessionEnds)
+        //    {
+        //        leaveAfterSessionEnds = false;
+        //        ConfirmExitFromDoor();
+        //    }
+
+        //    // Point UI exit button directly to scene transition
+        //    if (exitButton != null)
+        //    {
+        //        exitButton.onClick.RemoveAllListeners();
+        //        exitButton.onClick.AddListener(ConfirmExitFromDoor);
+        //    }
+        //}
+        //else
+        //{
+        //    leaveAfterSessionEnds = false;
+        //    if (uiManager != null)
+        //    {
+        //        if (UserSession.IsRunningTutorial)
+        //            uiManager.SetStatus("Tutorial Completed! Walk to the Exit Zone to begin your scenario.");
+        //        else
+        //            uiManager.SetStatus("Session Ended. Walk to the Exit Zone to leave.");
+        //    }
+        //}
     }
 
+    private bool isExiting = false;
     // Call this method when the player interacts with or walks into the Exit Door / Zone
-    public void ConfirmExitFromDoor()
+    public void ExecuteSceneTransition()
     {
-        Debug.Log("[InteractionManager] Door interaction triggered successfully!");
-        StartCoroutine(ConfirmExitRoutine());
+        if (isExiting) return;
+        isExiting = true;
+        StartCoroutine(ExecuteSceneTransitionRoutine());
     }
 
-    private IEnumerator ConfirmExitRoutine()
+    private IEnumerator ExecuteSceneTransitionRoutine()
     {
         // 1. If results are still saving to database/metrics, wait briefly for completion
         while (isSavingSession)
@@ -857,7 +918,7 @@ private IEnumerator DebugInitializeXRRoutine()
 
         if (targetScene == defaultDashboardScene || targetScene == "DashboardScene" || targetScene == "PCDashboardScene")
         {
-            VRSceneLoader.DisableVRAndReturnToMenu(targetScene);
+            yield return StartCoroutine(VRSceneLoader.DisableVRAndReturnToMenu(targetScene));
         }
         else
         {
