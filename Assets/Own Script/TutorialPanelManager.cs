@@ -3,51 +3,63 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
+using UnityEngine.XR.Interaction.Toolkit;
+using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
 public class TutorialPanelManager : MonoBehaviour
 {
+    public static TutorialPanelManager Instance { get; private set; }
+
     [Header("Tutorial Containers")]
     [SerializeField] private GameObject handTutorialContainer;
     [SerializeField] private GameObject controllerTutorialPanel;
+    [SerializeField] private GameObject roomTeleportAnchors;
 
-    [Header("Hand Tutorial Steps")]
-    [Tooltip("Assign the parent panel GameObject for each gesture step, PLUS your final completion panel at the very end.")]
+    [Header("Hand Tutorial Step Panels")]
+    [Tooltip("Assign each step panel in order: 0=UI Pinch, 1=Teleport, 2=Pinch Grab, 3=Open Palm, 4=Completion")]
     [SerializeField] private GameObject[] handStepPanels;
 
-    [Tooltip("Gesture names matching your gesture tracker. Leave the final completion step slot blank or empty!")]
+    [Tooltip("Assign parent World-Space Canvas GameObjects if steps live on separate canvases around the room.")]
+    [SerializeField] private GameObject[] parentWorldSpaceCanvases;
+
+    [Tooltip("Assign the status TMP_Text component located on EACH panel in matching order (0 to 4).")]
+    [SerializeField] private TMP_Text[] handStatusTexts;
+
+    [Tooltip("Gesture names matching GestureTracker (e.g., 'Pinch', 'Teleport', 'Grab', 'Open Palm'). Leave final step empty.")]
     [SerializeField] private string[] requiredGestureNames;
+
+    [Header("Teleport Step Setup")]
+    [SerializeField] private GameObject greenWaypointAnchor;
+    private TeleportationAnchor waypointTeleportAnchor;
+    [SerializeField] private Transform spawnPointTransform;
+    [SerializeField] private MonoBehaviour anchorOutlineScript;
+    private bool isStepTransitioning = false;
+
+    [Header("Grab Step Setup")]
+    [SerializeField] private XRBaseInteractable[] grabTargets;
 
     private int currentHandStepIndex = 0;
     private bool[] completedSteps;
 
-    [Header("Shared UI References")]
-    [SerializeField] private TextMeshProUGUI handProgressText;
-    [SerializeField] private TextMeshProUGUI handStatusText;
-    [SerializeField] private Button handPrevButton;
+    [Header("Consolidated UI References")]
     [SerializeField] private Button handCloseButton;
-    [SerializeField] private Button completionDoneButton; // Final Panel "Done" button
-    
-    [Header("Interactive Test Button")]
-    [SerializeField] private Button testPinchButton;
-
-    [Header("Status Panel")]
-    [SerializeField] private GameObject statusPanelContainer;
-    [SerializeField] private Image statusIconImage;
-    [SerializeField] private Sprite defaultIcon;
-    [SerializeField] private Sprite successIcon;
+    [SerializeField] private Button completionDoneButton;
 
     [Header("Status Messages")]
+    [Tooltip("Custom instruction for each step (0=UI Pinch, 1=Teleport, 2=Pinch Grab, 3=Open Palm, 4=Completion)")]
     [SerializeField]
-    private string defaultMessage =
-        "Waiting for gesture... Move your hand into the correct position and try again.";
+    private string[] defaultStepMessages = new string[]
+    {
+        "PLease click the button below using <color=#FFD700><b>UI Pinch</b></color> to try it out!",
+        "Pinch and point your ray at the <color=#55FF55><b>green waypoint anchor</b></color> to teleport.",
+        "Reach out and <color=#FFD700><b>pinch-grab</b></color> any object on the desk.",
+        "Hold your hand up with an <color=#FFD700><b>open palm facing forward</b></color> to open the menu.",
+        "You may proceed to the next step. Move to the <color=#55FF55><b>green waypoint anchor</b></color> at the desk to begin the <color=#00E5FF><b>NPC Dialogue Tutorial</b></color>."
+    };
 
-    [SerializeField]
-    private string successMessage =
-        "Correct! Well done! Moving to the next step...";
-
-    [SerializeField]
-    private string completedMessage =
-        "Tutorial completed! Well done!";
+    [SerializeField] private string successMessage = "<color=#81C784><b>Correct! Well done! Moving to next step...</b></color>";
+    [SerializeField] private string warningMessage = "<color=#FF5555><b>ACCESS RESTRICTED:</b></color> Please teleport to the <color=#55FF55>green waypoint anchor</color>.";
 
     [Header("Success Feedback")]
     [SerializeField] private AudioSource successAudioSource;
@@ -61,13 +73,26 @@ public class TutorialPanelManager : MonoBehaviour
     private Coroutine advanceCoroutine;
     private bool tutorialFinished = false;
 
+    private void Awake()
+    {
+        Instance = this;
+    }
+
     private void Start()
     {
+        if (grabTargets != null)
+            foreach (var g in grabTargets)
+                if (g != null) g.selectEntered.AddListener(OnObjectGrabbed);
+
+        if (greenWaypointAnchor != null)
+        {
+            waypointTeleportAnchor = greenWaypointAnchor.GetComponentInChildren<TeleportationAnchor>(true);
+            if (waypointTeleportAnchor != null)
+                waypointTeleportAnchor.teleporting.AddListener(OnWaypointTeleported);
+        }
+
         if (handCloseButton != null)
             handCloseButton.onClick.AddListener(CloseTutorial);
-
-        if (handPrevButton != null)
-            handPrevButton.onClick.AddListener(PreviousHandStep);
 
         if (completionDoneButton != null)
             completionDoneButton.onClick.AddListener(CloseTutorial);
@@ -78,14 +103,29 @@ public class TutorialPanelManager : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (grabTargets != null)
+            foreach (var g in grabTargets)
+                if (g != null) g.selectEntered.RemoveListener(OnObjectGrabbed);
+
+        if (waypointTeleportAnchor != null)
+            waypointTeleportAnchor.teleporting.RemoveListener(OnWaypointTeleported);
+
         if (handCloseButton != null)
             handCloseButton.onClick.RemoveListener(CloseTutorial);
 
-        if (handPrevButton != null)
-            handPrevButton.onClick.RemoveListener(PreviousHandStep);
-
         if (completionDoneButton != null)
             completionDoneButton.onClick.RemoveListener(CloseTutorial);
+    }
+
+    private void OnObjectGrabbed(SelectEnterEventArgs args)
+    {
+        if (activeMode != InputMode.HandTracking || tutorialFinished) return;
+        if (currentHandStepIndex == 2) TriggerStepSuccess();
+    }
+
+    private void OnWaypointTeleported(TeleportingEventArgs args)
+    {
+        ValidateTeleportTarget(greenWaypointAnchor);
     }
 
     public void InitializeForInputMode(InputMode mode)
@@ -99,19 +139,17 @@ public class TutorialPanelManager : MonoBehaviour
 
         if (activeMode == InputMode.Controller)
         {
-            if (handTutorialContainer != null)
-                handTutorialContainer.SetActive(false);
+            if (handTutorialContainer != null) handTutorialContainer.SetActive(false);
+            if (controllerTutorialPanel != null) controllerTutorialPanel.SetActive(true);
 
-            if (controllerTutorialPanel != null)
-                controllerTutorialPanel.SetActive(true);
+            // Force green waypoint anchor OFF immediately in Controller mode!
+            if (greenWaypointAnchor != null) greenWaypointAnchor.SetActive(false);
+            if (anchorOutlineScript != null) anchorOutlineScript.enabled = false;
         }
         else if (activeMode == InputMode.HandTracking)
         {
-            if (controllerTutorialPanel != null)
-                controllerTutorialPanel.SetActive(false);
-
-            if (handTutorialContainer != null)
-                handTutorialContainer.SetActive(true);
+            if (controllerTutorialPanel != null) controllerTutorialPanel.SetActive(false);
+            if (handTutorialContainer != null) handTutorialContainer.SetActive(true);
 
             ResetHandTutorial();
         }
@@ -135,103 +173,118 @@ public class TutorialPanelManager : MonoBehaviour
         }
 
         completedSteps = new bool[handStepPanels.Length];
-
         UpdateHandStepUI();
     }
 
     private void UpdateHandStepUI()
     {
-        if (handStepPanels == null || handStepPanels.Length == 0)
-            return;
+        if (handStepPanels == null || handStepPanels.Length == 0) return;
 
-        // Check if we reached the final completion panel
-        bool isFinalCompletionStep = (currentHandStepIndex == handStepPanels.Length - 1);
-
-        // Show only the current active step panel
-        for (int i = 0; i < handStepPanels.Length; i++)
+        // Pass 1: deactivate every parent canvas EXCEPT the root hand container
+        if (parentWorldSpaceCanvases != null)
         {
-            if (handStepPanels[i] != null)
+            foreach (var canvasObj in parentWorldSpaceCanvases)
             {
-                handStepPanels[i].SetActive(i == currentHandStepIndex);
+                if (canvasObj != null && canvasObj != handTutorialContainer)
+                    canvasObj.SetActive(false);
             }
         }
 
-        // Update step counter text (excludes final completion panel from total count)
-        if (handProgressText != null)
+        // Make sure the root container is on
+        if (handTutorialContainer != null) handTutorialContainer.SetActive(true);
+
+        // Pass 2: activate the current step's canvas AND any inactive parents above it
+        if (parentWorldSpaceCanvases != null &&
+            currentHandStepIndex < parentWorldSpaceCanvases.Length &&
+            parentWorldSpaceCanvases[currentHandStepIndex] != null)
         {
-            handProgressText.text = isFinalCompletionStep
-                ? "Complete!"
-                : $"Step {currentHandStepIndex + 1} / {handStepPanels.Length - 1}";
+            Transform t = parentWorldSpaceCanvases[currentHandStepIndex].transform;
+            while (t != null && (handTutorialContainer == null || t != handTutorialContainer.transform.parent))
+            {
+                t.gameObject.SetActive(true);
+                t = t.parent;
+            }
         }
 
-        // Hide status panel bar when viewing the final completion panel
-        if (isFinalCompletionStep)
+        for (int i = 0; i < handStepPanels.Length; i++)
         {
-            if (statusPanelContainer != null)
-                statusPanelContainer.SetActive(false);
-        }
-        else
-        {
-            SetDefaultStatus();
+            if (handStepPanels[i] != null)
+                handStepPanels[i].SetActive(i == currentHandStepIndex);
         }
 
-        // Enable Previous button only when the previous step was completed
-        if (handPrevButton != null)
-        {
-            bool previousStepCompleted =
-                currentHandStepIndex > 0 &&
-                completedSteps != null &&
-                completedSteps[currentHandStepIndex - 1];
+       
+        bool isTeleportStep = (activeMode == InputMode.HandTracking) && (currentHandStepIndex == 1);
 
-            handPrevButton.interactable = previousStepCompleted;
+        if (greenWaypointAnchor != null) greenWaypointAnchor.SetActive(isTeleportStep);
+        if (anchorOutlineScript != null) anchorOutlineScript.enabled = isTeleportStep;
+
+        if (isTeleportStep && interactionManager != null)
+            interactionManager.SetLocomotionEnabled(true);
+
+        SetDefaultStatus();
+    }
+
+    private TMP_Text GetActiveStatusText()
+    {
+        if (handStatusTexts != null && currentHandStepIndex < handStatusTexts.Length)
+        {
+            return handStatusTexts[currentHandStepIndex];
         }
+        return null;
     }
 
     private void SetDefaultStatus()
     {
-        if (statusPanelContainer != null)
-            statusPanelContainer.SetActive(true);
-
-        if (handStatusText != null)
-            handStatusText.text = defaultMessage;
-
-        if (statusIconImage != null)
+        TMP_Text activeText = GetActiveStatusText();
+        if (activeText != null && defaultStepMessages != null && currentHandStepIndex < defaultStepMessages.Length)
         {
-            statusIconImage.gameObject.SetActive(true);
-
-            if (defaultIcon != null)
-                statusIconImage.sprite = defaultIcon;
+            activeText.text = defaultStepMessages[currentHandStepIndex];
         }
     }
 
     private void SetSuccessStatus()
     {
-        if (statusPanelContainer != null)
-            statusPanelContainer.SetActive(true);
-
-        if (handStatusText != null)
-            handStatusText.text = successMessage;
-
-        if (statusIconImage != null)
+        TMP_Text activeText = GetActiveStatusText();
+        if (activeText != null)
         {
-            statusIconImage.gameObject.SetActive(true);
-
-            if (successIcon != null)
-                statusIconImage.sprite = successIcon;
+            activeText.text = successMessage;
         }
     }
 
+    /// <summary>
+    /// Called by GestureTracker when global gestures are recognized.
+    /// </summary>
     public void OnGesturePerformed(string gestureType)
     {
-        string required = (requiredGestureNames != null && currentHandStepIndex < requiredGestureNames.Length)
-       ? requiredGestureNames[currentHandStepIndex] : "<none>";
-        Debug.Log($"[Tutorial] Got '{gestureType}' | required '{required}' | step {currentHandStepIndex} | mode {activeMode} | advancing {advanceCoroutine != null} | finished {tutorialFinished}");
-
         if (activeMode != InputMode.HandTracking || advanceCoroutine != null || tutorialFinished)
             return;
 
+        // Ignore global air-pinch gesture events on Step 0!
+        // Step 0 must ONLY be completed by physically clicking the UI button.
+        if (currentHandStepIndex != 3)
+            return;
+
+        ProcessGestureAdvance(gestureType);
+    }
+
+    /// <summary>
+    /// Event hook assigned directly to the UI Button OnClick() on Step 0.
+    /// </summary>
+    public void OnTestPinchButtonPressed()
+    {
+        if (activeMode != InputMode.HandTracking || advanceCoroutine != null || tutorialFinished)
+            return;
+
+        if (currentHandStepIndex == 0)
+        {
+            TriggerStepSuccess();
+        }
+    }
+
+    private void ProcessGestureAdvance(string gestureType)
+    {
         if (handStepPanels == null || currentHandStepIndex >= handStepPanels.Length - 1)
-            return; // Don't process gesture triggers on the final completion panel
+            return;
 
         if (requiredGestureNames == null || currentHandStepIndex >= requiredGestureNames.Length)
             return;
@@ -243,17 +296,60 @@ public class TutorialPanelManager : MonoBehaviour
 
         if (string.Equals(gestureType.Trim(), requiredGesture.Trim(), StringComparison.OrdinalIgnoreCase))
         {
-            completedSteps[currentHandStepIndex] = true;
-
-            SetSuccessStatus();
-
-            if (successAudioSource != null && successSound != null)
-            {
-                successAudioSource.PlayOneShot(successSound);
-            }
-
-            advanceCoroutine = StartCoroutine(AdvanceAfterSuccess());
+            TriggerStepSuccess();
         }
+    }
+
+    public bool ValidateTeleportTarget(GameObject targetObject)
+    {
+        if (currentHandStepIndex != 1) return true;
+
+        if (greenWaypointAnchor != null && (targetObject == greenWaypointAnchor || targetObject.transform.IsChildOf(greenWaypointAnchor.transform)))
+        {
+            // Directly call TriggerStepSuccess() instead of ProcessGestureAdvance!
+            TriggerStepSuccess();
+            return true;
+        }
+
+        ShowTeleportRestrictionWarning();
+        return false;
+    }
+
+    private void ShowTeleportRestrictionWarning()
+    {
+        TMP_Text activeText = GetActiveStatusText();
+        if (activeText != null)
+        {
+            activeText.text = warningMessage;
+            CancelInvoke(nameof(SetDefaultStatus));
+            Invoke(nameof(SetDefaultStatus), 3.0f);
+        }
+    }
+
+    private void TriggerStepSuccess()
+    {
+        if (advanceCoroutine != null || tutorialFinished || isStepTransitioning) return;
+
+        completedSteps[currentHandStepIndex] = true;
+
+        // 1. Play success sound
+        if (successAudioSource != null && successSound != null)
+        {
+            successAudioSource.PlayOneShot(successSound);
+        }
+
+        // 2. Instant advance to Step 2 (Pinch Grab Panel) when completing Step 1 (Teleport)
+        if (currentHandStepIndex == 1)
+        {
+            currentHandStepIndex++;
+            UpdateHandStepUI();
+            return;
+        }
+
+        // Standard behavior for other steps
+        isStepTransitioning = true;
+        SetSuccessStatus();
+        advanceCoroutine = StartCoroutine(AdvanceAfterSuccess());
     }
 
     private IEnumerator AdvanceAfterSuccess()
@@ -265,7 +361,6 @@ public class TutorialPanelManager : MonoBehaviour
             currentHandStepIndex++;
             UpdateHandStepUI();
 
-            // Mark finished if advancing onto the final completion panel
             if (currentHandStepIndex == handStepPanels.Length - 1)
             {
                 tutorialFinished = true;
@@ -273,25 +368,7 @@ public class TutorialPanelManager : MonoBehaviour
         }
 
         advanceCoroutine = null;
-    }
-
-    public void PreviousHandStep()
-    {
-        if (currentHandStepIndex <= 0)
-            return;
-
-        if (completedSteps == null || !completedSteps[currentHandStepIndex - 1])
-            return;
-
-        if (advanceCoroutine != null)
-        {
-            StopCoroutine(advanceCoroutine);
-            advanceCoroutine = null;
-        }
-
-        tutorialFinished = false;
-        currentHandStepIndex--;
-        UpdateHandStepUI();
+        isStepTransitioning = false; // Reset transition lock
     }
 
     public void CloseTutorial()
@@ -307,23 +384,42 @@ public class TutorialPanelManager : MonoBehaviour
             interactionManager.SetLocomotionEnabled(true);
         }
 
-        // Hide both tutorial UI containers explicitly
-        if (controllerTutorialPanel != null)
+        if (spawnPointTransform != null)
         {
-            controllerTutorialPanel.SetActive(false);
+            // Find Unity's XR Origin / Rig object
+            var xrOrigin = FindObjectOfType<Unity.XR.CoreUtils.XROrigin>();
+            if (xrOrigin != null)
+            {
+                xrOrigin.MoveCameraToWorldLocation(spawnPointTransform.position);
+                xrOrigin.transform.rotation = spawnPointTransform.rotation;
+            }
         }
-    
-        if (handTutorialContainer != null)
+
+        if (controllerTutorialPanel != null) controllerTutorialPanel.SetActive(false);
+        if (handTutorialContainer != null) handTutorialContainer.SetActive(false);
+
+        // Turn OFF parent world space canvases on close
+        if (parentWorldSpaceCanvases != null)
         {
-            handTutorialContainer.SetActive(false);
+            foreach (var canvasObj in parentWorldSpaceCanvases)
+            {
+                if (canvasObj != null) canvasObj.SetActive(false);
+            }
         }
-    }
 
-    public void OnTestPinchButtonPressed()
-    {
-        Debug.Log("[Tutorial] 'Press Here!' button pressed via UI Pinch interactor!");
+        // Hide green waypoint anchor on close
+        if (greenWaypointAnchor != null) greenWaypointAnchor.SetActive(false);
+        if (anchorOutlineScript != null) anchorOutlineScript.enabled = false;
 
-        // Trigger the exact same success flow as physical gesture recognition
-        OnGesturePerformed("Pinch");
+        ObjectiveManager objectiveManager = FindObjectOfType<ObjectiveManager>();
+        if (objectiveManager != null)
+        {
+            objectiveManager.ShowStartWaypointAfterTutorial();
+        }
+
+        if (roomTeleportAnchors != null)
+        {
+            roomTeleportAnchors.SetActive(true);
+        }
     }
 }
