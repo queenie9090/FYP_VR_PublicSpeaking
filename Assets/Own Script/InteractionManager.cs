@@ -286,6 +286,11 @@ private IEnumerator DebugInitializeXRRoutine()
         sessionElapsedTimeSeconds = 0f; totalSpeakingTimeSeconds = 0f; totalSilenceTimeSeconds = 0f; totalFillerWordsDetected = 0;
         previousEmotion = "NEUTRAL";
 
+        if (NPCEmotionSessionManager.Instance != null)
+        {
+            NPCEmotionSessionManager.Instance.StartNewSession();
+        }
+
         // Capture precise start time (ISO 8601 string format for Supabase timestamptz)
         sessionStartTimestamp = DateTime.UtcNow;
 
@@ -431,6 +436,26 @@ private IEnumerator DebugInitializeXRRoutine()
         // Replace with Unity's actual intensity calculation later.
         int testIntensity =
             validatedEmotion == "NEUTRAL" ? 0 : 60;
+
+        if (NPCEmotionSessionManager.Instance != null)
+        {
+            string npcName = currentActiveNPC != null
+                ? currentActiveNPC.name
+                : "NPC";
+
+            NPCEmotionSessionManager.Instance.RecordEmotion(
+                expectedTurnNumber,
+                npcName,
+                validatedEmotion,
+                testIntensity
+            );
+        }
+        else
+        {
+            Debug.LogWarning(
+                "NPCEmotionSessionManager not found."
+            );
+        }
 
         if (npcEmotionController != null)
         {

@@ -52,6 +52,7 @@ public class PCDashboardController : MonoBehaviour
 
     [Header("Navigation")]
     [SerializeField] private Button backToMenuButton;
+    [SerializeField] private Button viewEmotionReportButton;
 
     private NormalizedSessionData cachedCurrentSession;
 
@@ -63,6 +64,14 @@ public class PCDashboardController : MonoBehaviour
             {
                 // If logged in, route directly back to your Main Menu / Dashboard scene
                 SceneManager.LoadScene("MainMenu");
+            });
+        }
+
+        if (viewEmotionReportButton != null)
+        {
+            viewEmotionReportButton.onClick.AddListener(() =>
+            {
+                SceneManager.LoadScene("EmotionDashboardScene");
             });
         }
 
