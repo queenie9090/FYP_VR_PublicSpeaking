@@ -13,15 +13,16 @@ public class HintManager : MonoBehaviour
     [Header("Input Mode Settings")]
     [SerializeField] private InputMode currentInputMode = InputMode.Controller;
 
-    [Header("Controller Hint UI")]
-    [SerializeField] private GameObject controllerHintCanvas;
-    [SerializeField] private TextMeshProUGUI controllerHintText;
-    // Assign 'XRI LeftHand Interaction/SecondaryButton' (Y Button)
-   // [SerializeField] private InputActionProperty controllerHintAction;
+    [Header("Unified World-Space Hint UI")]
+    [Tooltip("Assign the single top-level 3D Handle GameObject")]
+    [SerializeField] private GameObject hintPanelRoot;
+    [Tooltip("Assign the TextMeshProUGUI child object inside the panel canvas")]
+    [SerializeField] private TextMeshProUGUI hintText;
 
-    [Header("Hand Tracking Hint UI")]
-    [SerializeField] private GameObject handTrackingHintCanvas;
-    [SerializeField] private TextMeshProUGUI handTrackingHintText;
+    [Header("Positioning Settings")]
+    [Tooltip("Assign Main Camera (XR Camera / CenterEyeAnchor)")]
+    [SerializeField] private Transform playerCamera;
+    [SerializeField] private float spawnDistance = 1.2f;
 
     [Header("Manager References")]
     [SerializeField] private InteractionManager interactionManager;
@@ -29,8 +30,6 @@ public class HintManager : MonoBehaviour
     [Header("State Tracking")]
     private bool isDialogueActive = false;
     private string currentDialogueHint = "";
-
-    //private float nextDebugTime;
 
     private void Update()
     {
@@ -59,34 +58,12 @@ public class HintManager : MonoBehaviour
 
         if (interactionManager == null)
             interactionManager = FindObjectOfType<InteractionManager>();
+
+        if (playerCamera == null && Camera.main != null)
+        {
+            playerCamera = Camera.main.transform;
+        }
     }
-
-    //private void OnEnable()
-    //{
-    //    Debug.Log("[HintManager] OnEnable");
-    //    if (controllerHintAction.action != null)
-    //    {
-    //        controllerHintAction.action.Enable();
-    //        controllerHintAction.action.performed += OnControllerHintPressed;
-    //        Debug.Log($"[HintManager] Action '{controllerHintAction.action.name}' enabled. " +
-    //                  $"Bindings: {controllerHintAction.action.bindings.Count}, " +
-    //                  $"Bound controls: {controllerHintAction.action.controls.Count}");
-    //    }
-    //    else
-    //    {
-    //        Debug.LogError("[HintManager] controllerHintAction.action is NULL (nothing assigned or reference broken)");
-    //    }
-    //}
-
-    //private void OnDisable()
-    //{
-    //    Debug.Log("[HintManager] OnDisable (something deactivated this object)");
-    //    if (controllerHintAction.action != null)
-    //    {
-    //        controllerHintAction.action.performed -= OnControllerHintPressed;
-    //        controllerHintAction.action.Disable();
-    //    }
-    //}
 
     private void OnEnable()
     {
@@ -95,7 +72,7 @@ public class HintManager : MonoBehaviour
 
     private void OnDisable()
     {
-        Debug.Log("[HintManager] OnDisable (something deactivated this object)");
+        Debug.Log("[HintManager] OnDisable");
     }
 
     private void OnControllerHintPressed(InputAction.CallbackContext context)
@@ -105,11 +82,32 @@ public class HintManager : MonoBehaviour
         ProcessHintTrigger();
     }
 
-    // Triggered via Open Palm (> 1.0s) from GestureTracker / InteractionManager
-    public void OnOpenPalmGestureTriggered()
+    // -------------------------------------------------------------
+    // Hand Tracking Gesture Callbacks (Custom Framing & Fist Close)
+    // -------------------------------------------------------------
+
+    /// <summary>
+    /// Triggered via the camera framing gesture (|_ _|). Toggles panel display.
+    /// </summary>
+    public void OnCustomGestureTriggered()
     {
         if (currentInputMode != InputMode.HandTracking) return;
+        Debug.Log("<color=green>[HintManager]</color> OnCustomGestureTriggered received. Processing toggle...");
         ProcessHintTrigger();
+    }
+
+    /// <summary>
+    /// Triggered via the Fist gesture to explicitly close the panel.
+    /// </summary>
+    public void OnCloseGestureTriggered()
+    {
+        if (currentInputMode != InputMode.HandTracking) return;
+
+        if (hintPanelRoot != null && hintPanelRoot.activeSelf)
+        {
+            Debug.Log("<color=orange>[HintManager]</color> OnCloseGestureTriggered received. Hiding 3D panel...");
+            hintPanelRoot.SetActive(false);
+        }
     }
 
     /// <summary>
@@ -117,16 +115,16 @@ public class HintManager : MonoBehaviour
     /// </summary>
     private void ProcessHintTrigger()
     {
-        GameObject activeCanvas = (currentInputMode == InputMode.Controller) ? controllerHintCanvas : handTrackingHintCanvas;
+        if (hintPanelRoot == null) return;
 
-        // 1. If canvas is ALREADY showing -> Toggle OFF
-        if (activeCanvas != null && activeCanvas.activeSelf)
+        // 1. If root handle is ALREADY showing -> Toggle OFF
+        if (hintPanelRoot.activeSelf)
         {
-            activeCanvas.SetActive(false);
+            hintPanelRoot.SetActive(false);
             return;
         }
 
-        // 2. If canvas is HIDDEN and session active -> Fetch live AI coaching hint
+        // 2. If HIDDEN -> Fetch hint / toggle display
         if (isDialogueActive)
         {
             if (interactionManager != null)
@@ -135,34 +133,26 @@ public class HintManager : MonoBehaviour
             }
             else
             {
-                ToggleHintDisplay(); // Fallback if InteractionManager missing
+                ToggleHintDisplay();
             }
         }
         else
         {
-            // If session is ended or inactive, display standard notice/cached hint
             ToggleHintDisplay();
         }
     }
 
-    // -------------------------------------------------------------
-    // Display Logic & State Management
-    // -------------------------------------------------------------
-
     public void ToggleHintDisplay()
     {
-        GameObject activeCanvas = (currentInputMode == InputMode.Controller) ? controllerHintCanvas : handTrackingHintCanvas;
-        TextMeshProUGUI activeText = (currentInputMode == InputMode.Controller) ? controllerHintText : handTrackingHintText;
-
-        if (activeCanvas == null || activeText == null)
+        if (hintPanelRoot == null || hintText == null)
         {
-            Debug.LogError("[HintManager] Active Canvas or Text UI reference is missing in the Inspector!");
+            Debug.LogError("[HintManager] Hint Panel Root or Text UI reference missing in Inspector!");
             return;
         }
 
-        if (activeCanvas.activeSelf)
+        if (hintPanelRoot.activeSelf)
         {
-            activeCanvas.SetActive(false);
+            hintPanelRoot.SetActive(false);
             return;
         }
 
@@ -170,36 +160,30 @@ public class HintManager : MonoBehaviour
 
         if (isDialogueActive)
         {
-            if (!string.IsNullOrEmpty(currentDialogueHint))
-            {
-                activeText.text = currentDialogueHint;
-            }
-            else
-            {
-                activeText.text = "Press Y/B (or hold Open Palm) to request a dialogue hint.";
-            }
+            hintText.text = !string.IsNullOrEmpty(currentDialogueHint)
+                ? currentDialogueHint
+                : "Press Y/B or make camera frame gesture to request a dialogue hint.";
         }
         else
         {
-            activeText.text = "Hints are only available during active dialogue scenarios.";
+            hintText.text = "Hints are only available during active dialogue scenarios.";
         }
 
-        activeCanvas.SetActive(true);
-        Debug.Log($"[HintManager] Displaying hint under {currentInputMode} mode.");
+        // Position panel at eye level before opening
+        PositionInFrontOfPlayer(hintPanelRoot);
+        hintPanelRoot.SetActive(true);
     }
 
     public void ShowDirectMessage(string message)
     {
-        GameObject activeCanvas = (currentInputMode == InputMode.Controller) ? controllerHintCanvas : handTrackingHintCanvas;
-        TextMeshProUGUI activeText = (currentInputMode == InputMode.Controller) ? controllerHintText : handTrackingHintText;
-
-        if (activeCanvas == null || activeText == null) return;
+        if (hintPanelRoot == null || hintText == null) return;
 
         HideAllCanvases();
 
-        // Set text directly without cutting off sentences
-        activeText.text = message;
-        activeCanvas.SetActive(true);
+        hintText.text = message;
+
+        PositionInFrontOfPlayer(hintPanelRoot);
+        hintPanelRoot.SetActive(true);
     }
 
     public void SyncInputModeFromUserSession()
@@ -231,7 +215,7 @@ public class HintManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Hides any visible hint popups when the pause menu opens or session completes.
+    /// Hides visible hint popup when the pause menu opens or session completes.
     /// </summary>
     public void HideHintCanvas()
     {
@@ -240,7 +224,24 @@ public class HintManager : MonoBehaviour
 
     private void HideAllCanvases()
     {
-        if (controllerHintCanvas != null) controllerHintCanvas.SetActive(false);
-        if (handTrackingHintCanvas != null) handTrackingHintCanvas.SetActive(false);
+        if (hintPanelRoot != null) hintPanelRoot.SetActive(false);
+    }
+
+    /// <summary>
+    /// Positions the root handle object directly in front of the player's eye level facing toward them.
+    /// </summary>
+    private void PositionInFrontOfPlayer(GameObject targetRoot)
+    {
+        if (playerCamera == null || targetRoot == null) return;
+
+        Vector3 forwardDir = playerCamera.forward;
+        forwardDir.y = 0; // Keep horizontal orientation flat
+        forwardDir.Normalize();
+
+        Vector3 targetPosition = playerCamera.position + (forwardDir * spawnDistance);
+        targetPosition.y = playerCamera.position.y; // Match eye height
+
+        targetRoot.transform.position = targetPosition;
+        targetRoot.transform.rotation = Quaternion.LookRotation(forwardDir);
     }
 }

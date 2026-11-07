@@ -61,6 +61,7 @@ public class InteractionManager : MonoBehaviour
     private DateTime sessionEndTimestamp;
     private bool leaveAfterSessionEnds = false;
     private string sessionCompletionStatus = "Completed";
+    private Coroutine initiationCoroutine;
 
 
     private void Start()
@@ -215,10 +216,10 @@ private IEnumerator DebugInitializeXRRoutine()
             scenarioBriefingUI.SetupBriefing(activeConfig);
         }
 
-        if (objectiveManager != null)
-        {
-            objectiveManager.DisplayScenarioObjective(activeConfig);
-        }
+        //if (objectiveManager != null)
+        //{
+        //    objectiveManager.DisplayScenarioObjective(activeConfig);
+        //}
 
         if (emotionPanel != null)
         {
@@ -243,13 +244,18 @@ private IEnumerator DebugInitializeXRRoutine()
         // 2. Disable locomotion SECOND so player cannot walk out of the chair
         SetLocomotionEnabled(false);
 
-        StartCoroutine(HandsFreeSessionInitiationRoutine());
+        if (initiationCoroutine != null) StopCoroutine(initiationCoroutine);
+        initiationCoroutine = StartCoroutine(HandsFreeSessionInitiationRoutine());
     }
 
     private IEnumerator HandsFreeSessionInitiationRoutine()
     {
         for (int i = 5; i > 0; i--)
         {
+            if (!isSessionActive && startConfigPanel == null)
+            {
+                // Safety check if session was cancelled
+            }
             uiManager.SetStatus($"Starting in {i}s...");
             yield return new WaitForSeconds(1.0f);
         }
@@ -738,9 +744,31 @@ private IEnumerator DebugInitializeXRRoutine()
         leaveAfterSessionEnds = false; // Stay in the scene!
         SetLocomotionEnabled(true);
 
+        if (initiationCoroutine != null)
+        {
+            StopCoroutine(initiationCoroutine);
+            initiationCoroutine = null;
+        }
+
+        
         if (audioRecorder != null)
         {
             audioRecorder.StopRecording();
+        }
+
+        if (eyeContactTracker != null)
+        {
+            eyeContactTracker.StopTracking();
+        }
+
+        if (gestureTracker != null)
+        {
+            gestureTracker.StopTracking();
+        }
+
+        if (emotionPanel != null)
+        {
+            emotionPanel.SetActive(false);
         }
 
         if (startConfigPanel != null)

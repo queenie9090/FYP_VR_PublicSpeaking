@@ -72,6 +72,16 @@ public class LocomotionApplier : MonoBehaviour
             Debug.LogWarning("[LocomotionApplier] AppSystemManager.Instance is null, using PlayerPrefs.");
         }
 
+        // Hand tracking has no thumbsticks, so continuous move/turn can't work.
+        // Always use teleport for hands, regardless of the saved preference.
+        string currentMode = UserSession.InputMode;
+        bool isHandTracking = !string.IsNullOrEmpty(currentMode) && currentMode.Contains("Hand");
+        if (isHandTracking)
+        {
+            locoMode = LocomotionMode.TeleportOnly;
+            turnMode = TurningMode.Snap;
+        }
+
         // ---------------- Movement ----------------
         bool allowSmoothMove = locoMode == LocomotionMode.Dynamic || locoMode == LocomotionMode.Continuous;
         bool allowTeleport = locoMode == LocomotionMode.Dynamic || locoMode == LocomotionMode.TeleportOnly;
