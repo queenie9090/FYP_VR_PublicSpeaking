@@ -83,29 +83,30 @@ public class HintManager : MonoBehaviour
     }
 
     // -------------------------------------------------------------
-    // Hand Tracking Gesture Callbacks (Custom Framing & Fist Close)
+    // Hand Tracking Gesture Callbacks (Have a Question & Thumbs Down)
     // -------------------------------------------------------------
 
     /// <summary>
-    /// Triggered via the camera framing gesture (|_ _|). Toggles panel display.
+    /// Triggered via "Have a Question" gesture (Index Up). Toggles panel display.
     /// </summary>
-    public void OnCustomGestureTriggered()
+    public void OnHaveAQuestionGestureTriggered()
     {
+        Debug.Log($"[HintManager] HaveAQuestion gesture received. Mode = {currentInputMode}");
         if (currentInputMode != InputMode.HandTracking) return;
-        Debug.Log("<color=green>[HintManager]</color> OnCustomGestureTriggered received. Processing toggle...");
+        Debug.Log("<color=green>[HintManager]</color> OnHaveAQuestionGestureTriggered received. Processing toggle...");
         ProcessHintTrigger();
     }
 
     /// <summary>
-    /// Triggered via the Fist gesture to explicitly close the panel.
+    /// Triggered via "Thumbs Down" gesture to explicitly close the panel.
     /// </summary>
-    public void OnCloseGestureTriggered()
+    public void OnThumbsDownGestureTriggered()
     {
         if (currentInputMode != InputMode.HandTracking) return;
 
         if (hintPanelRoot != null && hintPanelRoot.activeSelf)
         {
-            Debug.Log("<color=orange>[HintManager]</color> OnCloseGestureTriggered received. Hiding 3D panel...");
+            Debug.Log("<color=orange>[HintManager]</color> OnThumbsDownGestureTriggered received. Hiding 3D panel...");
             hintPanelRoot.SetActive(false);
         }
     }

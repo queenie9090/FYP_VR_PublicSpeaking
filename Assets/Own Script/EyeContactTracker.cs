@@ -57,23 +57,28 @@ public class EyeContactTracker : MonoBehaviour
         {
             if (headsetTransform != null && avatarFacialCollider != null)
             {
-                // 1. Ray gazeRay = Ray(HeadsetPose.Position, HeadsetPose.Forward)
                 Ray gazeRay = new Ray(headsetTransform.position, headsetTransform.forward);
 
-                // 2. Raycast with maxDistance = 5.0m
+                // DEBUG: red line = gaze ray (visible in Scene view with Gizmos on)
+                Debug.DrawRay(gazeRay.origin, gazeRay.direction * maxDistance, Color.red, samplingInterval);
+
                 if (Physics.Raycast(gazeRay, out RaycastHit hitInfo, maxDistance))
                 {
-                    // 3. IF hitInfo.collider == AvatarFacialCollider THEN hitSamples++
-                    if (hitInfo.collider == avatarFacialCollider)
-                    {
-                        hitSamples++;
-                    }
+                    bool isHit = hitInfo.collider == avatarFacialCollider;
+
+                    // DEBUG: what did the ray actually hit?
+                    Debug.Log($"[EyeContact] Hit '{hitInfo.collider.name}' | target = '{avatarFacialCollider.name}' | match = {isHit}");
+
+                    if (isHit) hitSamples++;
+                }
+                else
+                {
+                    Debug.Log("[EyeContact] Ray hit nothing");
                 }
 
                 totalSamples++;
             }
 
-            // 4. Wait for SamplingInterval (0.1s)
             yield return new WaitForSeconds(samplingInterval);
         }
     }
