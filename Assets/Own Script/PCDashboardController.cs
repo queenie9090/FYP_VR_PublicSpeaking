@@ -10,6 +10,14 @@ public class PCDashboardController : MonoBehaviour
     [Header("Dependencies")]
     [SerializeField] private SupabaseManager supabaseManager;
 
+    [Header("Empty State UI")]
+    [Tooltip("Parent GameObject holding all normal metrics, charts, and content panels")]
+    [SerializeField] private GameObject dashboardDataContainer;
+    [Tooltip("Overlay Panel shown when no session data is recorded")]
+    [SerializeField] private GameObject noDataPanel;
+    [SerializeField] private TMP_Text noDataMessageText;
+    [SerializeField] private Button noDataReturnHomeButton;
+
     [Header("Header Metadata")]
     [SerializeField] private TMP_Text reportTitleText;
     [SerializeField] private TMP_Text sessionMetaText;
@@ -31,7 +39,7 @@ public class PCDashboardController : MonoBehaviour
     [Header("Eye Contact Breakdown")]
     [SerializeField] private TMP_Text eyeContactScoreText;
     [SerializeField] private Image eyeContactProgressBar;
-    [SerializeField] private TMP_Text eyeContactStatusText; // Newly added status field
+    [SerializeField] private TMP_Text eyeContactStatusText; 
 
     [Header("Gesture Breakdown")]
     [SerializeField] private TMP_Text gestureScoreText;
@@ -67,6 +75,14 @@ public class PCDashboardController : MonoBehaviour
             });
         }
 
+        if (noDataReturnHomeButton != null)
+        {
+            noDataReturnHomeButton.onClick.AddListener(() =>
+            {
+                SceneManager.LoadScene("MainMenu");
+            });
+        }
+
         if (viewEmotionReportButton != null)
         {
             viewEmotionReportButton.onClick.AddListener(() =>
@@ -92,6 +108,7 @@ public class PCDashboardController : MonoBehaviour
         // 1. Check if user navigated here from Main Menu History
         if (UserSession.CurrentSessionData != null)
         {
+            ShowDashboardContent(true);
             cachedCurrentSession = UserSession.CurrentSessionData;
             PopulateDashboard(cachedCurrentSession);
 
@@ -107,15 +124,17 @@ public class PCDashboardController : MonoBehaviour
         {
             if (data != null && data.performance_metric != null && data.performance_metric.Count > 0)
             {
+                ShowDashboardContent(true);
                 cachedCurrentSession = data;
                 PopulateDashboard(data);
             }
             else
             {
-                Debug.LogWarning("[PCDashboard] No normalized session record found.");
+                ShowEmptyState(); 
             }
         }, (error) =>
         {
+            ShowEmptyState("Unable to load session data. Please check your network connection."); // Overrides message dynamically for network issues
             Debug.LogError($"[PCDashboard] Error fetching session: {error}");
         }));
     }
@@ -229,7 +248,7 @@ public class PCDashboardController : MonoBehaviour
             case "Normal Conversation":
             default:
                 scenarioWeightsSubtext.text = "Weights: Clarity (50%)\nEye Contact (30%)\nGestures (20%)";
-                break;
+            break;
         }
     }
 
@@ -307,5 +326,21 @@ public class PCDashboardController : MonoBehaviour
     {
         if (cachedCurrentSession != null)
             DataExporter.ExportToPDFReport(cachedCurrentSession);
+    }
+
+    private void ShowDashboardContent(bool hasData)
+    {
+        if (dashboardDataContainer != null) dashboardDataContainer.SetActive(hasData);
+        if (noDataPanel != null) noDataPanel.SetActive(!hasData);
+    }
+
+    private void ShowEmptyState(string customMessage = null)
+    {
+        ShowDashboardContent(false);
+        // Only overrides text if a custom message is passed and the component is assigned
+        if (noDataMessageText != null && !string.IsNullOrEmpty(customMessage))
+        {
+            noDataMessageText.text = customMessage;
+        }
     }
 }

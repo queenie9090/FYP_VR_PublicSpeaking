@@ -25,6 +25,13 @@ public class SetupUIController : MonoBehaviour
 
     private const string NeverShowTutorialKey = "Tutorial_NeverShowAgain";
 
+    private void Awake()
+    {
+        // Guarantee game time and audio listener are active upon entering Main Menu
+        Time.timeScale = 1f;
+        AudioListener.pause = false;
+    }
+
     private void Start()
     {
         // 1. Ensure UserSession config is initialized to avoid NullReferenceException

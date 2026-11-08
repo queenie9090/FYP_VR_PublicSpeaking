@@ -10181,8 +10181,8 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Face your palm upwards, extend your index finger and thumb, then pinch
-    to aim. Release to teleport
+  m_text: Face your right palm upwards, extend your index finger and thumb, then
+    pinch to aim. Release to teleport.
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: f8802cdf5316acb45b71a160083153ee, type: 2}
   m_sharedMaterial: {fileID: -6269700506862428983, guid: f8802cdf5316acb45b71a160083153ee, type: 2}
