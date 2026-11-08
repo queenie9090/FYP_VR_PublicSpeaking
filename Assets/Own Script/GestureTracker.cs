@@ -62,18 +62,20 @@ public class GestureTracker : MonoBehaviour
     // -------------------------------------------------------------
 
     /// <summary>
-    /// Call this from Left & Right Hand Pose Detectors when camera frame shape is detected.
+    /// Triggered via "Have a Question" gesture (Index extended up). Opens/toggles hint panel.
     /// </summary>
-    public void TriggerCustomGesture() => ProcessGestureEvent("CustomGesture", 0.5f);
+    public void TriggerHaveAQuestionGesture() => ProcessGestureEvent("HaveAQuestion", 0.5f);
 
     /// <summary>
-    /// Call this from Fist Pose Detector to dismiss the active hint panel.
+    /// Triggered via "Thumbs Down" gesture to explicitly close the hint panel.
     /// </summary>
-    public void TriggerFistCloseGesture() => ProcessGestureEvent("FistClose", 0.3f);
+    public void TriggerThumbsDownGesture() => ProcessGestureEvent("ThumbsDown", 0.3f);
+
     /// <summary>
-    /// Call this from Left & Right Inappropriate Gesture Detectors (e.g. Middle Finger).
+    /// Triggered via Inappropriate Gesture Detectors (Middle Finger).
     /// </summary>
     public void TriggerUnprofessionalGesture() => ProcessUnprofessionalGesture("Middle Finger");
+
     public void TriggerPinchGesture() => ProcessGestureEvent("Pinch", 0.5f);
     public void TriggerPointPinchGesture() => ProcessGestureEvent("Point + Pinch", 0.5f);
     public void TriggerGrabGesture() => ProcessGestureEvent("Grab", 0.5f);
@@ -100,17 +102,17 @@ public class GestureTracker : MonoBehaviour
             tutorialManager.OnGesturePerformed(gestureType);
         }
 
-        // 3. Route Custom Framing Gesture (|_ _|) to HintManager
-        if (gestureType == "CustomGesture")
+        // 3. Route "Have a Question" Gesture to HintManager (Open/Toggle Panel)
+        if (gestureType == "HaveAQuestion")
         {
-            Debug.Log("<color=green>[GestureTracker -> HintManager]</color> Frame Pose Detected! Triggering 3D Hint Panel...");
+            Debug.Log("<color=green>[GestureTracker -> HintManager]</color> Have A Question Pose Detected! Triggering 3D Hint Panel...");
 
             if (hintManager == null)
                 hintManager = FindObjectOfType<HintManager>();
 
             if (hintManager != null)
             {
-                hintManager.OnCustomGestureTriggered();
+                hintManager.OnHaveAQuestionGestureTriggered();
             }
             else
             {
@@ -119,17 +121,17 @@ public class GestureTracker : MonoBehaviour
             return;
         }
 
-        // 4. Route Fist Close Gesture to dismiss panel
-        if (gestureType == "FistClose")
+        // 4. Route "Thumbs Down" Gesture to HintManager (Close Panel)
+        if (gestureType == "ThumbsDown")
         {
-            Debug.Log("<color=orange>[GestureTracker -> HintManager]</color> Fist Close Detected! Hiding Hint Panel...");
+            Debug.Log("<color=orange>[GestureTracker -> HintManager]</color> Thumbs Down Detected! Hiding Hint Panel...");
 
             if (hintManager == null)
                 hintManager = FindObjectOfType<HintManager>();
 
             if (hintManager != null)
             {
-                hintManager.OnCloseGestureTriggered();
+                hintManager.OnThumbsDownGestureTriggered();
             }
             return;
         }
@@ -166,6 +168,7 @@ public class GestureTracker : MonoBehaviour
         return (expressiveCount, gpm);
     }
 }
+
 
 //using System;
 //using System.Collections;

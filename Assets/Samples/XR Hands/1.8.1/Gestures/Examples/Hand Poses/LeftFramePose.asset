@@ -18,11 +18,11 @@ MonoBehaviour:
     - m_HandAxis: 0
       m_AlignmentCondition: 0
       m_ReferenceDirection: 2
-      m_AngleTolerance: 0.35
+      m_AngleTolerance: 0.5
       m_IgnorePositionY: 0
     - m_HandAxis: 2
       m_AlignmentCondition: 1
       m_ReferenceDirection: 0
-      m_AngleTolerance: 0.35
+      m_AngleTolerance: 0.5
       m_IgnorePositionY: 0
     m_TargetConditions: []

@@ -3,28 +3,41 @@ using TMPro;
 
 public class ScenarioBriefingUI : MonoBehaviour
 {
-    [Header("UI Reference")]
-    [Tooltip("Assign the single TMP_Text component placed inside your Scroll View's Content object")]
-    [SerializeField] private TMP_Text fullBriefingText;
+    [Header("UI Text References")]
+    [SerializeField] private TMP_Text scenarioTitleText;
+    [SerializeField] private TMP_Text roleText;
+    [SerializeField] private TMP_Text difficultyText;
+    [SerializeField] private TMP_Text objectiveText;
+    [SerializeField] private TMP_Text personaText;
+    [SerializeField] private TMP_Text topicText;
+    [SerializeField] private TMP_Text turnLimitText;
 
     public void SetupBriefing(ScenarioConfig config)
     {
-        if (config == null || fullBriefingText == null) return;
+        if (config == null) return;
 
-        // Clean, readable formatting with clear visual hierarchy
-        fullBriefingText.text =
-            $"<b><size=120%> {CleanScenarioName(config.scenario)}</size></b>\n" +
-            $"<color=#AAAAAA>Role: {config.participantRole}  |  Difficulty: {config.difficulty}</color>\n\n" +
+        if (scenarioTitleText != null)
+            scenarioTitleText.text = CleanScenarioName(config.scenario);
 
-            $"<b>TARGET OBJECTIVE</b>\n" +
-            $"{config.sessionObjective}\n\n" +
+        if (roleText != null)
+            roleText.text = config.participantRole;
 
-            $"<b>📌 KEY DETAILS</b>\n" +
-            $"•<b>Speaking With:</b> {config.persona} ({config.topic})\n" +
-            $"•<b>Turn Limit:</b> {config.maxTurnLimit} Turns";
+        if (difficultyText != null)
+            difficultyText.text = config.difficulty;
+
+        if (objectiveText != null)
+            objectiveText.text = config.sessionObjective;
+
+        if (personaText != null)
+            personaText.text = config.persona;
+
+        if (topicText != null)
+            topicText.text = config.topic;
+
+        if (turnLimitText != null)
+            turnLimitText.text = $"{config.maxTurnLimit} Turns";
     }
 
-    // Helper to turn "CafeteriaScene" into "Cafeteria"
     private string CleanScenarioName(string rawName)
     {
         if (string.IsNullOrEmpty(rawName)) return "Scenario Briefing";

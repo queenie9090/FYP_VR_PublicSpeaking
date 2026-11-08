@@ -657,7 +657,7 @@ private IEnumerator DebugInitializeXRRoutine()
         // 4. Generate Dynamic AI Coaching Feedback Summary via OpenAI
         uiManager.SetStatus("Generating AI Feedback...");
 
-        int unprofessionalCount = gestureTracker != null ? gestureTracker.GetUnprofessionalCount() : 0;
+        int unprofessionalCount = (gestureTracker != null) ? gestureTracker.GetUnprofessionalCount() : 0;
 
         // Pass unprofessional gesture count to the AI feedback prompt
         string summaryPrompt = $"You are an expert VR speech coach. Provide a concise 2-3 sentence constructive feedback summary with actionable suggestions for improvement based on this participant's performance in a '{currentScenario}' simulation: " +
