@@ -15,6 +15,8 @@ public class VRPlayerSeating : MonoBehaviour
             return;
         }
 
+        Debug.Log($"[VRPlayerSeating] chair target WORLD pos: {chairTargetTransform.position} | local: {chairTargetTransform.localPosition} | parent: {(chairTargetTransform.parent ? chairTargetTransform.parent.name : "none")} | rig: {playerXRRig.position}");
+
         StartCoroutine(SnapPlayerRoutine());
     }
 

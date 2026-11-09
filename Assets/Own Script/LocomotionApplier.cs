@@ -147,6 +147,7 @@ public class LocomotionApplier : MonoBehaviour
     /// </summary>
     public void DisableAllLocomotion()
     {
+        Debug.Log("[LocomotionApplier] DisableAllLocomotion called from:\n" + System.Environment.StackTrace);
         SetProvider(continuousMoveProvider, false);
         SetProvider(teleportProvider, false);
         SetProvider(snapTurnProvider, false);

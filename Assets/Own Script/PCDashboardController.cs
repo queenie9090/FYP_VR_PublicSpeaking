@@ -154,8 +154,14 @@ public class PCDashboardController : MonoBehaviour
             ? "<color=#FF8A65>[Incomplete - Ended Early]</color>"
             : "<color=#81C784>[Completed]</color>";
 
+            string formattedDate = System.DateTime.Now.ToString("MMM dd, yyyy");
+            if (System.DateTime.TryParse(data.start_time, out System.DateTime parsedDate))
+            {
+                formattedDate = parsedDate.ToString("MMM dd, yyyy HH:mm");
+            }
+
             sessionMetaText.text = $"Status: {statusStr} | Topic: {data.scenario_topic} | Difficulty: {data.difficulty_level}\n" +
-                                   $"Mode: {data.input_mode_used} | Date: {System.DateTime.Now:MMM dd, yyyy} | Duration: {talkTime:F0}s";
+                                   $"Mode: {data.input_mode_used} | Date: {formattedDate} | Duration: {talkTime:F0}s";
         }
 
         // 2. Donut Gauge Chart

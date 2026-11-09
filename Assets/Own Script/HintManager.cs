@@ -30,6 +30,11 @@ public class HintManager : MonoBehaviour
     [Header("State Tracking")]
     private bool isDialogueActive = false;
     private string currentDialogueHint = "";
+    private float lastGestureToggle = 0f;
+    private int hintTriggerCount = 0;
+
+    public void ResetHintCount() => hintTriggerCount = 0;
+    public int GetTotalHintCount() => hintTriggerCount;
 
     private void Update()
     {
@@ -93,6 +98,9 @@ public class HintManager : MonoBehaviour
     {
         Debug.Log($"[HintManager] HaveAQuestion gesture received. Mode = {currentInputMode}");
         if (currentInputMode != InputMode.HandTracking) return;
+        if (Time.time - lastGestureToggle < 1.0f) return;
+       
+        lastGestureToggle = Time.time;
         Debug.Log("<color=green>[HintManager]</color> OnHaveAQuestionGestureTriggered received. Processing toggle...");
         ProcessHintTrigger();
     }
@@ -117,6 +125,12 @@ public class HintManager : MonoBehaviour
     private void ProcessHintTrigger()
     {
         if (hintPanelRoot == null) return;
+
+        if (!hintPanelRoot.activeSelf)
+        {
+            hintTriggerCount++;
+            Debug.Log($"<color=green>[HintManager Metrics]</color> Total hints requested: {hintTriggerCount}");
+        }
 
         // 1. If root handle is ALREADY showing -> Toggle OFF
         if (hintPanelRoot.activeSelf)
@@ -163,7 +177,7 @@ public class HintManager : MonoBehaviour
         {
             hintText.text = !string.IsNullOrEmpty(currentDialogueHint)
                 ? currentDialogueHint
-                : "Press Y/B or make camera frame gesture to request a dialogue hint.";
+                : "Press Y/B or raise your index finger to request a dialogue hint.";
         }
         else
         {

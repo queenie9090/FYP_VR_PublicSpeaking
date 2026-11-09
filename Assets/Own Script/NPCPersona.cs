@@ -12,11 +12,20 @@ public class NPCPersona : MonoBehaviour
     [Header("Audio Output")]
     public AudioSource npcAudioSource;
 
+    [Header("Eye Contact Tracking")]
+    [Tooltip("Assign the Head/Face Collider of this NPC for Eye Contact tracking.")]
+    public Collider facialCollider; 
+
     private void Awake()
     {
         if (npcAudioSource == null)
         {
             npcAudioSource = GetComponent<AudioSource>();
+        }
+
+        if (facialCollider == null)
+        {
+            facialCollider = GetComponent<Collider>();
         }
     }
 }

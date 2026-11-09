@@ -2075,7 +2075,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 6a33ff2214b50724aa6742f020636de6, type: 3}
       propertyPath: m_Name
-      value: StartWayPoint
+      value: GreenWayPoint
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -10308,6 +10308,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_StartingHoverFilters: []
   m_StartingSelectFilters: []
+--- !u!4 &647569994 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 657184242222895506, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 1795247225}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &647569995 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 657184243640684915, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 1795247225}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &666338219 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 2218496723442559054, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
@@ -10334,6 +10344,18 @@ MonoBehaviour:
   tutorialManager: {fileID: 555532867}
   hintManager: {fileID: 555532868}
   warningPanelManager: {fileID: 1628775315}
+  leftHandTransform: {fileID: 861642167}
+  rightHandTransform: {fileID: 647569994}
+  leftControllerTransform: {fileID: 647569995}
+  rightControllerTransform: {fileID: 647569994}
+  trackingSpace: {fileID: 666338220}
+  headset: {fileID: 1765848839}
+  minSpeed: 0.5
+  minDuration: 0.25
+  minDistance: 0.15
+  gestureCooldown: 1
+  maxPlausibleSpeed: 6
+  systemGestureSuppression: 1.5
 --- !u!143 &666338226 stripped
 CharacterController:
   m_CorrespondingSourceObject: {fileID: 6873022368256633593, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
@@ -13399,7 +13421,7 @@ Transform:
   m_GameObject: {fileID: 916244963}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
-  m_LocalPosition: {x: 6.83, y: -0.56999993, z: 0.636}
+  m_LocalPosition: {x: 6.83, y: 0, z: 0.636}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -13979,7 +14001,7 @@ Transform:
   m_GameObject: {fileID: 987804110}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 0.79, y: -0.57, z: 2.99}
+  m_LocalPosition: {x: 0.79, y: 0, z: 2.99}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -17961,7 +17983,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ObjectiveManager
   startObjectivePanel: {fileID: 627369169}
-  startObjectiveText: {fileID: 476441009}
   startWaypoint: {fileID: 979278050}
   exitDoorWaypoint: {fileID: 1681019824}
 --- !u!137 &1268935963 stripped
@@ -24724,6 +24745,7 @@ MonoBehaviour:
   characterName: Tutor
   voiceId: echo
   npcAudioSource: {fileID: 1709510120}
+  facialCollider: {fileID: 1787168130}
 --- !u!65 &1787168130
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -24799,7 +24821,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2218496723442559053, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.49
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2218496723442559053, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
       propertyPath: m_LocalPosition.z
