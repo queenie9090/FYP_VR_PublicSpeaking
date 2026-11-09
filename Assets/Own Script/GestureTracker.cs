@@ -14,7 +14,7 @@ public class GestureTracker : MonoBehaviour
     [Header("Manager References")]
     [SerializeField] private InteractionManager interactionManager;
     [SerializeField] private TutorialPanelManager tutorialManager;
-    [SerializeField] private HintManager hintManager;
+    [SerializeField] private HintUIController hintUIController;
     [SerializeField] private WarningPanelManager warningPanelManager;
 
     [Header("Motion Sources (Hand Tracking)")]
@@ -87,8 +87,8 @@ public class GestureTracker : MonoBehaviour
         if (tutorialManager == null)
             tutorialManager = FindObjectOfType<TutorialPanelManager>();
 
-        if (hintManager == null)
-            hintManager = FindObjectOfType<HintManager>();
+        if (hintUIController == null)
+            hintUIController = FindObjectOfType<HintUIController>();
 
         if (warningPanelManager == null)
             warningPanelManager = FindObjectOfType<WarningPanelManager>();
@@ -110,6 +110,7 @@ public class GestureTracker : MonoBehaviour
         if (!isTracking) return;
 
         activeTrackingDurationSeconds += Time.deltaTime;
+
 
         TrackMotion(leftSource, leftState);
         TrackMotion(rightSource, rightState);
@@ -156,6 +157,12 @@ public class GestureTracker : MonoBehaviour
             return;
         }
 
+        if (Time.time < suppressUntil)
+        {
+            s.Reset();
+            return;
+        }
+
         // Ignore motion right after a system gesture (hint, pinch, grab, etc.)
         if (Time.time < suppressUntil)
         {
@@ -193,6 +200,11 @@ public class GestureTracker : MonoBehaviour
 
         // Light smoothing so single-frame jitter does not count
         s.smoothedSpeed = Mathf.Lerp(s.smoothedSpeed, rawSpeed, 0.3f);
+
+        if (s.smoothedSpeed > 0.2f)
+        {
+            Debug.Log($"[GestureTracker Live] {source.name} Speed: {s.smoothedSpeed:F2} m/s | Moving: {s.moving} | Duration: {s.moveTime:F2}s");
+        }
 
         float startSpeed = minSpeed;
         float stopSpeed = minSpeed * 0.6f; // hysteresis so one movement isn't split in pieces
@@ -247,11 +259,11 @@ public class GestureTracker : MonoBehaviour
 
     public void ProcessGestureEvent(string gestureType, float gestureDuration)
     {
-        if (!isTracking)
-        {
-            Debug.LogWarning("[GestureTracker Debug] ProcessGestureEvent ignored because isTracking == false!");
-            return;
-        }
+        //if (!isTracking)
+        //{
+        //    Debug.LogWarning("[GestureTracker Debug] ProcessGestureEvent ignored because isTracking == false!");
+        //    return;
+        //}
 
         Debug.Log($"<color=cyan>[GestureTracker RAW]</color> Detected Gesture: '{gestureType}' | Duration: {gestureDuration}s");
 
@@ -271,28 +283,28 @@ public class GestureTracker : MonoBehaviour
         // 2. "Have a Question" -> open/toggle hint panel
         if (gestureType == "HaveAQuestion")
         {
-            Debug.Log("<color=green>[GestureTracker -> HintManager]</color> Have A Question detected. Triggering hint panel...");
+            Debug.Log("<color=green>[GestureTracker -> hintUIController]</color> Have A Question detected. Triggering hint panel...");
 
-            if (hintManager == null)
-                hintManager = FindObjectOfType<HintManager>();
+            if (hintUIController == null)
+                hintUIController = FindObjectOfType<HintUIController>();
 
-            if (hintManager != null)
-                hintManager.OnHaveAQuestionGestureTriggered();
+            if (hintUIController != null)
+                hintUIController.OnHaveAQuestionGestureTriggered();
             else
-                Debug.LogError("<color=red>[GestureTracker Error]</color> HintManager reference is MISSING in scene!");
+                Debug.LogError("<color=red>[GestureTracker Error]</color> hintUIController reference is MISSING in scene!");
             return;
         }
 
         // 3. "Thumbs Down" -> close hint panel
         if (gestureType == "ThumbsDown")
         {
-            Debug.Log("<color=orange>[GestureTracker -> HintManager]</color> Thumbs Down detected. Hiding hint panel...");
+            Debug.Log("<color=orange>[GestureTracker -> hintUIController]</color> Thumbs Down detected. Hiding hint panel...");
 
-            if (hintManager == null)
-                hintManager = FindObjectOfType<HintManager>();
+            if (hintUIController == null)
+                hintUIController = FindObjectOfType<HintUIController>();
 
-            if (hintManager != null)
-                hintManager.OnThumbsDownGestureTriggered();
+            if (hintUIController != null)
+                hintUIController.OnThumbsDownGestureTriggered();
             return;
         }
 
@@ -334,7 +346,7 @@ public class GestureTracker : MonoBehaviour
 //    [Header("Manager References")]
 //    [SerializeField] private InteractionManager interactionManager;
 //    [SerializeField] private TutorialPanelManager tutorialManager;
-//    [SerializeField] private HintManager hintManager;
+//    [SerializeField] private hintUIController hintUIController;
 
 //    [Header("Unprofessional Gesture Tracking")]
 //    private int unprofessionalGestureCount = 0;

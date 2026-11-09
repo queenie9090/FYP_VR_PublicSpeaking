@@ -8,7 +8,7 @@ public enum InputMode
     HandTracking
 }
 
-public class HintManager : MonoBehaviour
+public class HintUIController : MonoBehaviour
 {
     [Header("Input Mode Settings")]
     [SerializeField] private InputMode currentInputMode = InputMode.Controller;
@@ -23,6 +23,11 @@ public class HintManager : MonoBehaviour
     [Tooltip("Assign Main Camera (XR Camera / CenterEyeAnchor)")]
     [SerializeField] private Transform playerCamera;
     [SerializeField] private float spawnDistance = 1.2f;
+
+    [Header("Audio Feedback")]
+    [SerializeField] private AudioSource audioSource;
+    [SerializeField] private AudioClip hintRequestedClip;
+    [SerializeField] private AudioClip hintReceivedClip;
 
     [Header("Manager References")]
     [SerializeField] private InteractionManager interactionManager;
@@ -51,7 +56,7 @@ public class HintManager : MonoBehaviour
 
         if (pressed)
         {
-            Debug.Log($"[HintManager] Secondary pressed | DialogueActive: {isDialogueActive}");
+            Debug.Log($"[hintUIController] Secondary pressed | DialogueActive: {isDialogueActive}");
             ProcessHintTrigger();
         }
     }
@@ -60,6 +65,9 @@ public class HintManager : MonoBehaviour
     {
         HideAllCanvases();
         SyncInputModeFromUserSession();
+
+        if (audioSource == null)
+            audioSource = GetComponent<AudioSource>() ?? gameObject.AddComponent<AudioSource>();
 
         if (interactionManager == null)
             interactionManager = FindObjectOfType<InteractionManager>();
@@ -72,17 +80,17 @@ public class HintManager : MonoBehaviour
 
     private void OnEnable()
     {
-        Debug.Log("[HintManager] OnEnable");
+        Debug.Log("[hintUIController] OnEnable");
     }
 
     private void OnDisable()
     {
-        Debug.Log("[HintManager] OnDisable");
+        Debug.Log("[hintUIController] OnDisable");
     }
 
     private void OnControllerHintPressed(InputAction.CallbackContext context)
     {
-        Debug.Log($"[HintManager] PRESSED: {context.control.path} | Mode: {currentInputMode} | DialogueActive: {isDialogueActive}");
+        Debug.Log($"[hintUIController] PRESSED: {context.control.path} | Mode: {currentInputMode} | DialogueActive: {isDialogueActive}");
         if (currentInputMode != InputMode.Controller) return;
         ProcessHintTrigger();
     }
@@ -96,12 +104,12 @@ public class HintManager : MonoBehaviour
     /// </summary>
     public void OnHaveAQuestionGestureTriggered()
     {
-        Debug.Log($"[HintManager] HaveAQuestion gesture received. Mode = {currentInputMode}");
+        Debug.Log($"[hintUIController] HaveAQuestion gesture received. Mode = {currentInputMode}");
         if (currentInputMode != InputMode.HandTracking) return;
         if (Time.time - lastGestureToggle < 1.0f) return;
        
         lastGestureToggle = Time.time;
-        Debug.Log("<color=green>[HintManager]</color> OnHaveAQuestionGestureTriggered received. Processing toggle...");
+        Debug.Log("<color=green>[hintUIController]</color> OnHaveAQuestionGestureTriggered received. Processing toggle...");
         ProcessHintTrigger();
     }
 
@@ -114,7 +122,7 @@ public class HintManager : MonoBehaviour
 
         if (hintPanelRoot != null && hintPanelRoot.activeSelf)
         {
-            Debug.Log("<color=orange>[HintManager]</color> OnThumbsDownGestureTriggered received. Hiding 3D panel...");
+            Debug.Log("<color=orange>[hintUIController]</color> OnThumbsDownGestureTriggered received. Hiding 3D panel...");
             hintPanelRoot.SetActive(false);
         }
     }
@@ -124,44 +132,38 @@ public class HintManager : MonoBehaviour
     /// </summary>
     private void ProcessHintTrigger()
     {
+        if (audioSource != null && hintRequestedClip != null)
+            audioSource.PlayOneShot(hintRequestedClip);
+
         if (hintPanelRoot == null) return;
 
-        if (!hintPanelRoot.activeSelf)
-        {
-            hintTriggerCount++;
-            Debug.Log($"<color=green>[HintManager Metrics]</color> Total hints requested: {hintTriggerCount}");
-        }
-
-        // 1. If root handle is ALREADY showing -> Toggle OFF
+        // Toggle OFF if already open
         if (hintPanelRoot.activeSelf)
         {
             hintPanelRoot.SetActive(false);
             return;
         }
 
-        // 2. If HIDDEN -> Fetch hint / toggle display
-        if (isDialogueActive)
+        //Repositions in front of camera ONLY on explicit manual toggle/open
+        PositionInFrontOfPlayer(hintPanelRoot);
+        hintPanelRoot.SetActive(true);
+
+        if (isDialogueActive && interactionManager != null)
         {
-            if (interactionManager != null)
-            {
-                interactionManager.TriggerHintActivation();
-            }
-            else
-            {
-                ToggleHintDisplay();
-            }
+            hintTriggerCount++;
+            interactionManager.TriggerHintActivation();
         }
         else
         {
-            ToggleHintDisplay();
+            ToggleHintDisplay(reposition: false);
         }
     }
 
-    public void ToggleHintDisplay()
+    public void ToggleHintDisplay(bool reposition = true)
     {
         if (hintPanelRoot == null || hintText == null)
         {
-            Debug.LogError("[HintManager] Hint Panel Root or Text UI reference missing in Inspector!");
+            Debug.LogError("[hintUIController] Hint Panel Root or Text UI reference missing in Inspector!");
             return;
         }
 
@@ -171,7 +173,7 @@ public class HintManager : MonoBehaviour
             return;
         }
 
-        HideAllCanvases();
+        //HideAllCanvases();
 
         if (isDialogueActive)
         {
@@ -185,20 +187,28 @@ public class HintManager : MonoBehaviour
         }
 
         // Position panel at eye level before opening
-        PositionInFrontOfPlayer(hintPanelRoot);
+        if (reposition)
+        {
+            PositionInFrontOfPlayer(hintPanelRoot);
+        }
         hintPanelRoot.SetActive(true);
     }
 
-    public void ShowDirectMessage(string message)
+    public void ShowDirectMessage(string message, bool isFinalResult = false)
     {
+        if (isFinalResult && audioSource != null && hintReceivedClip != null)
+            audioSource.PlayOneShot(hintReceivedClip);
+
         if (hintPanelRoot == null || hintText == null) return;
 
-        HideAllCanvases();
-
+        //HideAllCanvases();
         hintText.text = message;
 
-        PositionInFrontOfPlayer(hintPanelRoot);
-        hintPanelRoot.SetActive(true);
+        //if (!hintPanelRoot.activeSelf)
+        //{
+        //    PositionInFrontOfPlayer(hintPanelRoot);
+        //    hintPanelRoot.SetActive(true);
+        //}
     }
 
     public void SyncInputModeFromUserSession()
@@ -214,7 +224,7 @@ public class HintManager : MonoBehaviour
             SetInputMode(InputMode.Controller);
         }
 
-        Debug.Log($"[HintManager] Initialized Input Mode: {currentInputMode} (from UserSession: '{modeStr}')");
+        Debug.Log($"[hintUIController] Initialized Input Mode: {currentInputMode} (from UserSession: '{modeStr}')");
     }
 
     public void SetInputMode(InputMode newMode)
@@ -259,4 +269,24 @@ public class HintManager : MonoBehaviour
         targetRoot.transform.position = targetPosition;
         targetRoot.transform.rotation = Quaternion.LookRotation(forwardDir);
     }
+
+    /// <summary>
+    /// Called by InteractionManager at the start of a new turn.
+    /// If the panel is currently open in VR space, it automatically requests a fresh AI hint.
+    /// </summary>
+    public void OnNewTurnStarted()
+    {
+        // Clear stored text from the previous turn
+        currentDialogueHint = "";
+
+        if (hintPanelRoot != null && hintPanelRoot.activeSelf && isDialogueActive)
+        {
+            if (interactionManager != null)
+            {
+                hintTriggerCount++;
+                interactionManager.TriggerHintActivation();
+            }
+        }
+    }
+
 }
