@@ -131,6 +131,7 @@ private IEnumerator DebugInitializeXRRoutine()
     {
         Debug.Log("[InteractionManager] InitializeSceneComponents ran");
         InitScenarioConfig();
+
         locoApplier = FindObjectOfType<LocomotionApplier>();
         if (locoApplier != null)
         {
@@ -171,15 +172,17 @@ private IEnumerator DebugInitializeXRRoutine()
     {
         if (locoApplier == null) locoApplier = FindObjectOfType<LocomotionApplier>();
 
+        bool isTutorial = UserSession.IsRunningTutorial || SceneManager.GetActiveScene().name == "TutorialScene";
+
+        // In normal scenarios, we allow free movement unless specifically locked during conversation
         if (enabled)
         {
-            // Re-enable player movement & turning based on user settings
             if (locoApplier != null)
                 locoApplier.ApplyAllVRPreferences();
         }
         else
         {
-            // Disable ALL movement & turning while panels or dialogues are open
+            // Only force lock locomotion if it's the tutorial OR during active seated interaction
             if (locoApplier != null)
             {
                 locoApplier.DisableAllLocomotion();
@@ -216,10 +219,10 @@ private IEnumerator DebugInitializeXRRoutine()
             scenarioBriefingUI.SetupBriefing(activeConfig);
         }
 
-        //if (objectiveManager != null)
-        //{
-        //    objectiveManager.DisplayScenarioObjective(activeConfig);
-        //}
+        if (!isTutorial && objectiveManager != null && activeConfig != null)
+        {            
+            objectiveManager.SetPanelActive(true);
+        }
 
         if (emotionPanel != null)
         {
@@ -279,7 +282,7 @@ private IEnumerator DebugInitializeXRRoutine()
         if (hintManager != null)
         {
             hintManager.SyncInputModeFromUserSession();
-            hintManager.SetDialogueState(true, "Press Y/B or raise Open Palm to request a dialogue hint.");
+            hintManager.SetDialogueState(true, "Press Y/B or raise your index finger to request a dialogue hint.");
         }
 
         if (emotionPanel != null) emotionPanel.SetActive(true);
@@ -297,6 +300,7 @@ private IEnumerator DebugInitializeXRRoutine()
         if (npcEmotionController != null) npcEmotionController.SetEmotion("NEUTRAL", 0);
         if (eyeContactTracker != null) eyeContactTracker.StartTracking();
         if (gestureTracker != null) gestureTracker.ResetTracker();
+        if (hintManager != null) hintManager.ResetHintCount();
         if (uiManager != null && activeConfig != null) uiManager.InitTurnCounter(activeConfig.maxTurnLimit);       
 
         StartCoroutine(TrackSessionTimerRoutine());
@@ -643,11 +647,13 @@ private IEnumerator DebugInitializeXRRoutine()
         }
 
         float overallWpm = totalSpeakingTimeSeconds > 0 ? (totalWordsSpoken / totalSpeakingTimeSeconds) * 60.0f : 0.0f;
-        var (clarityScore, fwpm) = MetricsCalculator.CalculateSpeechClarity(totalFillerWordsDetected, totalSpeakingTimeSeconds, overallWpm);
-        float gestureScore = Mathf.Clamp(expressiveGestureCount * 10.0f, 0.0f, 100.0f);
+        var (clarityScore, fwpm) = MetricsCalculator.CalculateSpeechClarity(totalFillerWordsDetected, totalSpeakingTimeSeconds, overallWpm);        
+        float gestureScore = Mathf.Clamp((gpm / 5.0f) * 100.0f, 0.0f, 100.0f);
 
         // Clean the scene name (e.g. "CafeteriaScene" -> "Cafeteria") so it matches scenario weights
-        string rawScenario = activeConfig != null ? activeConfig.scenario : "Normal Conversation";
+        string rawScenario = (activeConfig != null && !string.IsNullOrEmpty(activeConfig.scenario))
+            ? activeConfig.scenario
+            : "Normal Conversation";
         string currentScenario = rawScenario.Replace("Scene", "").Trim();
 
         float overallScore = MetricsCalculator.CalculateOverallScore(currentScenario, clarityScore, eyeContactPct, gestureScore);
@@ -658,12 +664,13 @@ private IEnumerator DebugInitializeXRRoutine()
         uiManager.SetStatus("Generating AI Feedback...");
 
         int unprofessionalCount = (gestureTracker != null) ? gestureTracker.GetUnprofessionalCount() : 0;
+        int totalHintsUsed = (hintManager != null) ? hintManager.GetTotalHintCount() : 0;
 
-        // Pass unprofessional gesture count to the AI feedback prompt
+        // Update AI Summary Prompt to include both behavioral metrics
         string summaryPrompt = $"You are an expert VR speech coach. Provide a concise 2-3 sentence constructive feedback summary with actionable suggestions for improvement based on this participant's performance in a '{currentScenario}' simulation: " +
                                $"Overall Score: {overallScore:F0}%, Speech Clarity: {clarityScore:F0}%, Speaking Rate: {overallWpm:F0} WPM, " +
                                $"Filler Words Used: {totalFillerWordsDetected}, Eye Contact: {eyeContactPct:F0}%, Gestures Rate: {gpm:F1} GPM, " +
-                               $"Unprofessional Gestures Flagged: {unprofessionalCount}.";
+                               $"Hints Requested: {totalHintsUsed}, Unprofessional Gestures Flagged: {unprofessionalCount}.";
 
         StartCoroutine(openAIManager.SendChatRequest(
             summaryPrompt,
@@ -812,6 +819,7 @@ private IEnumerator DebugInitializeXRRoutine()
     {
         isSessionActive = false;
         isSavingSession = false;
+
         SetLocomotionEnabled(true);
 
         if (uiManager != null)
@@ -987,6 +995,10 @@ private IEnumerator DebugInitializeXRRoutine()
     {
         if (targetNPC == null) return;
         currentActiveNPC = targetNPC;
+
+        if (eyeContactTracker != null && targetNPC.facialCollider != null)
+            eyeContactTracker.SetTargetFacialCollider(targetNPC.facialCollider);
+
         if (roomNPCs.Contains(targetNPC))
         {
             currentNPCIndex = roomNPCs.IndexOf(targetNPC);
