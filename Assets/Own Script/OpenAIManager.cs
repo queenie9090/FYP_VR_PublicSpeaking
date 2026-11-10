@@ -58,13 +58,15 @@ public class OpenAIManager : MonoBehaviour
             new { role = "system", content = systemPrompt }
         };
 
-        if (history != null)
+        // The latest user turn is already inside history, so it is added once below as currentTranscript.
+        int count = history != null ? history.Count : 0;
+        if (count > 0 && history[count - 1].speaker == "User") count--;
+
+        for (int i = 0; i < count; i++)
         {
-            foreach (var turn in history)
-            {
-                string role = turn.speaker == "User" ? "user" : "assistant";
-                messages.Add(new { role = role, content = turn.dialogue });
-            }
+            var turn = history[i];
+            string role = turn.speaker == "User" ? "user" : "assistant";
+            messages.Add(new { role = role, content = turn.dialogue });
         }
 
         messages.Add(new { role = "user", content = currentTranscript });

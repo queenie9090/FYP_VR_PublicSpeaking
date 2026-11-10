@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
@@ -15,7 +16,7 @@ public class InteractionManager : MonoBehaviour
     [SerializeField] private DialogueUIManager uiManager;
     [SerializeField] private VRPlayerSeating playerSeating;
     [SerializeField] private EyeContactTracker eyeContactTracker;
-    [SerializeField] private GestureTracker gestureTracker;    
+    [SerializeField] private GestureTracker gestureTracker;
     [SerializeField] private ObjectiveManager objectiveManager;
     [SerializeField] private HintUIController hintUIController;
 
@@ -78,7 +79,7 @@ public class InteractionManager : MonoBehaviour
         Debug.Log("[InteractionManager] InitializeSceneComponents ran");
         InitScenarioConfig();
 
-        EnsureHelpersExist();        
+        EnsureHelpersExist();
 
         SetLocomotionEnabled(true);
 
@@ -167,14 +168,14 @@ public class InteractionManager : MonoBehaviour
         {
             activeConfig = UserSession.SelectedScenarioConfig;
         }
-        
+
         if (scenarioBriefingUI != null)
         {
             scenarioBriefingUI.SetupBriefing(activeConfig);
         }
 
         if (!isTutorial && objectiveManager != null && activeConfig != null)
-        {            
+        {
             objectiveManager.SetPanelActive(true);
         }
 
@@ -227,6 +228,13 @@ public class InteractionManager : MonoBehaviour
         conversationHistory.Clear();
 
         SetLocomotionEnabled(false);
+        ArmTransitDetector transitDetector = FindObjectOfType<ArmTransitDetector>();
+        Debug.Log($"[DEBUG] transitDetector found: {transitDetector != null}");
+        if (transitDetector != null)
+        {
+            transitDetector.SetZonesActive(true);
+            Debug.Log("[DEBUG] SetZonesActive(true) called");
+        }
 
         if (uiManager != null)
         {
@@ -254,7 +262,7 @@ public class InteractionManager : MonoBehaviour
         if (eyeContactTracker != null) eyeContactTracker.StartTracking();
         if (gestureTracker != null) gestureTracker.ResetTracker();
         if (hintUIController != null) hintUIController.ResetHintCount();
-        if (uiManager != null && activeConfig != null) uiManager.InitTurnCounter(activeConfig.maxTurnLimit);       
+        if (uiManager != null && activeConfig != null) uiManager.InitTurnCounter(activeConfig.maxTurnLimit);
 
         StartCoroutine(TrackSessionTimerRoutine());
         StartCoroutine(HandsFreeSpeechInteractionLoop());
@@ -334,19 +342,20 @@ public class InteractionManager : MonoBehaviour
 
         uiManager.SetStatus("NPC Thinking...");
         //int turnCounter = (conversationHistory.Count / 2) + 1;
-        int turnCounter = conversationHistory.Count / 2;
+        int turnCounter = conversationHistory.Count(t => t.speaker == "NPC");
         int expectedTurnNumber = turnCounter + 1;
 
         LLMResponse response = null; bool llmDone = false;
         StartCoroutine(openAIManager.SendChatRequest(
             PromptBuilder.BuildSystemPrompt(activeConfig, turnCounter, previousEmotion),
             conversationHistory,
-            formattedTranscript, 
+            formattedTranscript,
             res => { response = res; llmDone = true; },
             err => { Debug.LogError($"[LLM Error] {err}"); llmDone = true; }
         ));
 
         yield return new WaitUntil(() => llmDone);
+        if (!isSessionActive) yield break;   // session was closed while waiting for the LLM
         if (response == null || string.IsNullOrEmpty(response.npc_response))
         {
             Debug.LogWarning("[ProcessLLMTurnRoutine] LLM returned null or empty response.");
@@ -363,8 +372,8 @@ public class InteractionManager : MonoBehaviour
                 $"Expected: {expectedTurnNumber}"
             );
 
-            uiManager.SetStatus("NPC Turn Validation Error.");
-            yield break;
+            // Correct the number instead of rejecting, so the user's turn is not lost
+            response.turn_number = expectedTurnNumber;
         }
 
         // AI emotion has already been checked by OpenAIManager.
@@ -432,16 +441,29 @@ public class InteractionManager : MonoBehaviour
         ));
         //yield return StartCoroutine(PlayNPCAudioRoutine(response.npc_response));
 
-        if ((activeConfig != null && turnCounter >= activeConfig.maxTurnLimit) || (response != null && response.end_conversation))
+        if (!isSessionActive) yield break;   // closed during NPC audio (CloseSession already saved)
+
+        bool isFinalTurn = activeConfig != null && expectedTurnNumber >= activeConfig.maxTurnLimit;
+        if (isFinalTurn || response.end_conversation)
         {
             isSessionActive = false;
+            StopMetricCollection();
             CalculateAndSaveResults();
             yield break;
         }
 
         SelectNextNPC();
         uiManager.SetStatus("Recording...");
-    }    
+    }
+
+    private void StopMetricCollection()
+    {
+        if (eyeContactTracker != null) eyeContactTracker.StopTracking();
+        if (gestureTracker != null) gestureTracker.StopTracking();
+
+        ArmTransitDetector det = FindObjectOfType<ArmTransitDetector>();
+        if (det != null) det.SetZonesActive(false);
+    }
 
     /// ALGORITHM 7: Hand Gesture Hint Activation Callback Method
     /// Invoked when GestureTracker detects an Open Palm > 1.0s.
@@ -485,21 +507,24 @@ public class InteractionManager : MonoBehaviour
             initiationCoroutine = null;
         }
 
-        
+        if (currentActiveNPC != null && currentActiveNPC.npcAudioSource != null)
+        {
+            currentActiveNPC.npcAudioSource.Stop();
+            Animator anim = currentActiveNPC.GetComponent<Animator>();
+            if (anim != null) anim.SetBool("IsTalking", false);
+        }
+        if (fallbackNpcAudioSource != null)
+        {
+            fallbackNpcAudioSource.Stop();
+        }
+
+
         if (audioRecorder != null)
         {
             audioRecorder.StopRecording();
         }
 
-        if (eyeContactTracker != null)
-        {
-            eyeContactTracker.StopTracking();
-        }
-
-        if (gestureTracker != null)
-        {
-            gestureTracker.StopTracking();
-        }
+        StopMetricCollection();
 
         if (emotionPanel != null)
         {
@@ -564,7 +589,8 @@ public class InteractionManager : MonoBehaviour
 
         if (hintUIController != null)
         {
-            hintUIController.HideHintCanvas();            
+            hintUIController.HideHintCanvas();
+            hintUIController.SetDialogueState(false);   // stops "Generating AI hint..." hanging after the session
         }
 
         if (audioRecorder != null)
@@ -585,7 +611,7 @@ public class InteractionManager : MonoBehaviour
         if (objectiveManager != null)
         {
             objectiveManager.EnableExitWaypointOnly();
-        }      
+        }
 
         bool isTutorial = UserSession.IsRunningTutorial;
 

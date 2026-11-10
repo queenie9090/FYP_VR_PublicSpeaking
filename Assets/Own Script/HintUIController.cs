@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.InputSystem;
 using TMPro;
 
@@ -135,27 +135,30 @@ public class HintUIController : MonoBehaviour
         if (audioSource != null && hintRequestedClip != null)
             audioSource.PlayOneShot(hintRequestedClip);
 
-        if (hintPanelRoot == null) return;
+        if (hintPanelRoot == null || hintText == null) return;
 
-        // Toggle OFF if already open
+        // 1. If panel is ALREADY open, toggle it OFF
         if (hintPanelRoot.activeSelf)
         {
             hintPanelRoot.SetActive(false);
             return;
         }
 
-        //Repositions in front of camera ONLY on explicit manual toggle/open
+        // 2. Position the panel in front of the headset and turn it ON
         PositionInFrontOfPlayer(hintPanelRoot);
         hintPanelRoot.SetActive(true);
 
+        // 3. Set text based on dialogue state
         if (isDialogueActive && interactionManager != null)
         {
+            hintText.text = "Generating AI hint...";
             hintTriggerCount++;
             interactionManager.TriggerHintActivation();
         }
         else
         {
-            ToggleHintDisplay(reposition: false);
+            // Allowed before session starts!
+            hintText.text = "Hint panel ready. Hints will be generated once you start the conversation.";
         }
     }
 
@@ -201,14 +204,14 @@ public class HintUIController : MonoBehaviour
 
         if (hintPanelRoot == null || hintText == null) return;
 
-        //HideAllCanvases();
         hintText.text = message;
 
-        //if (!hintPanelRoot.activeSelf)
-        //{
-        //    PositionInFrontOfPlayer(hintPanelRoot);
-        //    hintPanelRoot.SetActive(true);
-        //}
+        // Only force open if this is the final AI hint result arriving from OpenAI
+        if (isFinalResult && !hintPanelRoot.activeSelf)
+        {
+            PositionInFrontOfPlayer(hintPanelRoot);
+            hintPanelRoot.SetActive(true);
+        }
     }
 
     public void SyncInputModeFromUserSession()
