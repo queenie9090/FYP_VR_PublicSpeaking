@@ -20,7 +20,7 @@ public class ObjectiveManager : MonoBehaviour
         if (exitDoorWaypoint != null)
             exitDoorWaypoint.SetActive(false);
 
-        SetPanelActive(false);
+        SetPanelActive(!isTutorialActive);
     }
 
     /// <summary>

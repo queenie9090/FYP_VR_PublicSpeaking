@@ -28,6 +28,7 @@ public class HintUIController : MonoBehaviour
     [SerializeField] private AudioSource audioSource;
     [SerializeField] private AudioClip hintRequestedClip;
     [SerializeField] private AudioClip hintReceivedClip;
+    [SerializeField] private AudioClip hintCloseClip;
 
     [Header("Manager References")]
     [SerializeField] private InteractionManager interactionManager;
@@ -247,12 +248,20 @@ public class HintUIController : MonoBehaviour
     /// </summary>
     public void HideHintCanvas()
     {
-        HideAllCanvases();
+        if (hintPanelRoot != null && hintPanelRoot.activeSelf)
+        {
+            hintPanelRoot.SetActive(false);
+            if (audioSource != null && hintCloseClip != null)
+            {
+                audioSource.PlayOneShot(hintCloseClip);
+            }
+        }
     }
 
     private void HideAllCanvases()
     {
         if (hintPanelRoot != null) hintPanelRoot.SetActive(false);
+
     }
 
     /// <summary>
