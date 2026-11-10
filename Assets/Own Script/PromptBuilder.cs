@@ -60,7 +60,7 @@ Unclear Response:
 If the participant's response is unclear or insufficient to determine the intended meaning, request clarification without making unsupported assumptions. 
 
 Final Turn Rule (HIGHEST PRIORITY): 
-If TurnCounter reaches Maximum Turn Limit ({config.maxTurnLimit}), the Final Turn condition takes priority over all other response conditions. The NPC must end the conversation immediately after acknowledging the participant's latest response. Do not ask a question, request additional information, or introduce a new discussion topic. Set end_conversation to true. 
+If the current interaction number ({currentTurnCount + 1}) is greater than or equal to Maximum Turn Limit ({config.maxTurnLimit}), the Final Turn condition takes priority over all other response conditions. 
 
 //Emotion Part
 NPC EMOTION GENERATION RULES

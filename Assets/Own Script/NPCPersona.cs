@@ -12,11 +12,21 @@ public class NPCPersona : MonoBehaviour
     [Header("Audio Output")]
     public AudioSource npcAudioSource;
 
+    [Header("Eye Contact Tracking")]
+    [Tooltip("Assign the Head/Face Collider of this NPC for Eye Contact tracking.")]
+    public Collider facialCollider;
+
     private void Awake()
     {
         if (npcAudioSource == null)
         {
             npcAudioSource = GetComponent<AudioSource>();
+        }
+
+        if (facialCollider == null)
+        {
+            facialCollider = GetComponent<Collider>();
+            Debug.LogWarning($"[NPCPersona] '{name}' has no facialCollider assigned. Falling back to '{(facialCollider != null ? facialCollider.name : "NONE")}'. Eye contact will be measured against it.");
         }
     }
 }

@@ -1,11 +1,9 @@
 ﻿using UnityEngine;
-using TMPro;
 
 public class ObjectiveManager : MonoBehaviour
 {
     [Header("Start Objective UI (Desk/Waypoint)")]
     [SerializeField] private GameObject startObjectivePanel;
-    [SerializeField] private TMP_Text startObjectiveText;
 
     [Header("World Space Waypoints")]
     [SerializeField] private GameObject startWaypoint;
@@ -25,12 +23,9 @@ public class ObjectiveManager : MonoBehaviour
         SetPanelActive(false);
     }
 
-    public void SetObjective(string text)
-    {
-        if (startObjectiveText != null)
-            startObjectiveText.text = text;
-    }
-
+    /// <summary>
+    /// Toggles the objective panel canvas visibility.
+    /// </summary>
     public void SetPanelActive(bool active)
     {
         if (startObjectivePanel != null)

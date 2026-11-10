@@ -5,14 +5,15 @@ using System.Collections.Generic;
 [Serializable]
 public class ScenarioConfig
 {
-    public string scenario; //= "Classroom"; // "Hall", "Normal Conversation", "Classroom", "Interview"
-    public string participantRole; //= "Student";
-    public string topic; //= "General Presentation";
-    public string difficulty; //= "Medium";
-    public string persona;// = "Teacher";
-    public string sessionObjective;// = "Engage effectively with the evaluator.";
-    public int maxTurnLimit; //= 5;
-    public string sessionStartSignal;// = "Session Start";
+    // these values are use for default settings
+    public string scenario = "Classroom"; // "Hall", "Normal Conversation", "Classroom", "Interview"
+    public string participantRole = "Student";
+    public string topic = "General Presentation";
+    public string difficulty = "Medium";
+    public string persona = "Teacher";
+    public string sessionObjective = "Engage effectively with the evaluator.";
+    public int maxTurnLimit = 5;
+    public string sessionStartSignal = "Session Start";
 }
 
 [Serializable]

@@ -25,6 +25,13 @@ public class SetupUIController : MonoBehaviour
 
     private const string NeverShowTutorialKey = "Tutorial_NeverShowAgain";
 
+    private void Awake()
+    {
+        // Guarantee game time and audio listener are active upon entering Main Menu
+        Time.timeScale = 1f;
+        AudioListener.pause = false;
+    }
+
     private void Start()
     {
         // 1. Ensure UserSession config is initialized to avoid NullReferenceException
@@ -99,9 +106,19 @@ public class SetupUIController : MonoBehaviour
         if (npcPersonaInput != null) npcPersonaInput.text = defaultPersona;
     }
 
+    private string FormatDynamicObjective(string topic)
+    {
+        string cleanTopic = string.IsNullOrWhiteSpace(topic) ? "the assigned topic" : topic;
+        return $"Demonstrate clear and structured communication while discussing '{cleanTopic}', effectively addressing questions and maintaining an appropriate tone.";
+    }
+
     // Called when the user clicks "Confirm Scenario" / "Start Session"
     public void OnConfirmConfiguration()
     {
+        string currentTopic = activityInput != null && !string.IsNullOrEmpty(activityInput.text)
+            ? activityInput.text
+            : "General Presentation";
+
         // Package setup selections into UserSession
         UserSession.SelectedScenarioConfig = new ScenarioConfig
         {
@@ -110,7 +127,7 @@ public class SetupUIController : MonoBehaviour
             difficulty = difficultyDropdown != null ? difficultyDropdown.options[difficultyDropdown.value].text : "Medium",
             participantRole = participantRoleInput != null && !string.IsNullOrEmpty(participantRoleInput.text) ? participantRoleInput.text : "Student",
             persona = npcPersonaInput != null && !string.IsNullOrEmpty(npcPersonaInput.text) ? npcPersonaInput.text : "Evaluator",
-            sessionObjective = "Practice scenario-specific communication skills effectively.",
+            sessionObjective = FormatDynamicObjective(currentTopic),
             maxTurnLimit = 5,
             sessionStartSignal = "Session Start"
         };

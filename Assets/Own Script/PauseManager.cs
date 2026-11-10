@@ -95,18 +95,26 @@ public class PauseManager : MonoBehaviour
 
     public void ReturnToMainMenu()
     {
-        // Reset time scale and audio state before changing scenes
+        // 1. Unfreeze time and audio immediately
         Time.timeScale = 1f;
         AudioListener.pause = false;
 
-        // Stop active recording hardware if active
+        // 2. Clear current EventSystem selection so UI buttons aren't left in 'Pressed' state
+        if (UnityEngine.EventSystems.EventSystem.current != null)
+        {
+            UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(null);
+        }
+
+        // 3. Stop recording hardware if active
         if (audioRecorder != null)
         {
             audioRecorder.StopRecording();
         }
 
         Debug.Log($"[PauseManager] Loading Main Menu scene: '{mainMenuSceneName}'");
-        SceneManager.LoadScene(mainMenuSceneName);
+
+        // 4. Start the VR scene unloading coroutine directly
+        StartCoroutine(VRSceneLoader.DisableVRAndReturnToMenu(mainMenuSceneName));
     }
 
     private void OnDestroy()

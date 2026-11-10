@@ -17,7 +17,7 @@ public class TutorialPanelManager : MonoBehaviour
     [SerializeField] private GameObject roomTeleportAnchors;
 
     [Header("Hand Tutorial Step Panels")]
-    [Tooltip("Assign each step panel in order: 0=UI Pinch, 1=Teleport, 2=Pinch Grab, 3=Open Palm, 4=Completion")]
+    [Tooltip("Assign each step panel in order: 0=UI Pinch, 1=Teleport, 2=Pinch Grab, 3=Hint Gesture, 4=Completion")]
     [SerializeField] private GameObject[] handStepPanels;
 
     [Tooltip("Assign parent World-Space Canvas GameObjects if steps live on separate canvases around the room.")]
@@ -25,9 +25,6 @@ public class TutorialPanelManager : MonoBehaviour
 
     [Tooltip("Assign the status TMP_Text component located on EACH panel in matching order (0 to 4).")]
     [SerializeField] private TMP_Text[] handStatusTexts;
-
-    [Tooltip("Gesture names matching GestureTracker (e.g., 'Pinch', 'Teleport', 'Grab', 'Open Palm'). Leave final step empty.")]
-    [SerializeField] private string[] requiredGestureNames;
 
     [Header("Teleport Step Setup")]
     [SerializeField] private GameObject greenWaypointAnchor;
@@ -41,23 +38,25 @@ public class TutorialPanelManager : MonoBehaviour
 
     private int currentHandStepIndex = 0;
     private bool[] completedSteps;
+    private bool hintPanelOpenedInTutorial = false; // Tracks 2-stage gesture progress
 
     [Header("Consolidated UI References")]
     [SerializeField] private Button handCloseButton;
     [SerializeField] private Button completionDoneButton;
 
     [Header("Status Messages")]
-    [Tooltip("Custom instruction for each step (0=UI Pinch, 1=Teleport, 2=Pinch Grab, 3=Open Palm, 4=Completion)")]
+    [Tooltip("Custom instruction for each step (0=UI Pinch, 1=Teleport, 2=Pinch Grab, 3=Hint Gesture, 4=Completion)")]
     [SerializeField]
     private string[] defaultStepMessages = new string[]
     {
-        "PLease click the button below using <color=#FFD700><b>UI Pinch</b></color> to try it out!",
+        "Please click the button below using <color=#FFD700><b>UI Pinch</b></color> to try it out!",
         "Pinch and point your ray at the <color=#55FF55><b>green waypoint anchor</b></color> to teleport.",
         "Reach out and <color=#FFD700><b>pinch-grab</b></color> any object on the desk.",
-        "Hold your hand up with an <color=#FFD700><b>open palm facing forward</b></color> to open the menu.",
+        "Raise your right index finger <color=#FFD700><b>(Have a Question)</b></color> to open the AI hint panel.",
         "You may proceed to the next step. Move to the <color=#55FF55><b>green waypoint anchor</b></color> at the desk to begin the <color=#00E5FF><b>NPC Dialogue Tutorial</b></color>."
     };
 
+    [SerializeField] private string hintOpenedMessage = "<color=#81C784><b>Great job!</b></color> Now make a <color=#FFD700><b>Thumbs Down</b></color> gesture to close the panel.";
     [SerializeField] private string successMessage = "<color=#81C784><b>Correct! Well done! Moving to next step...</b></color>";
     [SerializeField] private string warningMessage = "<color=#FF5555><b>ACCESS RESTRICTED:</b></color> Please teleport to the <color=#55FF55>green waypoint anchor</color>.";
 
@@ -142,7 +141,6 @@ public class TutorialPanelManager : MonoBehaviour
             if (handTutorialContainer != null) handTutorialContainer.SetActive(false);
             if (controllerTutorialPanel != null) controllerTutorialPanel.SetActive(true);
 
-            // Force green waypoint anchor OFF immediately in Controller mode!
             if (greenWaypointAnchor != null) greenWaypointAnchor.SetActive(false);
             if (anchorOutlineScript != null) anchorOutlineScript.enabled = false;
         }
@@ -158,6 +156,7 @@ public class TutorialPanelManager : MonoBehaviour
     private void ResetHandTutorial()
     {
         currentHandStepIndex = 0;
+        hintPanelOpenedInTutorial = false;
         tutorialFinished = false;
 
         if (advanceCoroutine != null)
@@ -180,7 +179,6 @@ public class TutorialPanelManager : MonoBehaviour
     {
         if (handStepPanels == null || handStepPanels.Length == 0) return;
 
-        // Pass 1: deactivate every parent canvas EXCEPT the root hand container
         if (parentWorldSpaceCanvases != null)
         {
             foreach (var canvasObj in parentWorldSpaceCanvases)
@@ -190,10 +188,8 @@ public class TutorialPanelManager : MonoBehaviour
             }
         }
 
-        // Make sure the root container is on
         if (handTutorialContainer != null) handTutorialContainer.SetActive(true);
 
-        // Pass 2: activate the current step's canvas AND any inactive parents above it
         if (parentWorldSpaceCanvases != null &&
             currentHandStepIndex < parentWorldSpaceCanvases.Length &&
             parentWorldSpaceCanvases[currentHandStepIndex] != null)
@@ -212,7 +208,6 @@ public class TutorialPanelManager : MonoBehaviour
                 handStepPanels[i].SetActive(i == currentHandStepIndex);
         }
 
-       
         bool isTeleportStep = (activeMode == InputMode.HandTracking) && (currentHandStepIndex == 1);
 
         if (greenWaypointAnchor != null) greenWaypointAnchor.SetActive(isTeleportStep);
@@ -253,18 +248,39 @@ public class TutorialPanelManager : MonoBehaviour
 
     /// <summary>
     /// Called by GestureTracker when global gestures are recognized.
+    /// Handles 2-stage gesture progression (Open Panel -> Close Panel).
     /// </summary>
     public void OnGesturePerformed(string gestureType)
     {
         if (activeMode != InputMode.HandTracking || advanceCoroutine != null || tutorialFinished)
             return;
 
-        // Ignore global air-pinch gesture events on Step 0!
-        // Step 0 must ONLY be completed by physically clicking the UI button.
-        if (currentHandStepIndex != 3)
-            return;
+        if (currentHandStepIndex == 3)
+        {
+            // Stage 1: User performs HaveAQuestion gesture -> Opens hint panel
+            if (!hintPanelOpenedInTutorial && gestureType == "HaveAQuestion")
+            {
+                hintPanelOpenedInTutorial = true;
 
-        ProcessGestureAdvance(gestureType);
+                if (successAudioSource != null && successSound != null)
+                {
+                    successAudioSource.PlayOneShot(successSound);
+                }
+
+                TMP_Text activeText = GetActiveStatusText();
+                if (activeText != null)
+                {
+                    activeText.text = hintOpenedMessage;
+                }
+                return;
+            }
+
+            // Stage 2: User performs ThumbsDown gesture -> Closes hint panel & completes step
+            if (hintPanelOpenedInTutorial && gestureType == "ThumbsDown")
+            {
+                TriggerStepSuccess();
+            }
+        }
     }
 
     /// <summary>
@@ -281,32 +297,12 @@ public class TutorialPanelManager : MonoBehaviour
         }
     }
 
-    private void ProcessGestureAdvance(string gestureType)
-    {
-        if (handStepPanels == null || currentHandStepIndex >= handStepPanels.Length - 1)
-            return;
-
-        if (requiredGestureNames == null || currentHandStepIndex >= requiredGestureNames.Length)
-            return;
-
-        string requiredGesture = requiredGestureNames[currentHandStepIndex];
-
-        if (string.IsNullOrEmpty(gestureType) || string.IsNullOrEmpty(requiredGesture))
-            return;
-
-        if (string.Equals(gestureType.Trim(), requiredGesture.Trim(), StringComparison.OrdinalIgnoreCase))
-        {
-            TriggerStepSuccess();
-        }
-    }
-
     public bool ValidateTeleportTarget(GameObject targetObject)
     {
         if (currentHandStepIndex != 1) return true;
 
         if (greenWaypointAnchor != null && (targetObject == greenWaypointAnchor || targetObject.transform.IsChildOf(greenWaypointAnchor.transform)))
         {
-            // Directly call TriggerStepSuccess() instead of ProcessGestureAdvance!
             TriggerStepSuccess();
             return true;
         }
@@ -332,13 +328,11 @@ public class TutorialPanelManager : MonoBehaviour
 
         completedSteps[currentHandStepIndex] = true;
 
-        // 1. Play success sound
         if (successAudioSource != null && successSound != null)
         {
             successAudioSource.PlayOneShot(successSound);
         }
 
-        // 2. Instant advance to Step 2 (Pinch Grab Panel) when completing Step 1 (Teleport)
         if (currentHandStepIndex == 1)
         {
             currentHandStepIndex++;
@@ -346,7 +340,6 @@ public class TutorialPanelManager : MonoBehaviour
             return;
         }
 
-        // Standard behavior for other steps
         isStepTransitioning = true;
         SetSuccessStatus();
         advanceCoroutine = StartCoroutine(AdvanceAfterSuccess());
@@ -368,7 +361,7 @@ public class TutorialPanelManager : MonoBehaviour
         }
 
         advanceCoroutine = null;
-        isStepTransitioning = false; // Reset transition lock
+        isStepTransitioning = false;
     }
 
     public void CloseTutorial()
@@ -386,7 +379,6 @@ public class TutorialPanelManager : MonoBehaviour
 
         if (spawnPointTransform != null)
         {
-            // Find Unity's XR Origin / Rig object
             var xrOrigin = FindObjectOfType<Unity.XR.CoreUtils.XROrigin>();
             if (xrOrigin != null)
             {
@@ -398,7 +390,6 @@ public class TutorialPanelManager : MonoBehaviour
         if (controllerTutorialPanel != null) controllerTutorialPanel.SetActive(false);
         if (handTutorialContainer != null) handTutorialContainer.SetActive(false);
 
-        // Turn OFF parent world space canvases on close
         if (parentWorldSpaceCanvases != null)
         {
             foreach (var canvasObj in parentWorldSpaceCanvases)
@@ -407,7 +398,6 @@ public class TutorialPanelManager : MonoBehaviour
             }
         }
 
-        // Hide green waypoint anchor on close
         if (greenWaypointAnchor != null) greenWaypointAnchor.SetActive(false);
         if (anchorOutlineScript != null) anchorOutlineScript.enabled = false;
 

@@ -1,49 +1,126 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>
+/// Tracks gestures for the session.
+///  - Primary Engine  : Smoothed Velocity Tracking with a 0.3s Idle Grace Period.
+///  - Secondary Engine: Zone Transit (ArmTransitDetector) cross-deduplicated.
+///  - System Gestures : Forwarded to UI/Tutorial and retroactively scrubbed from expressive scores.
+/// </summary>
 public class GestureTracker : MonoBehaviour
 {
     [Header("Manager References")]
     [SerializeField] private InteractionManager interactionManager;
     [SerializeField] private TutorialPanelManager tutorialManager;
-    [SerializeField] private HintManager hintManager;
+    [SerializeField] private HintUIController hintUIController;
     [SerializeField] private WarningPanelManager warningPanelManager;
+    [SerializeField] private ArmTransitDetector armTransitDetector;
+
+    [Header("Fallback Motion Sources (if ArmTransitDetector has no manual probes)")]
+    [SerializeField] private Transform leftHandTransform;
+    [SerializeField] private Transform rightHandTransform;
+    [SerializeField] private Transform leftControllerTransform;
+    [SerializeField] private Transform rightControllerTransform;
+
+    [Header("Reference Frames")]
+    [SerializeField] private Transform trackingSpace;
+    [SerializeField] private Transform headset;
+
+    [Header("Primary Velocity Detection Settings")]
+    [SerializeField] private bool enableVelocityTracking = true;
+    [SerializeField] private float minSpeed = 0.45f;          // m/s to initiate movement
+    [SerializeField] private float minDuration = 0.35f;       // minimum sustained seconds
+    [SerializeField] private float minDistance = 0.16f;       // minimum meters traveled
+    [SerializeField] private float idleGracePeriod = 0.30f;   // 0.3s pause buffer before ending episode
+    [SerializeField] private float maxPlausibleSpeed = 6.0f;  // tracking glitch filter
+    [SerializeField] private float gestureCooldown = 1.5f;    // per-hand cooldown between counts
+    [SerializeField] private bool logMotionDebug = false;
+
+    [Header("System Gesture Handling")]
+    [SerializeField] private float systemGestureSuppression = 1.5f;
+    [SerializeField] private float retroactiveWindow = 1.0f;
 
     [Header("Unprofessional Gesture Tracking")]
     private int unprofessionalGestureCount = 0;
 
-    private List<Tuple<string, float>> validExpressiveGestures = new List<Tuple<string, float>>();
+    private class VelocityState
+    {
+        public Vector3 smoothedPos;
+        public bool initialized;
+        public bool isEpisodeActive;
+        public float smoothedSpeed;
+        public float episodeTime;
+        public float episodeDistance;
+        public float idleTimer;
+
+        public void Reset()
+        {
+            initialized = false;
+            isEpisodeActive = false;
+            smoothedSpeed = 0f;
+            episodeTime = 0f;
+            episodeDistance = 0f;
+            idleTimer = 0f;
+        }
+    }
+
+    private class GestureRecord
+    {
+        public string label;
+        public float duration;
+        public float time;
+        public int handIndex;
+    }
+
+    private readonly VelocityState leftState = new VelocityState();
+    private readonly VelocityState rightState = new VelocityState();
+    private readonly float[] lastHandGestureTime = { -99f, -99f };
+    private readonly List<GestureRecord> validExpressiveGestures = new List<GestureRecord>();
+
+    private Transform leftSource;
+    private Transform rightSource;
     private float activeTrackingDurationSeconds = 0.0f;
+    private float suppressUntil = 0f;
     private bool isTracking = false;
+
+    public bool IsTracking => isTracking;
 
     private void Awake()
     {
-        StartTracking();
+        isTracking = false;
     }
 
     private void Start()
     {
-        if (interactionManager == null)
-            interactionManager = FindObjectOfType<InteractionManager>();
+        if (interactionManager == null) interactionManager = FindObjectOfType<InteractionManager>();
+        if (tutorialManager == null) tutorialManager = FindObjectOfType<TutorialPanelManager>();
+        if (hintUIController == null) hintUIController = FindObjectOfType<HintUIController>();
+        if (warningPanelManager == null) warningPanelManager = FindObjectOfType<WarningPanelManager>();
+        if (armTransitDetector == null) armTransitDetector = FindObjectOfType<ArmTransitDetector>();
 
-        if (tutorialManager == null)
-            tutorialManager = FindObjectOfType<TutorialPanelManager>();
+        if (headset == null && Camera.main != null) headset = Camera.main.transform;
+        if (trackingSpace == null)
+        {
+            var origin = FindObjectOfType<Unity.XR.CoreUtils.XROrigin>();
+            if (origin != null) trackingSpace = origin.transform;
+        }
 
-        if (hintManager == null)
-            hintManager = FindObjectOfType<HintManager>();
-
-        if (warningPanelManager == null)
-            warningPanelManager = FindObjectOfType<WarningPanelManager>();
+        ResolveMotionSources();
     }
 
     private void Update()
     {
-        if (isTracking)
-        {
-            activeTrackingDurationSeconds += Time.deltaTime;
-        }
+        if (!isTracking) return;
+
+        activeTrackingDurationSeconds += Time.deltaTime;
+
+        if (!enableVelocityTracking) return;
+
+        if (leftSource == null || rightSource == null) ResolveMotionSources();
+
+        TrackVelocityMotion(leftSource, leftState, 0);
+        TrackVelocityMotion(rightSource, rightState, 1);
     }
 
     public void StartTracking() => ResetTracker();
@@ -54,106 +131,189 @@ public class GestureTracker : MonoBehaviour
         validExpressiveGestures.Clear();
         unprofessionalGestureCount = 0;
         activeTrackingDurationSeconds = 0.0f;
+        suppressUntil = 0f;
+        lastHandGestureTime[0] = lastHandGestureTime[1] = -99f;
+        leftState.Reset();
+        rightState.Reset();
+        ResolveMotionSources();
         isTracking = true;
+        Debug.Log("[GestureTracker] Primary Velocity Tracker STARTED.");
     }
 
     // -------------------------------------------------------------
-    // UnityEvent Entry Points (for XR Hand Tracking Events)
+    // Primary Engine: Velocity Motion with 0.3s Grace Period
     // -------------------------------------------------------------
+    private void TrackVelocityMotion(Transform source, VelocityState s, int handIndex)
+    {
+        if (source == null || headset == null || !source.gameObject.activeInHierarchy || Time.time < suppressUntil)
+        {
+            s.Reset();
+            return;
+        }
 
-    /// <summary>
-    /// Call this from Left & Right Hand Pose Detectors when camera frame shape is detected.
-    /// </summary>
-    public void TriggerCustomGesture() => ProcessGestureEvent("CustomGesture", 0.5f);
+        float dt = Time.deltaTime;
+        if (dt <= 0f) return;
 
-    /// <summary>
-    /// Call this from Fist Pose Detector to dismiss the active hint panel.
-    /// </summary>
-    public void TriggerFistCloseGesture() => ProcessGestureEvent("FistClose", 0.3f);
-    /// <summary>
-    /// Call this from Left & Right Inappropriate Gesture Detectors (e.g. Middle Finger).
-    /// </summary>
+        // Position relative to tracking head space
+        Vector3 rawPos = trackingSpace != null
+            ? trackingSpace.InverseTransformPoint(source.position) - trackingSpace.InverseTransformPoint(headset.position)
+            : source.position - headset.position;
+
+        if (!s.initialized)
+        {
+            s.smoothedPos = rawPos;
+            s.initialized = true;
+            return;
+        }
+
+        // 1. Vector Position Smoothing (Exponential Moving Average)
+        s.smoothedPos = Vector3.Lerp(s.smoothedPos, rawPos, 0.35f);
+        float step = Vector3.Distance(rawPos, s.smoothedPos);
+        float rawSpeed = step / dt;
+
+        if (rawSpeed > maxPlausibleSpeed)
+        {
+            s.Reset();
+            return;
+        }
+
+        s.smoothedSpeed = Mathf.Lerp(s.smoothedSpeed, rawSpeed, 0.25f);
+        bool active = s.smoothedSpeed >= minSpeed;
+
+        if (logMotionDebug && s.smoothedSpeed > 0.2f)
+            Debug.Log($"[GestureTracker Live] Hand {handIndex} Speed: {s.smoothedSpeed:F2} m/s | Active: {s.isEpisodeActive} | Time: {s.episodeTime:F2}s");
+
+        // 2. Grace Period State Machine
+        if (active)
+        {
+            s.isEpisodeActive = true;
+            s.idleTimer = 0f;
+            s.episodeTime += dt;
+            s.episodeDistance += step;
+        }
+        else if (s.isEpisodeActive)
+        {
+            s.idleTimer += dt;
+
+            // Episode finishes after grace period expires
+            if (s.idleTimer >= idleGracePeriod)
+            {
+                if (s.episodeTime >= minDuration && s.episodeDistance >= minDistance && !IsDuplicate(handIndex))
+                {
+                    AddGesture(handIndex == 0 ? "Velocity (Left)" : "Velocity (Right)", s.episodeTime, handIndex);
+                }
+                s.Reset();
+            }
+        }
+    }
+
+    // -------------------------------------------------------------
+    // Secondary Engine: Zone Transit Callback (ArmTransitDetector)
+    // -------------------------------------------------------------
+    public void RegisterExpressiveArmTransit(float transitDuration, int handIndex = -1)
+    {
+        if (!isTracking || Time.time < suppressUntil) return;
+
+        if (IsDuplicate(handIndex))
+        {
+            Debug.Log($"[GestureTracker] Zone Transit merged with recent velocity count for hand {handIndex}.");
+            return;
+        }
+
+        AddGesture("Zone Transit", transitDuration, handIndex);
+    }
+
+    private bool IsDuplicate(int handIndex)
+    {
+        if (handIndex < 0 || handIndex > 1) return false;
+        return (Time.time - lastHandGestureTime[handIndex]) < gestureCooldown;
+    }
+
+    private void AddGesture(string label, float duration, int handIndex)
+    {
+        validExpressiveGestures.Add(new GestureRecord { label = label, duration = duration, time = Time.time, handIndex = handIndex });
+        if (handIndex == 0 || handIndex == 1) lastHandGestureTime[handIndex] = Time.time;
+        Debug.Log($"<color=cyan>[GestureTracker Log]</color> {label} COUNTED. Duration: {duration:F2}s | Total Count: {validExpressiveGestures.Count}");
+    }
+
+    private void ResolveMotionSources()
+    {
+        Transform l = null, r = null;
+        if (armTransitDetector == null) armTransitDetector = FindObjectOfType<ArmTransitDetector>();
+        if (armTransitDetector != null) (l, r) = armTransitDetector.GetActiveProbeTransforms();
+
+        if (l == null || r == null)
+        {
+            var (fl, fr) = GetActiveSources();
+            if (l == null) l = fl;
+            if (r == null) r = fr;
+        }
+        leftSource = l; rightSource = r;
+    }
+
+    public (Transform left, Transform right) GetActiveSources()
+    {
+        string mode = UserSession.InputMode;
+        bool useHands = !string.IsNullOrEmpty(mode) && mode.Contains("Hand");
+        return (useHands ? leftHandTransform : leftControllerTransform,
+                useHands ? rightHandTransform : rightControllerTransform);
+    }
+
+    // -------------------------------------------------------------
+    // System Pose Events & Unprofessional Tracking
+    // -------------------------------------------------------------
+    public void TriggerHaveAQuestionGesture() => ProcessGestureEvent("HaveAQuestion", 0.5f);
+    public void TriggerThumbsDownGesture() => ProcessGestureEvent("ThumbsDown", 0.3f);
     public void TriggerUnprofessionalGesture() => ProcessUnprofessionalGesture("Middle Finger");
     public void TriggerPinchGesture() => ProcessGestureEvent("Pinch", 0.5f);
     public void TriggerPointPinchGesture() => ProcessGestureEvent("Point + Pinch", 0.5f);
     public void TriggerGrabGesture() => ProcessGestureEvent("Grab", 0.5f);
-    public void TriggerSocialGreetingGesture() => ProcessGestureEvent("Wave", 1.0f);
 
     public void ProcessGestureEvent(string gestureType, float gestureDuration)
     {
-        if (!isTracking)
+        Debug.Log($"<color=cyan>[GestureTracker RAW]</color> System Gesture: '{gestureType}' | Duration: {gestureDuration}s");
+
+        suppressUntil = Time.time + systemGestureSuppression;
+
+        if (validExpressiveGestures.Count > 0)
         {
-            Debug.LogWarning("[GestureTracker Debug] ProcessGestureEvent ignored because isTracking == false!");
+            float cutoff = Time.time - retroactiveWindow;
+            int removed = validExpressiveGestures.RemoveAll(g => g.time >= cutoff);
+            if (removed > 0)
+                Debug.Log($"[GestureTracker] Retroactively removed {removed} expressive count(s) near '{gestureType}'.");
+        }
+        leftState.Reset(); rightState.Reset();
+
+        if (tutorialManager == null) tutorialManager = FindObjectOfType<TutorialPanelManager>();
+        if (tutorialManager != null) tutorialManager.OnGesturePerformed(gestureType);
+
+        if (gestureType == "HaveAQuestion")
+        {
+            if (hintUIController == null) hintUIController = FindObjectOfType<HintUIController>();
+            if (hintUIController != null) hintUIController.OnHaveAQuestionGestureTriggered();
             return;
         }
 
-        // 1. Log raw gesture input received from Meta Quest / XRI events
-        Debug.Log($"<color=cyan>[GestureTracker RAW]</color> Detected Gesture: '{gestureType}' | Duration: {gestureDuration}s");
-
-        // 2. Forward gesture to TutorialPanelManager if active
-        if (tutorialManager == null)
-            tutorialManager = FindObjectOfType<TutorialPanelManager>();
-
-        if (tutorialManager != null)
+        if (gestureType == "ThumbsDown")
         {
-            Debug.Log($"<color=yellow>[GestureTracker -> Tutorial]</color> Forwarding '{gestureType}' to TutorialPanelManager...");
-            tutorialManager.OnGesturePerformed(gestureType);
-        }
-
-        // 3. Route Custom Framing Gesture (|_ _|) to HintManager
-        if (gestureType == "CustomGesture")
-        {
-            Debug.Log("<color=green>[GestureTracker -> HintManager]</color> Frame Pose Detected! Triggering 3D Hint Panel...");
-
-            if (hintManager == null)
-                hintManager = FindObjectOfType<HintManager>();
-
-            if (hintManager != null)
-            {
-                hintManager.OnCustomGestureTriggered();
-            }
-            else
-            {
-                Debug.LogError("<color=red>[GestureTracker Error]</color> HintManager reference is MISSING in scene!");
-            }
+            if (hintUIController == null) hintUIController = FindObjectOfType<HintUIController>();
+            if (hintUIController != null) hintUIController.OnThumbsDownGestureTriggered();
             return;
         }
-
-        // 4. Route Fist Close Gesture to dismiss panel
-        if (gestureType == "FistClose")
-        {
-            Debug.Log("<color=orange>[GestureTracker -> HintManager]</color> Fist Close Detected! Hiding Hint Panel...");
-
-            if (hintManager == null)
-                hintManager = FindObjectOfType<HintManager>();
-
-            if (hintManager != null)
-            {
-                hintManager.OnCloseGestureTriggered();
-            }
-            return;
-        }
-
-        // 5. Ignore standard system gestures for expressive scoring
-        if (gestureType == "Pinch" || gestureType == "Point + Pinch" || gestureType == "Grab" || gestureType == "Handshake")
-        {
-            Debug.Log($"[GestureTracker Debug] '{gestureType}' processed for tutorial, ignored for GPM score.");
-            return;
-        }
-
-        validExpressiveGestures.Add(new Tuple<string, float>(gestureType, gestureDuration));
     }
 
     public void ProcessUnprofessionalGesture(string gestureType)
     {
-        if (!isTracking) return;
-        unprofessionalGestureCount++;
-        Debug.LogWarning($"[GestureTracker] Flagged unprofessional gesture: {gestureType}");
+        Debug.Log($"[GestureTracker] Unprofessional gesture received. isTracking = {isTracking}, warningPanelManager null? {warningPanelManager == null}");
+
+        if (isTracking)
+        {
+            unprofessionalGestureCount++;
+            Debug.LogWarning($"[GestureTracker] Flagged unprofessional gesture: {gestureType}");
+        }
 
         if (warningPanelManager != null)
-        {
             warningPanelManager.ShowWarning("Please maintain appropriate hand posture.");
-        }
     }
 
     public int GetUnprofessionalCount() => unprofessionalGestureCount;
@@ -166,148 +326,3 @@ public class GestureTracker : MonoBehaviour
         return (expressiveCount, gpm);
     }
 }
-
-//using System;
-//using System.Collections;
-//using System.Collections.Generic;
-//using UnityEngine;
-
-//public class GestureTracker : MonoBehaviour
-//{
-//    [Header("Manager References")]
-//    [SerializeField] private InteractionManager interactionManager;
-//    [SerializeField] private TutorialPanelManager tutorialManager;
-//    [SerializeField] private HintManager hintManager;
-
-//    [Header("Unprofessional Gesture Tracking")]
-//    private int unprofessionalGestureCount = 0;
-
-//    private List<Tuple<string, float>> validExpressiveGestures = new List<Tuple<string, float>>();
-//    private float activeTrackingDurationSeconds = 0.0f;
-//    private bool isTracking = false;
-
-//    private void Awake()
-//    {
-//        StartTracking();
-//    }
-
-//    private void Start()
-//    {
-//        if (interactionManager == null)
-//            interactionManager = FindObjectOfType<InteractionManager>();
-
-//        if (tutorialManager == null)
-//            tutorialManager = FindObjectOfType<TutorialPanelManager>();
-
-//        if (hintManager == null)
-//            hintManager = FindObjectOfType<HintManager>();
-//    }
-
-//    private void Update()
-//    {
-//        if (isTracking)
-//        {
-//            activeTrackingDurationSeconds += Time.deltaTime;
-//        }
-//    }
-
-//    public void StartTracking() => ResetTracker();
-//    public void StopTracking() => isTracking = false;
-
-//    public void ResetTracker()
-//    {
-//        validExpressiveGestures.Clear();
-//        unprofessionalGestureCount = 0;
-//        activeTrackingDurationSeconds = 0.0f;
-//        isTracking = true;
-//    }
-
-//    // -------------------------------------------------------------
-//    // UnityEvent Entry Points (for XR Hand Tracking Events)
-//    // -------------------------------------------------------------
-//    public void TriggerOpenPalmGesture() => ProcessGestureEvent("Open Palm", 1.0f);
-//    public void TriggerPinchGesture() => ProcessGestureEvent("Pinch", 0.5f);
-//    public void TriggerPointPinchGesture() => ProcessGestureEvent("Point + Pinch", 0.5f);
-//    public void TriggerGrabGesture() => ProcessGestureEvent("Grab", 0.5f);
-//    public void TriggerSocialGreetingGesture() => ProcessGestureEvent("Wave", 1.0f);
-
-//    public void ProcessGestureEvent(string gestureType, float gestureDuration)
-//    {
-//        if (!isTracking)
-//        {
-//            Debug.LogWarning("[GestureTracker Debug] ProcessGestureEvent ignored because isTracking == false!");
-//            return;
-//        }
-
-//        // 1. Log raw gesture input received from Meta Quest / XRI events
-//        Debug.Log($"<color=cyan>[GestureTracker RAW]</color> Detected Gesture: '{gestureType}' | Duration: {gestureDuration}s");
-
-//        // 2. Ensure TutorialPanelManager reference exists and forward the event
-//        if (tutorialManager == null)
-//            tutorialManager = FindObjectOfType<TutorialPanelManager>();
-
-//        if (tutorialManager != null)
-//        {
-//            Debug.Log($"<color=yellow>[GestureTracker -> Tutorial]</color> Forwarding '{gestureType}' to TutorialPanelManager...");
-//            tutorialManager.OnGesturePerformed(gestureType);
-//        }
-//        else
-//        {
-//            Debug.LogError("<color=red>[GestureTracker Error]</color> TutorialPanelManager is NULL! Cannot advance tutorial step.");
-//        }
-
-//        // 3. Handle Open Palm Hint Request
-//        if (gestureType == "Open Palm" && gestureDuration >= 1.0f)
-//        {
-//            if (hintManager == null)
-//                hintManager = FindObjectOfType<HintManager>();
-
-//            if (hintManager != null)
-//            {
-//                Debug.Log("<color=green>[GestureTracker -> Hint]</color> Triggering Open Palm Hint Activation.");
-//                hintManager.OnOpenPalmGestureTriggered();
-//            }
-//            return;
-//        }
-
-//        // 4. Ignore navigation gestures for expressive metric scoring
-//        if (gestureType == "Pinch" || gestureType == "Point + Pinch" || gestureType == "Grab" || gestureType == "Handshake")
-//        {
-//            Debug.Log($"[GestureTracker Debug] '{gestureType}' processed for tutorial, ignored for GPM score.");
-//            return;
-//        }
-
-//        validExpressiveGestures.Add(new Tuple<string, float>(gestureType, gestureDuration));
-//    }
-
-//    public void ProcessUnprofessionalGesture(string gestureType)
-//    {
-//        if (!isTracking) return;
-//        unprofessionalGestureCount++;
-//        Debug.LogWarning($"[GestureTracker] Flagged unprofessional gesture: {gestureType}");
-
-//        if (hintManager != null)
-//        {
-//            hintManager.ShowDirectMessage("Please maintain appropriate hand posture.");
-//        }
-//    }
-
-//    public int GetUnprofessionalCount() => unprofessionalGestureCount;
-
-//    public (int expressiveCount, float gpm) CalculateGestureMetrics(float sessionDurationSeconds)
-//    {
-//        int expressiveCount = validExpressiveGestures.Count;
-//        float durationMinutes = sessionDurationSeconds > 0 ? sessionDurationSeconds / 60.0f : 0.0f;
-//        float gpm = durationMinutes > 0 ? expressiveCount / durationMinutes : 0.0f;
-//        return (expressiveCount, gpm);
-//    }
-
-//    // Add this method inside GestureTracker.cs if it's missing
-//    public void TriggerOpenPalmEnded()
-//    {
-//        if (hintManager != null)
-//        {
-//            hintManager.HideHintCanvas();
-//        }
-//    }
-//}
