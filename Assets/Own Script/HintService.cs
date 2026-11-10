@@ -30,7 +30,8 @@ public class HintService : MonoBehaviour
         }
 
         // 2. Build context prompt from conversation history
-        string lastUserScript = conversationHistory.Count > 0 ? conversationHistory[conversationHistory.Count - 1].dialogue : "";
+        bool lastIsUser = conversationHistory.Count > 0 && conversationHistory[conversationHistory.Count - 1].speaker == "User";
+        string lastUserScript = lastIsUser ? conversationHistory[conversationHistory.Count - 1].dialogue : "";
         string hintPrompt = PromptBuilder.BuildHintPrompt(activeConfig, conversationHistory, lastUserScript);
 
         // 3. Send network API request to OpenAI
@@ -48,6 +49,10 @@ public class HintService : MonoBehaviour
                     }
 
                     if (uiManager != null) uiManager.SetStatus("Hint Generated");
+                }
+                else if (hintUI != null)
+                {
+                    hintUI.ShowDirectMessage("No hint available. Try again.");
                 }
             },
             err => {

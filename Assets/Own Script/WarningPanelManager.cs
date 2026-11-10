@@ -40,6 +40,8 @@ public class WarningPanelManager : MonoBehaviour
     /// </summary>
     public void ShowWarning(string message)
     {
+
+        Debug.Log($"ShowWarning called. canvas={warningCanvas != null}, group={warningCanvasGroup != null}, text={warningText != null}");
         if (warningCanvas == null || warningCanvasGroup == null || warningText == null) return;
 
         if (activeWarningCoroutine != null)

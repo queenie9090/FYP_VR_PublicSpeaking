@@ -59,11 +59,13 @@ public class SessionResultSaver : MonoBehaviour
             eyeContactPct = eyeContactTracker.CalculateEyeContactScore();
         }
 
+        int totalExpressiveGestures = 0;
         float gpm = 0.0f;
         if (gestureTracker != null)
         {
             gestureTracker.StopTracking();
             var gestureMetrics = gestureTracker.CalculateGestureMetrics(sessionElapsedTimeSeconds);
+            totalExpressiveGestures = gestureMetrics.expressiveCount;
             gpm = gestureMetrics.gpm;
         }
 
@@ -129,9 +131,13 @@ public class SessionResultSaver : MonoBehaviour
         int unprofessionalCount = (gestureTracker != null) ? gestureTracker.GetUnprofessionalCount() : 0;
         int totalHintsUsed = (hintUIController != null) ? hintUIController.GetTotalHintCount() : 0;
 
+        // Format UI Status Text with full breakdown
+        string summaryText = $"Gestures: {totalExpressiveGestures} Hits ({gpm:F1} GPM) | Inappropriate: {unprofessionalCount}";
+        Debug.Log($"[SessionResultSaver] Gesture Summary: {summaryText}");
+
         string summaryPrompt = $"You are an expert VR speech coach. Provide a concise 2-3 sentence constructive feedback summary with actionable suggestions for improvement based on this participant's performance in a '{currentScenario}' simulation: " +
                                $"Overall Score: {overallScore:F0}%, Speech Clarity: {clarityScore:F0}%, Speaking Rate: {overallWpm:F0} WPM, " +
-                               $"Filler Words Used: {totalFillerWordsDetected}, Eye Contact: {eyeContactPct:F0}%, Gestures Rate: {gpm:F1} GPM, " +
+                               $"Filler Words Used: {totalFillerWordsDetected}, Eye Contact: {eyeContactPct:F0}%, Expressive Gestures: {totalExpressiveGestures} ({gpm:F1} GPM), " +
                                $"Hints Requested: {totalHintsUsed}, Unprofessional Gestures Flagged: {unprofessionalCount}.";
 
         string aiSummary = null;
