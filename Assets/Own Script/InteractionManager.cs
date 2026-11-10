@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -36,6 +36,7 @@ public class InteractionManager : MonoBehaviour
     [Header("UI Controls")]
     [SerializeField] private GameObject startConfigPanel;
     [SerializeField] private GameObject emotionPanel;
+    [SerializeField] private GameObject viewNPCFaceButton;
     [SerializeField] private Button startSessionButton;
     [SerializeField] private Button exitButton;
     [SerializeField] private ScenarioBriefingUI scenarioBriefingUI;
@@ -192,7 +193,7 @@ private IEnumerator DebugInitializeXRRoutine()
         string currentSceneName = SceneManager.GetActiveScene().name;
         bool isTutorial = UserSession.IsRunningTutorial || currentSceneName == "TutorialScene";
 
-        if (UserSession.IsRunningTutorial)
+        if (isTutorial)
         {
             activeConfig = new ScenarioConfig
             {
@@ -225,11 +226,17 @@ private IEnumerator DebugInitializeXRRoutine()
         {
             emotionPanel.SetActive(false);
         }
+
+        if (viewNPCFaceButton != null)
+        {
+            viewNPCFaceButton.SetActive(false);
+        }
     }
 
 
     public void OnUserConfirmedStart()
     {
+        if (!isActiveAndEnabled || isSessionActive || isSavingSession) return;
         Debug.Log("[InteractionManager] OnUserConfirmedStart called");
         if (startSessionButton != null)
             startSessionButton.interactable = false;
@@ -283,6 +290,7 @@ private IEnumerator DebugInitializeXRRoutine()
         }
 
         if (emotionPanel != null) emotionPanel.SetActive(true);
+        if (viewNPCFaceButton != null) viewNPCFaceButton.SetActive(true);
         sessionElapsedTimeSeconds = 0f; totalSpeakingTimeSeconds = 0f; totalSilenceTimeSeconds = 0f; totalFillerWordsDetected = 0;
         previousEmotion = "NEUTRAL";
 
@@ -302,6 +310,8 @@ private IEnumerator DebugInitializeXRRoutine()
         StartCoroutine(TrackSessionTimerRoutine());
         StartCoroutine(HandsFreeSpeechInteractionLoop());
     }
+
+    public NPCEmotionController CurrentEmotionController => npcEmotionController;
 
     private IEnumerator TrackSessionTimerRoutine()
     {
@@ -487,7 +497,8 @@ private IEnumerator DebugInitializeXRRoutine()
         uiManager.SetStatus("NPC Speaking...");
         yield return StartCoroutine(PlayNPCAudioRoutine(response.npc_response));
 
-        if ((activeConfig != null && turnCounter >= activeConfig.maxTurnLimit) || (response != null && response.end_conversation))
+        if (activeConfig != null && activeConfig.maxTurnLimit > 0 &&
+            expectedTurnNumber >= activeConfig.maxTurnLimit)
         {
             isSessionActive = false;
             CalculateAndSaveResults();
@@ -834,6 +845,11 @@ private IEnumerator DebugInitializeXRRoutine()
         if (emotionPanel != null)
         {
             emotionPanel.SetActive(false);
+        }
+
+        if (viewNPCFaceButton != null)
+        {
+            viewNPCFaceButton.SetActive(false);
         }
 
         if (startConfigPanel != null)

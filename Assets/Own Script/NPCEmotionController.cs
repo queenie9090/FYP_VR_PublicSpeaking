@@ -6,6 +6,7 @@ public class NPCEmotionController : MonoBehaviour
 {
     [Header("NPC Face")]
     [SerializeField] private SkinnedMeshRenderer headMesh;
+    public SkinnedMeshRenderer HeadMesh => headMesh;
 
     [Header("Emotion Settings")]
     public string currentEmotion = "NEUTRAL";
