@@ -258,8 +258,6 @@ public class InteractionManager : MonoBehaviour
         sessionTimer.ResetTimer();
         totalFillerWordsDetected = 0;
         if (viewNPCFaceButton != null) viewNPCFaceButton.SetActive(true);
-        sessionElapsedTimeSeconds = 0f; totalSpeakingTimeSeconds = 0f; totalSilenceTimeSeconds = 0f; totalFillerWordsDetected = 0;
-        //sessionElapsedTimeSeconds = 0f; totalSpeakingTimeSeconds = 0f; totalSilenceTimeSeconds = 0f;
         previousEmotion = "NEUTRAL";
 
         if (NPCEmotionSessionManager.Instance != null)
