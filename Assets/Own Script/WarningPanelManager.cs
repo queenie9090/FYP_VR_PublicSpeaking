@@ -21,6 +21,10 @@ public class WarningPanelManager : MonoBehaviour
     [SerializeField] private float displayDuration = 3.0f;
     [SerializeField] private float fadeSpeed = 4.0f;
 
+    [Header("Audio Feedback")]
+    [SerializeField] private AudioSource sfxAudioSource;
+    [SerializeField] private AudioClip warningSFX;
+
     private Coroutine activeWarningCoroutine;
 
     private void Start()
@@ -43,6 +47,11 @@ public class WarningPanelManager : MonoBehaviour
 
         Debug.Log($"ShowWarning called. canvas={warningCanvas != null}, group={warningCanvasGroup != null}, text={warningText != null}");
         if (warningCanvas == null || warningCanvasGroup == null || warningText == null) return;
+
+        if (sfxAudioSource != null && warningSFX != null)
+        {
+            sfxAudioSource.PlayOneShot(warningSFX);
+        }
 
         if (activeWarningCoroutine != null)
             StopCoroutine(activeWarningCoroutine);
