@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -47,6 +47,7 @@ public class InteractionManager : MonoBehaviour
     [Header("UI Controls")]
     [SerializeField] private GameObject startConfigPanel;
     [SerializeField] private GameObject emotionPanel;
+    [SerializeField] private GameObject viewNPCFaceButton;
     [SerializeField] private Button startSessionButton;
     [SerializeField] private Button exitButton;
     [SerializeField] private ScenarioBriefingUI scenarioBriefingUI;
@@ -150,7 +151,7 @@ public class InteractionManager : MonoBehaviour
         string currentSceneName = SceneManager.GetActiveScene().name;
         bool isTutorial = UserSession.IsRunningTutorial || currentSceneName == "TutorialScene";
 
-        if (UserSession.IsRunningTutorial)
+        if (isTutorial)
         {
             activeConfig = new ScenarioConfig
             {
@@ -183,11 +184,17 @@ public class InteractionManager : MonoBehaviour
         {
             emotionPanel.SetActive(false);
         }
+
+        if (viewNPCFaceButton != null)
+        {
+            viewNPCFaceButton.SetActive(false);
+        }
     }
 
 
     public void OnUserConfirmedStart()
     {
+        if (!isActiveAndEnabled || isSessionActive || isSavingSession) return;
         Debug.Log("[InteractionManager] OnUserConfirmedStart called");
         if (startSessionButton != null)
             startSessionButton.interactable = false;
@@ -249,8 +256,8 @@ public class InteractionManager : MonoBehaviour
 
         if (emotionPanel != null) emotionPanel.SetActive(true);
         sessionTimer.ResetTimer();
-        //sessionElapsedTimeSeconds = 0f; totalSpeakingTimeSeconds = 0f; totalSilenceTimeSeconds = 0f;
         totalFillerWordsDetected = 0;
+        if (viewNPCFaceButton != null) viewNPCFaceButton.SetActive(true);
         previousEmotion = "NEUTRAL";
 
         if (NPCEmotionSessionManager.Instance != null)
@@ -267,6 +274,8 @@ public class InteractionManager : MonoBehaviour
         StartCoroutine(TrackSessionTimerRoutine());
         StartCoroutine(HandsFreeSpeechInteractionLoop());
     }
+
+    public NPCEmotionController CurrentEmotionController => npcEmotionController;
 
     private IEnumerator TrackSessionTimerRoutine()
     {
@@ -441,6 +450,8 @@ public class InteractionManager : MonoBehaviour
         ));
         //yield return StartCoroutine(PlayNPCAudioRoutine(response.npc_response));
 
+        if (activeConfig != null && activeConfig.maxTurnLimit > 0 &&
+            expectedTurnNumber >= activeConfig.maxTurnLimit)
         if (!isSessionActive) yield break;   // closed during NPC audio (CloseSession already saved)
 
         bool isFinalTurn = activeConfig != null && expectedTurnNumber >= activeConfig.maxTurnLimit;
@@ -601,6 +612,11 @@ public class InteractionManager : MonoBehaviour
         if (emotionPanel != null)
         {
             emotionPanel.SetActive(false);
+        }
+
+        if (viewNPCFaceButton != null)
+        {
+            viewNPCFaceButton.SetActive(false);
         }
 
         if (startConfigPanel != null)
