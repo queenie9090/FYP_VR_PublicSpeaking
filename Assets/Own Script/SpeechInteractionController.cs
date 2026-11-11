@@ -66,7 +66,8 @@ public class SpeechInteractionController : MonoBehaviour
         onTranscriptionComplete?.Invoke();
     }
 
-    public IEnumerator PlayNPCAudioRoutine(string textToSpeak, NPCPersona currentNPC, AudioSource fallbackAudio)
+    public IEnumerator PlayNPCAudioRoutine(string textToSpeak, NPCPersona currentNPC, AudioSource fallbackAudio,
+        int turnNumber = 0)
     {
         bool downloaded = false;
         AudioClip clip = null;
@@ -85,14 +86,25 @@ public class SpeechInteractionController : MonoBehaviour
                 : fallbackAudio;
 
             Animator npcAnimator = currentNPC != null ? currentNPC.GetComponent<Animator>() : null;
-            if (npcAnimator != null) npcAnimator.SetBool("IsTalking", true);
+            bool hasTalkingParameter = npcAnimator != null && Array.Exists(npcAnimator.parameters,
+                parameter => parameter.name == "IsTalking" && parameter.type == AnimatorControllerParameterType.Bool);
+            var body = currentNPC != null ? currentNPC.GetComponentInParent<NPCBodyAnimation>() : null;
 
-            targetSource.clip = clip;
-            targetSource.Play();
-            yield return new WaitForSeconds(0.1f);
-            while (targetSource != null && targetSource.isPlaying) yield return null;
-
-            if (npcAnimator != null) npcAnimator.SetBool("IsTalking", false);
+            if (targetSource == null) yield break;
+            try
+            {
+                targetSource.clip = clip;
+                targetSource.Play();
+                if (hasTalkingParameter) npcAnimator.SetBool("IsTalking", true);
+                if (body != null) body.SetActivity(NPCBodyActivity.SPEAKING, turnNumber);
+                yield return new WaitForSeconds(0.1f);
+                while (targetSource != null && targetSource.isPlaying) yield return null;
+            }
+            finally
+            {
+                if (hasTalkingParameter && npcAnimator != null) npcAnimator.SetBool("IsTalking", false);
+                if (body != null) body.SetActivity(NPCBodyActivity.IDLE);
+            }
         }
     }
 }
