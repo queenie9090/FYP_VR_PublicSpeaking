@@ -10,11 +10,21 @@ public class NPCEmotionRecord
     public string npcName;
     public string emotion;
     public int intensity;
+    public string emotionLogId = Guid.NewGuid().ToString();
+    public string previousEmotion;
+    public string recordedAt;
+    public string emotionTrigger;
 }
 
 public class NPCEmotionSessionManager : MonoBehaviour
 {
     public static NPCEmotionSessionManager Instance { get; private set; }
+    public static NPCEmotionSessionManager EnsureInstance()
+    {
+        if (Instance == null)
+            new GameObject("NPC Emotion Session Manager").AddComponent<NPCEmotionSessionManager>();
+        return Instance;
+    }
 
     [Header("Session Emotion History")]
     [SerializeField]
@@ -24,6 +34,20 @@ public class NPCEmotionSessionManager : MonoBehaviour
         => emotionHistory;
 
     public int TotalEmotionTurns => emotionHistory.Count;
+    private readonly List<BodyAnimationEventRecord> bodyEvents = new();
+    public IReadOnlyList<BodyAnimationEventRecord> BodyAnimationEvents => bodyEvents;
+    public bool IsCollectingBodyEvents { get; private set; }
+
+    public void RecordBodyAnimation(BodyAnimationEventRecord record)
+    {
+        if (IsCollectingBodyEvents && record != null)
+            bodyEvents.Add(record);
+    }
+
+    public void FinishBodyEventCollection()
+    {
+        IsCollectingBodyEvents = false;
+    }
 
     private void Awake()
     {
@@ -40,6 +64,8 @@ public class NPCEmotionSessionManager : MonoBehaviour
     public void StartNewSession()
     {
         emotionHistory.Clear();
+        bodyEvents.Clear();
+        IsCollectingBodyEvents = true;
         Debug.Log("[Emotion Session] New session started.");
     }
 
@@ -47,7 +73,8 @@ public class NPCEmotionSessionManager : MonoBehaviour
         int turnNumber,
         string npcName,
         string emotion,
-        int intensity)
+        int intensity,
+        string emotionTrigger = null)
     {
         if (turnNumber < 1 ||
             string.IsNullOrWhiteSpace(emotion))
@@ -85,12 +112,22 @@ public class NPCEmotionSessionManager : MonoBehaviour
             ? 0
             : Mathf.Clamp(intensity, 0, 100);
 
+        string previous = "NEUTRAL";
+        for (int i = emotionHistory.Count - 1; i >= 0; i--)
+            if (emotionHistory[i].npcName == npcName)
+            {
+                previous = emotionHistory[i].emotion;
+                break;
+            }
         emotionHistory.Add(new NPCEmotionRecord
         {
             turnNumber = turnNumber,
             npcName = npcName,
             emotion = emotion,
-            intensity = validIntensity
+            intensity = validIntensity,
+            previousEmotion = previous,
+            recordedAt = DateTime.UtcNow.ToString("o"),
+            emotionTrigger = emotionTrigger
         });
 
         Debug.Log(

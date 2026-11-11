@@ -33,119 +33,144 @@ public class SupabaseManager : MonoBehaviour
         string feedbackSummary,
         List<DialogueTurnRecord> dialogueTurns,
         Action onSuccess,
-        Action<string> onError)
+        Action<string> onError,
+        List<NPCEmotionRecord> emotions = null,
+        List<BodyAnimationEventRecord> bodyEvents = null)
     {
-        string supabaseUrl = ConfigLoader.GetSupabaseUrl().Trim();
-        string supabaseApiKey = ConfigLoader.GetSupabaseAnonKey().Trim();
-
-        // -------------------------------------------------------------
-        // STEP 1: Insert into 'session' table and return generated session_id
-        // -------------------------------------------------------------
-        string sessionEndpoint = $"{supabaseUrl}/rest/v1/session";
-
-        var sessionPayload = new
+        string key = userId + "|" + startTime;
+        if (!pendingSaves.TryGetValue(key, out var save))
         {
-            user_id = userId,
-            scenario_type = scenarioType,
-            selected_role = selectedRole,
-            scenario_topic = topic,
-            difficulty_level = difficulty,
-            input_mode_used = inputMode,
-            status = sessionStatus,
-            start_time = startTime,
-            end_time = endTime,
-            duration_seconds = durationSeconds
-        };
-
-        string sessionJson = JsonConvert.SerializeObject(sessionPayload);
-        string newSessionId = null;
-
-        using (UnityWebRequest www = CreatePostRequest(sessionEndpoint, sessionJson, supabaseApiKey))
-        {
-            www.SetRequestHeader("Prefer", "return=representation");
-            yield return www.SendWebRequest();
-
-            if (www.result != UnityWebRequest.Result.Success)
+            string sessionId = Guid.NewGuid().ToString();
+            var turns = new List<object>();
+            var logs = new List<object>();
+            var turnIds = new Dictionary<int, string>();
+            foreach (var turn in dialogueTurns ?? new List<DialogueTurnRecord>())
             {
-                onError?.Invoke($"[Session Insert Error] {www.error} | {www.downloadHandler.text}");
-                yield break;
+                string turnId = Guid.NewGuid().ToString();
+                turnIds.Add(turn.turn_sequence, turnId);
+                turns.Add(new { turn_id = turnId, session_id = sessionId,
+                    turn.turn_sequence, turn.user_transcript, turn.ai_response_text,
+                    turn.filler_word_count, turn.speaking_rate_wpm, turn.silence_duration_seconds });
             }
-
-            var createdSessions = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(www.downloadHandler.text);
-            if (createdSessions != null && createdSessions.Count > 0)
+            var previousByNpc = new Dictionary<string, string>();
+            foreach (var emotion in emotions ?? new List<NPCEmotionRecord>())
             {
-                newSessionId = createdSessions[0]["session_id"].ToString();
-            }
-        }
-
-        if (string.IsNullOrEmpty(newSessionId))
-        {
-            onError?.Invoke("Failed to retrieve generated session_id from database.");
-            yield break;
-        }
-
-        // -------------------------------------------------------------
-        // STEP 2: Insert into 'performance_metric' table using foreign key
-        // -------------------------------------------------------------
-        string metricEndpoint = $"{supabaseUrl}/rest/v1/performance_metric";
-        var metricData = new
-        {
-            session_id = newSessionId,
-            overall_score = overallScore,
-            speech_clarity_score = clarityScore,
-            eye_contact_pct = eyeContactPct,
-            hand_gesture_score = gestureScore,
-            average_wpm = wpm,
-            filler_word_count = totalFillers,
-            gestures_per_minute = gpm,
-            total_silence_seconds = totalSilenceSeconds,
-            ai_feedback_summary = feedbackSummary
-        };
-
-        using (UnityWebRequest www = CreatePostRequest(metricEndpoint, JsonConvert.SerializeObject(metricData), supabaseApiKey))
-        {
-            yield return www.SendWebRequest();
-            if (www.result != UnityWebRequest.Result.Success)
-            {
-                onError?.Invoke($"[Metric Insert Error] {www.error} | {www.downloadHandler.text}");
-                yield break;
-            }
-        }
-
-        // -------------------------------------------------------------
-        // STEP 3: Insert dialogue turns into 'dialogue_turn' table
-        // -------------------------------------------------------------
-        if (dialogueTurns != null && dialogueTurns.Count > 0)
-        {
-            string turnEndpoint = $"{supabaseUrl}/rest/v1/dialogue_turn";
-            List<object> turnPayloads = new List<object>();
-
-            for (int i = 0; i < dialogueTurns.Count; i++)
-            {
-                turnPayloads.Add(new
+                if (!turnIds.TryGetValue(emotion.turnNumber, out string turnId))
                 {
-                    session_id = newSessionId,
-                    turn_sequence = i + 1,
-                    user_transcript = dialogueTurns[i].user_transcript,
-                    ai_response_text = dialogueTurns[i].ai_response_text,
-                    filler_word_count = dialogueTurns[i].filler_word_count,
-                    speaking_rate_wpm = dialogueTurns[i].speaking_rate_wpm,
-                    silence_duration_seconds = dialogueTurns[i].silence_duration_seconds
-                });
-            }
-
-            using (UnityWebRequest www = CreatePostRequest(turnEndpoint, JsonConvert.SerializeObject(turnPayloads), supabaseApiKey))
-            {
-                yield return www.SendWebRequest();
-                if (www.result != UnityWebRequest.Result.Success)
-                {
-                    onError?.Invoke($"[Dialogue Turn Insert Error] {www.error} | {www.downloadHandler.text}");
+                    onError?.Invoke("[Emotion mapping] No dialogue turn for emotion turn " + emotion.turnNumber);
                     yield break;
                 }
+                string npcName = string.IsNullOrWhiteSpace(emotion.npcName) ? "NPC" : emotion.npcName;
+                string previous = emotion.previousEmotion;
+                if (string.IsNullOrEmpty(previous))
+                    previous = previousByNpc.TryGetValue(npcName, out var last) ? last : "NEUTRAL";
+                previousByNpc[npcName] = emotion.emotion;
+                if (string.IsNullOrEmpty(emotion.emotionLogId)) emotion.emotionLogId = Guid.NewGuid().ToString();
+                logs.Add(new { emotion_log_id = emotion.emotionLogId, turn_id = turnId,
+                    npc_name = npcName, previous_emotion = previous,
+                    current_emotion = emotion.emotion, emotion_intensity = emotion.intensity,
+                    emotion_trigger = emotion.emotionTrigger, recorded_at = emotion.recordedAt ?? endTime });
+            }
+            var animationLogs = new List<object>();
+            foreach (var record in bodyEvents ?? new List<BodyAnimationEventRecord>())
+            {
+                // Listening can begin before any transcript exists. Such events are session-only.
+                turnIds.TryGetValue(record.turnNumber, out string turnId);
+                animationLogs.Add(new {
+                    record.animation_event_id, record.npc_id, record.npc_type, record.scene_type,
+                    record.npc_activity, record.emotion, record.animation_name, record.timestamp,
+                    session_id = sessionId, turn_id = turnId
+                });
+            }
+            save = new PendingSave
+            {
+                UserId = userId,
+                SessionId = sessionId,
+                Operation = animationLogs.Count > 0 ? "save_training_session_v2" : "save_training_session",
+                Json = JsonConvert.SerializeObject(new { payload = new {
+                    session = new { session_id = sessionId, user_id = userId,
+                        scenario_type = scenarioType, selected_role = selectedRole,
+                        scenario_topic = topic, difficulty_level = difficulty, input_mode_used = inputMode,
+                        status = sessionStatus, start_time = startTime, end_time = endTime,
+                        duration_seconds = durationSeconds },
+                    metric = new { metric_id = Guid.NewGuid().ToString(), session_id = sessionId,
+                        overall_score = overallScore, speech_clarity_score = clarityScore,
+                        eye_contact_pct = eyeContactPct, hand_gesture_score = gestureScore,
+                        average_wpm = wpm, filler_word_count = totalFillers, gestures_per_minute = gpm,
+                        total_silence_seconds = totalSilenceSeconds, ai_feedback_summary = feedbackSummary },
+                    turns, emotions = logs, body_events = animationLogs } })
+            };
+            pendingSaves.Add(key, save);
+        }
+        yield return SubmitPending(save, onSuccess, onError);
+    }
+
+    private class PendingSave
+    {
+        public string UserId;
+        public string SessionId;
+        public string Json;
+        public string Operation;
+        public bool Saving;
+        public bool Saved;
+    }
+
+    private static readonly Dictionary<string, PendingSave> pendingSaves = new();
+
+    [ContextMenu("Retry Pending Session Saves")]
+    public void RetryPendingSaves()
+    {
+        foreach (var save in new List<PendingSave>(pendingSaves.Values))
+            if (!save.Saved && !save.Saving && save.UserId == UserSession.CurrentUserId)
+                NPCEmotionSessionManager.EnsureInstance().StartCoroutine(SubmitPending(save, null, null));
+    }
+
+    private static IEnumerator SubmitPending(PendingSave save, Action onSuccess, Action<string> onError)
+    {
+        while (save.Saving) yield return null;
+        if (save.Saved) { onSuccess?.Invoke(); yield break; }
+        var auth = UserSession.AuthClient?.Auth;
+        string token = auth?.CurrentSession?.AccessToken;
+        if (string.IsNullOrEmpty(token) || auth.CurrentUser?.Id != save.UserId)
+        {
+            string error = "[Session save] Sign in as the session owner before retrying. Data retained in memory.";
+            Debug.LogError(error);
+            onError?.Invoke(error);
+            yield break;
+        }
+        save.Saving = true;
+        try
+        {
+            using (var request = new UnityWebRequest(
+                ConfigLoader.GetSupabaseUrl().TrimEnd('/') + "/rest/v1/rpc/" + save.Operation, "POST"))
+            {
+                request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(save.Json));
+                request.downloadHandler = new DownloadHandlerBuffer();
+                request.timeout = 45;
+                request.SetRequestHeader("Content-Type", "application/json");
+                request.SetRequestHeader("apikey", ConfigLoader.GetSupabaseAnonKey().Trim());
+                request.SetRequestHeader("Authorization", "Bearer " + token);
+                yield return request.SendWebRequest();
+                if (request.result != UnityWebRequest.Result.Success)
+                {
+                    string error = $"[{save.Operation} HTTP {request.responseCode}] {request.error} | {request.downloadHandler.text}";
+                    Debug.LogError(error);
+                    onError?.Invoke(error);
+                    yield break;
+                }
+                if (request.downloadHandler.text.Trim().Trim('"') != save.SessionId)
+                {
+                    const string error = "[Session save] Unexpected confirmation. Data retained for retry.";
+                    Debug.LogError(error);
+                    onError?.Invoke(error);
+                    yield break;
+                }
+                save.Saved = true;
+                Debug.Log("[Session save] Confirmed all submitted session records: " + save.SessionId);
+                onSuccess?.Invoke();
             }
         }
-
-        onSuccess?.Invoke();
+        finally { save.Saving = false; }
     }
 
     /// <summary>
@@ -162,7 +187,7 @@ public class SupabaseManager : MonoBehaviour
             : userId;
 
         // Escape query params so PostgREST parses joined tables correctly
-        string rawSelect = "*,performance_metric(*),dialogue_turn(*)";
+        string rawSelect = "*,performance_metric(*),dialogue_turn(*,npc_emotion_log(*))";
         string encodedSelect = UnityWebRequest.EscapeURL(rawSelect);
 
         string endpoint = $"{supabaseUrl}/rest/v1/session?user_id=eq.{validUserId}&select={encodedSelect}&order=start_time.desc&limit=1";
@@ -170,7 +195,7 @@ public class SupabaseManager : MonoBehaviour
         using (UnityWebRequest www = UnityWebRequest.Get(endpoint))
         {
             www.SetRequestHeader("apikey", supabaseApiKey);
-            www.SetRequestHeader("Authorization", "Bearer " + supabaseApiKey);
+            www.SetRequestHeader("Authorization", "Bearer " + (UserSession.AuthClient?.Auth.CurrentSession?.AccessToken ?? supabaseApiKey));
             www.SetRequestHeader("Accept", "application/json");
 
             yield return www.SendWebRequest();
@@ -224,7 +249,7 @@ public class SupabaseManager : MonoBehaviour
             : userId;
 
         // Escape query params so PostgREST parses joined tables correctly
-        string rawSelect = "*,performance_metric(*),dialogue_turn(*)";
+        string rawSelect = "*,performance_metric(*),dialogue_turn(*,npc_emotion_log(*))";
         string encodedSelect = UnityWebRequest.EscapeURL(rawSelect);
 
         string endpoint = $"{supabaseUrl}/rest/v1/session?user_id=eq.{validUserId}&select={encodedSelect}&order=start_time.desc";
@@ -232,7 +257,7 @@ public class SupabaseManager : MonoBehaviour
         using (UnityWebRequest request = UnityWebRequest.Get(endpoint))
         {
             request.SetRequestHeader("apikey", supabaseApiKey);
-            request.SetRequestHeader("Authorization", $"Bearer {supabaseApiKey}");
+            request.SetRequestHeader("Authorization", "Bearer " + (UserSession.AuthClient?.Auth.CurrentSession?.AccessToken ?? supabaseApiKey));
             request.SetRequestHeader("Accept", "application/json");
 
             yield return request.SendWebRequest();
@@ -273,7 +298,7 @@ public class SupabaseManager : MonoBehaviour
         string supabaseApiKey = ConfigLoader.GetSupabaseAnonKey().Trim();
 
         // Select all sessions and join performance_metric + dialogue_turn tables
-        string rawSelect = "*,performance_metric(*),dialogue_turn(*)";
+        string rawSelect = "*,performance_metric(*),dialogue_turn(*,npc_emotion_log(*))";
         string encodedSelect = UnityWebRequest.EscapeURL(rawSelect);
 
         string endpoint = $"{supabaseUrl}/rest/v1/session?select={encodedSelect}&order=start_time.desc";
@@ -281,7 +306,7 @@ public class SupabaseManager : MonoBehaviour
         using (UnityWebRequest request = UnityWebRequest.Get(endpoint))
         {
             request.SetRequestHeader("apikey", supabaseApiKey);
-            request.SetRequestHeader("Authorization", $"Bearer {supabaseApiKey}");
+            request.SetRequestHeader("Authorization", "Bearer " + (UserSession.AuthClient?.Auth.CurrentSession?.AccessToken ?? supabaseApiKey));
             request.SetRequestHeader("Accept", "application/json");
 
             yield return request.SendWebRequest();

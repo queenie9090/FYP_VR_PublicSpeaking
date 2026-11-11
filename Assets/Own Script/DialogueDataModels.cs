@@ -41,12 +41,27 @@ public class DialogueTurn
 [Serializable]
 public class DialogueTurnRecord
 {
+    public string turn_id;
+    public List<NPCEmotionLogData> npc_emotion_log;
     public int turn_sequence;
     public string user_transcript;
     public string ai_response_text;
     public int filler_word_count;
     public float speaking_rate_wpm;
     public float silence_duration_seconds; 
+}
+
+[Serializable]
+public class NPCEmotionLogData
+{
+    public string emotion_log_id;
+    public string turn_id;
+    public string npc_name;
+    public string previous_emotion;
+    public string current_emotion;
+    public int emotion_intensity;
+    public string emotion_trigger;
+    public string recorded_at;
 }
 
 [Serializable]

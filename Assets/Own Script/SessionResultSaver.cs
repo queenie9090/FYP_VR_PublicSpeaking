@@ -22,12 +22,24 @@ public class SessionResultSaver : MonoBehaviour
         GestureTracker gestureTracker,
         HintUIController hintUIController,
         DialogueUIManager uiManager,
-        Action onComplete)
+        Action onComplete,
+        string sessionStatus = "Completed")
     {
-        StartCoroutine(ProcessResultsRoutine(
-            activeConfig, conversationHistory, sessionElapsedTimeSeconds,
+        if (sessionStartTimestamp == default) return;
+        if (supabaseManager == null) supabaseManager = FindFirstObjectByType<SupabaseManager>();
+        if (openAIManager == null) openAIManager = FindFirstObjectByType<OpenAIManager>();
+        var runner = NPCEmotionSessionManager.EnsureInstance();
+        if (supabaseManager == null)
+            supabaseManager = runner.GetComponent<SupabaseManager>() ??
+                runner.gameObject.AddComponent<SupabaseManager>();
+        var emotions = new List<NPCEmotionRecord>(runner.EmotionHistory);
+        runner.FinishBodyEventCollection();
+        var bodyEvents = new List<BodyAnimationEventRecord>(runner.BodyAnimationEvents);
+        runner.StartCoroutine(ProcessResultsRoutine(
+            activeConfig, new List<DialogueTurn>(conversationHistory), sessionElapsedTimeSeconds,
             totalSpeakingTimeSeconds, totalSilenceTimeSeconds, totalFillerWordsDetected,
-            sessionStartTimestamp, eyeContactTracker, gestureTracker, hintUIController, uiManager, onComplete
+            sessionStartTimestamp, eyeContactTracker, gestureTracker, hintUIController, uiManager, onComplete,
+            sessionStatus, emotions, bodyEvents
         ));
     }
 
@@ -43,7 +55,10 @@ public class SessionResultSaver : MonoBehaviour
         GestureTracker gestureTracker,
         HintUIController hintUIController,
         DialogueUIManager uiManager,
-        Action onComplete)
+        Action onComplete,
+        string sessionStatus,
+        List<NPCEmotionRecord> emotions,
+        List<BodyAnimationEventRecord> bodyEvents)
     {
         if (uiManager != null) uiManager.SetStatus("Saving Results...");
 
@@ -69,17 +84,6 @@ public class SessionResultSaver : MonoBehaviour
             gpm = gestureMetrics.gpm;
         }
 
-        // 2. Tutorial Bypass (Does not save to DB)
-        string currentScene = SceneManager.GetActiveScene().name;
-        bool isTutorial = UserSession.IsRunningTutorial || currentScene == "TutorialScene";
-        if (isTutorial)
-        {
-            Debug.Log("[SessionResultSaver] Tutorial completed. Bypassing database save.");
-            if (uiManager != null) uiManager.SetStatus("Calibration Complete!");
-            onComplete?.Invoke();
-            yield break;
-        }
-
         // 3. Guest Mode Bypass (Prevents 23503 Foreign Key error)
         if (!UserSession.IsLoggedIn || string.IsNullOrEmpty(UserSession.CurrentUserId))
         {
@@ -93,20 +97,32 @@ public class SessionResultSaver : MonoBehaviour
         int totalWordsSpoken = 0;
         List<DialogueTurnRecord> turnRecords = new List<DialogueTurnRecord>();
 
-        for (int i = 0; i < conversationHistory.Count; i += 2)
+        var pairs = new List<(DialogueTurn user, DialogueTurn npc)>();
+        DialogueTurn pendingUser = null;
+        foreach (var entry in conversationHistory)
         {
-            string userText = conversationHistory[i].dialogue;
-            string aiText = (i + 1 < conversationHistory.Count) ? conversationHistory[i + 1].dialogue : "";
-            int turnFillers = conversationHistory[i].fillerWordCount;
-            float userDurationSec = conversationHistory[i].speechDuration;
-            float turnSilenceSec = conversationHistory[i].silenceDuration;
+            if (entry.speaker == "User") pendingUser = entry;
+            else if (entry.speaker == "NPC")
+            {
+                pairs.Add((pendingUser, entry));
+                pendingUser = null;
+            }
+        }
+        if (pendingUser != null) pairs.Add((pendingUser, null));
+        for (int i = 0; i < pairs.Count; i++)
+        {
+            string userText = pairs[i].user?.dialogue ?? "";
+            string aiText = pairs[i].npc?.dialogue ?? "";
+            int turnFillers = pairs[i].user?.fillerWordCount ?? 0;
+            float userDurationSec = pairs[i].user?.speechDuration ?? 0f;
+            float turnSilenceSec = pairs[i].user?.silenceDuration ?? 0f;
 
             var (wordCount, turnWpm) = MetricsCalculator.CalculateSpeakingRate(userText, userDurationSec);
             totalWordsSpoken += wordCount;
 
             turnRecords.Add(new DialogueTurnRecord
             {
-                turn_sequence = (i / 2) + 1,
+                turn_sequence = i + 1,
                 user_transcript = userText,
                 ai_response_text = aiText,
                 filler_word_count = turnFillers,
@@ -143,7 +159,8 @@ public class SessionResultSaver : MonoBehaviour
         string aiSummary = null;
         bool aiSummaryDone = false;
 
-        StartCoroutine(openAIManager.SendChatRequest(
+        if (!ReferenceEquals(openAIManager, null))
+        yield return openAIManager.SendChatRequest(
             summaryPrompt, conversationHistory, "Generate Summary",
             res => {
                 aiSummary = (res != null && !string.IsNullOrEmpty(res.npc_response)) ? res.npc_response : $"Your overall performance scored {overallScore:F0}%.";
@@ -153,12 +170,12 @@ public class SessionResultSaver : MonoBehaviour
                 aiSummary = $"Your overall performance scored {overallScore:F0}%.";
                 aiSummaryDone = true;
             }
-        ));
+        );
 
-        yield return new WaitUntil(() => aiSummaryDone);
+        if (!aiSummaryDone) aiSummary = $"Your overall performance scored {overallScore:F0}%.";
 
         // 6. Supabase database save
-        if (supabaseManager != null)
+        if (!ReferenceEquals(supabaseManager, null))
         {
             // Change 'turnRecords: turnRecords' to 'dialogueTurns: turnRecords'
             yield return supabaseManager.SaveSessionNormalized(
@@ -168,7 +185,7 @@ public class SessionResultSaver : MonoBehaviour
                 topic: activeConfig != null ? activeConfig.topic : "General",
                 difficulty: activeConfig != null ? activeConfig.difficulty : "Medium",
                 inputMode: UserSession.InputMode,
-                sessionStatus: "Completed",
+                sessionStatus: sessionStatus,
                 startTime: startTimeIso,
                 endTime: endTimeIso,
                 durationSeconds: sessionElapsedTimeSeconds,
@@ -181,7 +198,9 @@ public class SessionResultSaver : MonoBehaviour
                 gpm: gpm,
                 totalSilenceSeconds: totalSilenceTimeSeconds,
                 feedbackSummary: aiSummary,
-                dialogueTurns: turnRecords, // <-- FIX: Renamed from turnRecords to dialogueTurns
+                dialogueTurns: turnRecords,
+                emotions: emotions,
+                bodyEvents: bodyEvents,
                 onSuccess: () => {
                     Debug.Log("[SessionResultSaver] Session successfully saved!");
                     if (uiManager != null) uiManager.SetStatus("Session Saved!");
@@ -196,6 +215,7 @@ public class SessionResultSaver : MonoBehaviour
         }
         else
         {
+            Debug.LogError("[SessionResultSaver] SupabaseManager missing. Session was not saved.");
             onComplete?.Invoke();
         }
     }
