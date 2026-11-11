@@ -22,8 +22,6 @@ public class SessionResultSaver : MonoBehaviour
         GestureTracker gestureTracker,
         HintUIController hintUIController,
         DialogueUIManager uiManager,
-        string sessionStatus, 
-        Action onComplete)
         Action onComplete,
         string sessionStatus = "Completed")
     {
@@ -40,7 +38,6 @@ public class SessionResultSaver : MonoBehaviour
         runner.StartCoroutine(ProcessResultsRoutine(
             activeConfig, new List<DialogueTurn>(conversationHistory), sessionElapsedTimeSeconds,
             totalSpeakingTimeSeconds, totalSilenceTimeSeconds, totalFillerWordsDetected,
-            sessionStartTimestamp, eyeContactTracker, gestureTracker, hintUIController, uiManager, sessionStatus, onComplete
             sessionStartTimestamp, eyeContactTracker, gestureTracker, hintUIController, uiManager, onComplete,
             sessionStatus, emotions, bodyEvents
         ));
@@ -58,8 +55,6 @@ public class SessionResultSaver : MonoBehaviour
         GestureTracker gestureTracker,
         HintUIController hintUIController,
         DialogueUIManager uiManager,
-        string sessionStatus,
-        Action onComplete)
         Action onComplete,
         string sessionStatus,
         List<NPCEmotionRecord> emotions,
@@ -170,7 +165,7 @@ public class SessionResultSaver : MonoBehaviour
         {
             bool aiSummaryDone = false;
 
-            StartCoroutine(openAIManager.SendChatRequest(
+            NPCEmotionSessionManager.EnsureInstance().StartCoroutine(openAIManager.SendChatRequest(
                 summaryPrompt, conversationHistory, "Generate Summary",
                 res =>
                 {
@@ -191,18 +186,7 @@ public class SessionResultSaver : MonoBehaviour
             {
                 waited += Time.unscaledDeltaTime;
                 yield return null;
-        if (!ReferenceEquals(openAIManager, null))
-        yield return openAIManager.SendChatRequest(
-            summaryPrompt, conversationHistory, "Generate Summary",
-            res => {
-                aiSummary = (res != null && !string.IsNullOrEmpty(res.npc_response)) ? res.npc_response : $"Your overall performance scored {overallScore:F0}%.";
-                aiSummaryDone = true;
-            },
-            err => {
-                aiSummary = $"Your overall performance scored {overallScore:F0}%.";
-                aiSummaryDone = true;
             }
-        );
 
             if (!aiSummaryDone)
                 Debug.LogWarning("[SessionResultSaver] OpenAI summary timed out. Using default summary.");
@@ -211,7 +195,6 @@ public class SessionResultSaver : MonoBehaviour
         {
             Debug.LogWarning("[SessionResultSaver] OpenAIManager not found. Using default summary.");
         }
-        if (!aiSummaryDone) aiSummary = $"Your overall performance scored {overallScore:F0}%.";
 
         // 6. Supabase database save
         if (supabaseManager == null)
@@ -219,7 +202,6 @@ public class SessionResultSaver : MonoBehaviour
             supabaseManager = GetComponent<SupabaseManager>() ?? FindObjectOfType<SupabaseManager>();
         }
 
-        if (supabaseManager != null)
         if (!ReferenceEquals(supabaseManager, null))
         {
             yield return supabaseManager.SaveSessionNormalized(
@@ -242,9 +224,6 @@ public class SessionResultSaver : MonoBehaviour
                 gpm: gpm,
                 totalSilenceSeconds: totalSilenceTimeSeconds,
                 feedbackSummary: aiSummary,
-                dialogueTurns: turnRecords,
-                onSuccess: () =>
-                {
                 dialogueTurns: turnRecords,
                 emotions: emotions,
                 bodyEvents: bodyEvents,

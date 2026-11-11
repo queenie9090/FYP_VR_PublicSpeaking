@@ -496,7 +496,6 @@ public class InteractionManager : MonoBehaviour
             sessionTimer.TotalSpeakingTimeSeconds, sessionTimer.TotalSilenceTimeSeconds, totalFillerWordsDetected,
             sessionTimer.StartTimestamp,
             eyeContactTracker, gestureTracker, hintUIController, uiManager,
-            sessionCompletionStatus, 
             onComplete: () => {
                 if (this == null) return;
                 isSavingSession = false;
