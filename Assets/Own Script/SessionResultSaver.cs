@@ -22,6 +22,8 @@ public class SessionResultSaver : MonoBehaviour
         GestureTracker gestureTracker,
         HintUIController hintUIController,
         DialogueUIManager uiManager,
+        string sessionStatus, 
+        Action onComplete)
         Action onComplete,
         string sessionStatus = "Completed")
     {
@@ -38,6 +40,7 @@ public class SessionResultSaver : MonoBehaviour
         runner.StartCoroutine(ProcessResultsRoutine(
             activeConfig, new List<DialogueTurn>(conversationHistory), sessionElapsedTimeSeconds,
             totalSpeakingTimeSeconds, totalSilenceTimeSeconds, totalFillerWordsDetected,
+            sessionStartTimestamp, eyeContactTracker, gestureTracker, hintUIController, uiManager, sessionStatus, onComplete
             sessionStartTimestamp, eyeContactTracker, gestureTracker, hintUIController, uiManager, onComplete,
             sessionStatus, emotions, bodyEvents
         ));
@@ -55,6 +58,8 @@ public class SessionResultSaver : MonoBehaviour
         GestureTracker gestureTracker,
         HintUIController hintUIController,
         DialogueUIManager uiManager,
+        string sessionStatus,
+        Action onComplete)
         Action onComplete,
         string sessionStatus,
         List<NPCEmotionRecord> emotions,
@@ -144,10 +149,12 @@ public class SessionResultSaver : MonoBehaviour
         // 5. OpenAI Summary feedback generation
         if (uiManager != null) uiManager.SetStatus("Generating AI Feedback...");
 
+        if (openAIManager == null)
+            openAIManager = GetComponent<OpenAIManager>() ?? FindObjectOfType<OpenAIManager>();
+
         int unprofessionalCount = (gestureTracker != null) ? gestureTracker.GetUnprofessionalCount() : 0;
         int totalHintsUsed = (hintUIController != null) ? hintUIController.GetTotalHintCount() : 0;
 
-        // Format UI Status Text with full breakdown
         string summaryText = $"Gestures: {totalExpressiveGestures} Hits ({gpm:F1} GPM) | Inappropriate: {unprofessionalCount}";
         Debug.Log($"[SessionResultSaver] Gesture Summary: {summaryText}");
 
@@ -156,9 +163,34 @@ public class SessionResultSaver : MonoBehaviour
                                $"Filler Words Used: {totalFillerWordsDetected}, Eye Contact: {eyeContactPct:F0}%, Expressive Gestures: {totalExpressiveGestures} ({gpm:F1} GPM), " +
                                $"Hints Requested: {totalHintsUsed}, Unprofessional Gestures Flagged: {unprofessionalCount}.";
 
-        string aiSummary = null;
-        bool aiSummaryDone = false;
+        // Default summary is used if OpenAI is missing, fails, or times out
+        string aiSummary = $"Your overall performance scored {overallScore:F0}%.";
 
+        if (openAIManager != null)
+        {
+            bool aiSummaryDone = false;
+
+            StartCoroutine(openAIManager.SendChatRequest(
+                summaryPrompt, conversationHistory, "Generate Summary",
+                res =>
+                {
+                    if (res != null && !string.IsNullOrEmpty(res.npc_response))
+                        aiSummary = res.npc_response;
+                    aiSummaryDone = true;
+                },
+                err =>
+                {
+                    Debug.LogWarning($"[SessionResultSaver] OpenAI summary failed: {err}");
+                    aiSummaryDone = true;
+                }
+            ));
+
+            // Wait for the response, but give up after 30s so the save can't hang
+            float waited = 0f;
+            while (!aiSummaryDone && waited < 30f)
+            {
+                waited += Time.unscaledDeltaTime;
+                yield return null;
         if (!ReferenceEquals(openAIManager, null))
         yield return openAIManager.SendChatRequest(
             summaryPrompt, conversationHistory, "Generate Summary",
@@ -172,12 +204,24 @@ public class SessionResultSaver : MonoBehaviour
             }
         );
 
+            if (!aiSummaryDone)
+                Debug.LogWarning("[SessionResultSaver] OpenAI summary timed out. Using default summary.");
+        }
+        else
+        {
+            Debug.LogWarning("[SessionResultSaver] OpenAIManager not found. Using default summary.");
+        }
         if (!aiSummaryDone) aiSummary = $"Your overall performance scored {overallScore:F0}%.";
 
         // 6. Supabase database save
+        if (supabaseManager == null)
+        {
+            supabaseManager = GetComponent<SupabaseManager>() ?? FindObjectOfType<SupabaseManager>();
+        }
+
+        if (supabaseManager != null)
         if (!ReferenceEquals(supabaseManager, null))
         {
-            // Change 'turnRecords: turnRecords' to 'dialogueTurns: turnRecords'
             yield return supabaseManager.SaveSessionNormalized(
                 userId: activeUserId,
                 scenarioType: currentScenario,
@@ -199,6 +243,9 @@ public class SessionResultSaver : MonoBehaviour
                 totalSilenceSeconds: totalSilenceTimeSeconds,
                 feedbackSummary: aiSummary,
                 dialogueTurns: turnRecords,
+                onSuccess: () =>
+                {
+                dialogueTurns: turnRecords,
                 emotions: emotions,
                 bodyEvents: bodyEvents,
                 onSuccess: () => {
@@ -206,7 +253,8 @@ public class SessionResultSaver : MonoBehaviour
                     if (uiManager != null) uiManager.SetStatus("Session Saved!");
                     onComplete?.Invoke();
                 },
-                onError: (err) => {
+                onError: (err) =>
+                {
                     Debug.LogError($"[SessionResultSaver] Save Failed: {err}");
                     if (uiManager != null) uiManager.SetStatus("Save Failed!");
                     onComplete?.Invoke();
@@ -215,6 +263,7 @@ public class SessionResultSaver : MonoBehaviour
         }
         else
         {
+            Debug.LogWarning("[SessionResultSaver] SupabaseManager component not found in scene. Skipping database save.");
             Debug.LogError("[SessionResultSaver] SupabaseManager missing. Session was not saved.");
             onComplete?.Invoke();
         }

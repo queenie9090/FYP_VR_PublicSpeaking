@@ -66,7 +66,7 @@ public class InteractionManager : MonoBehaviour
     private bool leaveAfterSessionEnds = false;
     private string sessionCompletionStatus = "Completed";
     private Coroutine initiationCoroutine;
-
+    private Coroutine activeSpeechLoopCoroutine;
 
     private void Start()
     {
@@ -100,7 +100,7 @@ public class InteractionManager : MonoBehaviour
             SelectActiveNPC(roomNPCs[0]);
         }
 
-        if (exitButton != null) exitButton.onClick.AddListener(ExitSession);
+        //if (exitButton != null) exitButton.onClick.AddListener(ExitSession);
 
         if (hintUIController == null)
             hintUIController = FindObjectOfType<HintUIController>();
@@ -175,7 +175,7 @@ public class InteractionManager : MonoBehaviour
             scenarioBriefingUI.SetupBriefing(activeConfig);
         }
 
-        if (!isTutorial && objectiveManager != null && activeConfig != null)
+        if (!isTutorial && objectiveManager != null)
         {
             objectiveManager.SetPanelActive(true);
         }
@@ -270,7 +270,8 @@ public class InteractionManager : MonoBehaviour
         if (uiManager != null && activeConfig != null) uiManager.InitTurnCounter(activeConfig.maxTurnLimit);
 
         StartCoroutine(TrackSessionTimerRoutine());
-        StartCoroutine(HandsFreeSpeechInteractionLoop());
+        if (activeSpeechLoopCoroutine != null) StopCoroutine(activeSpeechLoopCoroutine);
+        activeSpeechLoopCoroutine = StartCoroutine(HandsFreeSpeechInteractionLoop());
     }
 
     public NPCEmotionController CurrentEmotionController => npcEmotionController;
@@ -493,8 +494,9 @@ public class InteractionManager : MonoBehaviour
         resultSaver.ProcessAndSaveResults(
             activeConfig, conversationHistory, sessionTimer.ElapsedTimeSeconds,
             sessionTimer.TotalSpeakingTimeSeconds, sessionTimer.TotalSilenceTimeSeconds, totalFillerWordsDetected,
-            sessionTimer.StartTimestamp, // Pulls exact start time captured by SessionTimer
+            sessionTimer.StartTimestamp,
             eyeContactTracker, gestureTracker, hintUIController, uiManager,
+            sessionCompletionStatus, 
             onComplete: () => {
                 if (this == null) return;
                 isSavingSession = false;
@@ -510,9 +512,23 @@ public class InteractionManager : MonoBehaviour
     /// </summary>
     public void CloseSession()
     {
+        // GUARD: Prevent re-entry while a save sequence is actively running
+        if (isSavingSession)
+        {
+            Debug.LogWarning("[InteractionManager] CloseSession ignored: Session save already in progress.");
+            return;
+        }
+
         if (isSavingSession) return;
         SetNPCBodyActivity(NPCBodyActivity.IDLE);
         leaveAfterSessionEnds = false; // Stay in the scene!
+
+        if (activeSpeechLoopCoroutine != null)
+        {
+            StopCoroutine(activeSpeechLoopCoroutine);
+            activeSpeechLoopCoroutine = null;
+        }
+
         SetLocomotionEnabled(true);
 
         if (initiationCoroutine != null)
@@ -532,7 +548,6 @@ public class InteractionManager : MonoBehaviour
             fallbackNpcAudioSource.Stop();
         }
 
-
         if (audioRecorder != null)
         {
             audioRecorder.StopRecording();
@@ -540,15 +555,8 @@ public class InteractionManager : MonoBehaviour
 
         StopMetricCollection();
 
-        if (emotionPanel != null)
-        {
-            emotionPanel.SetActive(false);
-        }
-
-        if (startConfigPanel != null)
-        {
-            startConfigPanel.SetActive(false);
-        }
+        if (emotionPanel != null) emotionPanel.SetActive(false);
+        if (startConfigPanel != null) startConfigPanel.SetActive(false);
 
         // Save results if session is active
         if (isSessionActive)
@@ -559,15 +567,7 @@ public class InteractionManager : MonoBehaviour
         }
         else
         {
-            if (uiManager != null)
-            {
-                uiManager.SetStatus("Chat ended.");
-            }
-            if (emotionPanel != null)
-            {
-                emotionPanel.SetActive(false);
-            }
-
+            if (uiManager != null) uiManager.SetStatus("Chat ended.");
             isSessionActive = false;
             OnSessionCompletedSequence();
         }
@@ -654,6 +654,7 @@ public class InteractionManager : MonoBehaviour
     }
 
     private bool isExiting = false;
+
     // Call this method when the player interacts with or walks into the Exit Door / Zone
     public void ExecuteSceneTransition()
     {
@@ -664,13 +665,19 @@ public class InteractionManager : MonoBehaviour
 
     private IEnumerator ExecuteSceneTransitionRoutine()
     {
-        while (isSavingSession)
+        float timeoutCounter = 0f;
+
+        // Timeout safeguard prevents infinite loading hangs if network save stalls
+        while (isSavingSession && timeoutCounter < 5.0f)
         {
             if (uiManager != null) uiManager.SetStatus("Saving progress... Please wait.");
             yield return new WaitForSeconds(0.5f);
+            timeoutCounter += 0.5f;
         }
 
+        isSavingSession = false;
         isSessionActive = false;
+
         yield return transitionController.ExecuteSceneTransitionRoutine(activeConfig, uiManager);
     }
 

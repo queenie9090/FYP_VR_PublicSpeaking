@@ -48,8 +48,14 @@ public class ScenarioTransitionController : MonoBehaviour
     public IEnumerator ExecuteSceneTransitionRoutine(ScenarioConfig activeConfig, DialogueUIManager uiManager)
     {
         string targetScene = defaultDashboardScene;
+        string currentSceneName = SceneManager.GetActiveScene().name;
 
-        if (UserSession.IsRunningTutorial || (activeConfig != null && activeConfig.scenario == "TutorialScene"))
+        // Direct scene check prevents defaulting to menu when coming out of the Tutorial
+        bool isExitingFromTutorial = UserSession.IsRunningTutorial ||
+                                     currentSceneName == "TutorialScene" ||
+                                     (activeConfig != null && activeConfig.scenario == "TutorialScene");
+
+        if (isExitingFromTutorial)
         {
             UserSession.IsRunningTutorial = false;
 
@@ -63,7 +69,7 @@ public class ScenarioTransitionController : MonoBehaviour
 
         if (targetScene == "PCDashboardScene") targetScene = defaultDashboardScene;
 
-        Debug.Log($"[ScenarioTransitionController] Exiting to target scene: '{targetScene}'");
+        Debug.Log($"[ScenarioTransitionController] Exiting from '{currentSceneName}' to target scene: '{targetScene}'");
 
         if (targetScene == defaultDashboardScene || targetScene == "DashboardScene" || targetScene == "PCDashboardScene")
         {
