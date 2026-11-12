@@ -15,6 +15,8 @@ public class NPCPersona : MonoBehaviour
     [Header("Eye Contact Tracking")]
     [Tooltip("Assign the Head/Face Collider of this NPC for Eye Contact tracking.")]
     public Collider facialCollider;
+    [Tooltip("Eye contact icon attached to the left side of this NPC's head")]
+    public GameObject eyeContactIcon;
 
     private void Awake()
     {

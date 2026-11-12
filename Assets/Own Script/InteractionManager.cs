@@ -754,13 +754,19 @@ public class InteractionManager : MonoBehaviour
         if (targetEmotion == null)
             Debug.LogWarning("[InteractionManager] Selected NPC has no emotion controller.", targetNPC);
 
-        if (eyeContactTracker != null && targetNPC.facialCollider != null)
-            eyeContactTracker.SetTargetFacialCollider(targetNPC.facialCollider);
+        if (eyeContactTracker != null)
+        {
+            if (targetNPC.facialCollider != null)
+                eyeContactTracker.SetTargetFacialCollider(targetNPC.facialCollider);
+
+            eyeContactTracker.SetEyeContactIcon(targetNPC.eyeContactIcon);
+        }
 
         if (roomNPCs.Contains(targetNPC))
         {
             currentNPCIndex = roomNPCs.IndexOf(targetNPC);
         }
+
     }
 
     public void SelectNextNPC()
