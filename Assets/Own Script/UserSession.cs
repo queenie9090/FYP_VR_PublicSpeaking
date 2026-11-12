@@ -20,6 +20,9 @@ public static class UserSession
 
     public static bool IsLoggedIn => !string.IsNullOrEmpty(CurrentUserId);
     public static bool IsEducator => UserRole?.ToLower() == "educator";
+
+    public static bool LastSessionEndedBeforeStart = false;
+    public static string LastSessionAbortReason = "";
 }
 
 //public static class UserSession

@@ -44,7 +44,6 @@ public class HintService : MonoBehaviour
 
                     if (hintUI != null)
                     {
-                        hintUI.SetDialogueState(true, generatedHint);
                         hintUI.ShowDirectMessage(generatedHint, isFinalResult: true);
                     }
 

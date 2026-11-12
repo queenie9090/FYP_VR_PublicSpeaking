@@ -105,6 +105,19 @@ public class PCDashboardController : MonoBehaviour
 
     private void FetchAndDisplayLatestSession()
     {
+        if (UserSession.LastSessionEndedBeforeStart)
+        {
+            string msg = !string.IsNullOrEmpty(UserSession.LastSessionAbortReason)
+                ? UserSession.LastSessionAbortReason
+                : "Session ended early before starting. No session data was saved.";
+
+            UserSession.LastSessionEndedBeforeStart = false;
+            UserSession.LastSessionAbortReason = "";
+
+            ShowEmptyState(msg);
+            return;
+        }
+
         // 1. Check if user navigated here from Main Menu History
         if (UserSession.CurrentSessionData != null)
         {
