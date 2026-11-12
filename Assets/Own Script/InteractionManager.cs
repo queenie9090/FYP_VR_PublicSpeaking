@@ -233,6 +233,9 @@ public class InteractionManager : MonoBehaviour
 
     private void StartCommunicationSession()
     {
+        UserSession.LastSessionEndedBeforeStart = false;
+        UserSession.LastSessionAbortReason = "";
+
         isSessionActive = true;
         conversationHistory.Clear();
 
@@ -626,6 +629,8 @@ public class InteractionManager : MonoBehaviour
         }
         else
         {
+            UserSession.LastSessionEndedBeforeStart = true;
+            UserSession.LastSessionAbortReason = "Session ended early before any conversation took place. No metrics were recorded.";
             if (uiManager != null) uiManager.SetStatus("Chat ended.");
             isSessionActive = false;
             OnSessionCompletedSequence();
@@ -722,6 +727,14 @@ public class InteractionManager : MonoBehaviour
             ExitSession();
             return;
         }
+
+        // If the player walked out the exit door without ever starting a session
+        if (conversationHistory == null || conversationHistory.Count == 0)
+        {
+            UserSession.LastSessionEndedBeforeStart = true;
+            UserSession.LastSessionAbortReason = "Session ended early before starting. No session data was saved.";
+        }
+
         isExiting = true;
         StartCoroutine(ExecuteSceneTransitionRoutine());
     }
