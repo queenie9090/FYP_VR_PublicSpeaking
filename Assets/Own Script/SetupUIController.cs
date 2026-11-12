@@ -43,7 +43,8 @@ public class SetupUIController : MonoBehaviour
         // Initialize toggle position based on current UserSession preference
         if (inputModeToggle != null)
         {
-            inputModeToggle.isOn = (UserSession.InputMode == "Hands-Tracking");
+            bool isHandTracking = (UserSession.InputMode == "Hands-Tracking");
+            inputModeToggle.isOn = isHandTracking;
         }
 
         // 2. Add dropdown listener to auto-populate defaults and update scenario weights
