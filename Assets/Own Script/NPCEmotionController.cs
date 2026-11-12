@@ -17,8 +17,15 @@ public class NPCEmotionController : MonoBehaviour
     [Range(1f, 10f)]
     public float transitionSpeed = 4f;
 
+    [Tooltip("Scales expression targets without changing recorded emotion intensity.")]
+    [SerializeField, Range(0f, 2f)] private float expressionStrengthMultiplier = 1f;
+    [Tooltip("Adds subtle eye and mouth cues for the Tutorial Businessman.")]
+    [SerializeField] private bool useExpressiveTutorialProfile;
+
     private readonly Dictionary<string, List<int>> shapeIndices = new();
     private readonly Dictionary<string, float> targets = new();
+    private readonly Dictionary<int, float> baselineWeights = new();
+    private bool expressionTransitionPending;
 
     // Logical blendshape names used by the existing Businessman.
     private readonly string[] expressionShapes =
@@ -116,6 +123,8 @@ public class NPCEmotionController : MonoBehaviour
             {
                 shapeIndices[logicalName] = indices;
                 targets[logicalName] = 0f;
+                foreach (int index in indices)
+                    baselineWeights[index] = headMesh.GetBlendShapeWeight(index);
             }
             else
             {
@@ -148,6 +157,8 @@ public class NPCEmotionController : MonoBehaviour
             return;
         }
 
+        bool changed = currentEmotion != emotion || emotionIntensity !=
+            (emotion == "NEUTRAL" ? 0 : Mathf.Clamp(intensity, 0, 100));
         currentEmotion = emotion;
 
         emotionIntensity = emotion == "NEUTRAL"
@@ -170,6 +181,11 @@ public class NPCEmotionController : MonoBehaviour
                 SetTarget("mouthSmileRight", 80f * strength);
                 SetTarget("cheekSquintLeft", 30f * strength);
                 SetTarget("cheekSquintRight", 30f * strength);
+                if (useExpressiveTutorialProfile)
+                {
+                    SetTarget("eyeSquintLeft", 12f * strength);
+                    SetTarget("eyeSquintRight", 12f * strength);
+                }
                 break;
 
             case "SAD":
@@ -183,6 +199,11 @@ public class NPCEmotionController : MonoBehaviour
                 SetTarget("browDownRight", 75f * strength);
                 SetTarget("eyeSquintLeft", 35f * strength);
                 SetTarget("eyeSquintRight", 35f * strength);
+                if (useExpressiveTutorialProfile)
+                {
+                    SetTarget("mouthPressLeft", 20f * strength);
+                    SetTarget("mouthPressRight", 20f * strength);
+                }
                 break;
 
             case "NERVOUS":
@@ -196,10 +217,14 @@ public class NPCEmotionController : MonoBehaviour
             case "THINKING":
                 SetTarget("browInnerUp", 25f * strength);
                 SetTarget("mouthPucker", 20f * strength);
+                if (useExpressiveTutorialProfile)
+                    SetTarget("browDownLeft", 18f * strength);
                 break;
 
                 // NEUTRAL keeps all expression targets at zero.
         }
+
+        if (changed) expressionTransitionPending = shapeIndices.Count > 0;
 
         Debug.Log(
             $"[{name}] Emotion: {currentEmotion}, " +
@@ -210,7 +235,7 @@ public class NPCEmotionController : MonoBehaviour
     private void SetTarget(string shape, float value)
     {
         if (targets.ContainsKey(shape))
-            targets[shape] = value;
+            targets[shape] = value * Mathf.Clamp(expressionStrengthMultiplier, 0f, 2f);
     }
 
     private void LateUpdate()
@@ -218,6 +243,7 @@ public class NPCEmotionController : MonoBehaviour
         if (headMesh == null)
             return;
 
+        bool applied = false;
         foreach (var item in targets)
         {
             foreach (int index in shapeIndices[item.Key])
@@ -225,14 +251,22 @@ public class NPCEmotionController : MonoBehaviour
                 float current =
                     headMesh.GetBlendShapeWeight(index);
 
+                float desired = Mathf.Clamp(baselineWeights[index] + item.Value, 0f, 100f);
                 float next = Mathf.MoveTowards(
                     current,
-                    item.Value,
+                    desired,
                     transitionSpeed * 100f * Time.deltaTime
                 );
 
                 headMesh.SetBlendShapeWeight(index, next);
+                if (Mathf.Abs(next - current) > 0.001f) applied = true;
             }
+        }
+        if (expressionTransitionPending && applied)
+        {
+            expressionTransitionPending = false;
+            NPCEmotionSessionManager.Instance?.RecordRealismEvent(
+                this, "face", "Expression blendshape transition started");
         }
     }
 }

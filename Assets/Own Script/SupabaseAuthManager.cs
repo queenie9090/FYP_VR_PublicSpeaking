@@ -91,6 +91,7 @@ public class SupabaseAuthManager : MonoBehaviour
 
             Client = new Supabase.Client(trimmedUrl, trimmedKey, options);
             await Client.InitializeAsync();
+            UserSession.AuthClient = Client;
 
             IsReady = true;
 

@@ -67,6 +67,7 @@ public class InteractionManager : MonoBehaviour
     private string sessionCompletionStatus = "Completed";
     private Coroutine initiationCoroutine;
     private Coroutine activeSpeechLoopCoroutine;
+    private Coroutine activeRecordingCoroutine;
 
     private void Start()
     {
@@ -226,6 +227,7 @@ public class InteractionManager : MonoBehaviour
         }
 
         uiManager.SetStatus("Session Started");
+        initiationCoroutine = null;
         StartCommunicationSession();
     }
 
@@ -260,10 +262,8 @@ public class InteractionManager : MonoBehaviour
         if (viewNPCFaceButton != null) viewNPCFaceButton.SetActive(true);
         previousEmotion = "NEUTRAL";
 
-        if (NPCEmotionSessionManager.Instance != null)
-        {
-            NPCEmotionSessionManager.Instance.StartNewSession();
-        }
+        NPCEmotionSessionManager.EnsureInstance().StartNewSession();
+        sessionCompletionStatus = "Completed";
 
         if (npcEmotionController != null) npcEmotionController.SetEmotion("NEUTRAL", 0);
         if (eyeContactTracker != null) eyeContactTracker.StartTracking();
@@ -305,13 +305,14 @@ public class InteractionManager : MonoBehaviour
             if (!isSessionActive) yield break;
 
             uiManager.SetStatus("Listening...");
+            SetNPCBodyActivity(NPCBodyActivity.LISTENING, conversationHistory.Count(t => t.speaker == "NPC") + 1);
 
             byte[] wavBytes = null;
             float speechDuration = 0f, silenceDuration = 0f;
             bool recDone = false;
 
             // Pass live remaining time directly into the UI status text bar
-            StartCoroutine(audioRecorder.RecordUserSpeechRoutine(
+            activeRecordingCoroutine = StartCoroutine(audioRecorder.RecordUserSpeechRoutine(
                 (bytes, sDuration, silDuration) => {
                     wavBytes = bytes; speechDuration = sDuration; silenceDuration = silDuration;
                     recDone = true;
@@ -323,20 +324,38 @@ public class InteractionManager : MonoBehaviour
             ));
 
             yield return new WaitUntil(() => recDone);
+            activeRecordingCoroutine = null;
 
             if (!isSessionActive) yield break;
+            if (wavBytes == null || wavBytes.Length == 0)
+            {
+                uiManager.SetStatus("Microphone unavailable. Check the microphone and restart the session.");
+                Debug.LogError("[InteractionManager] No microphone audio was recorded. The conversation was not advanced.");
+                yield break;
+            }
 
             sessionTimer.RecordTurnDurations(speechDuration, silenceDuration);
 
             bool turnDone = false;
+            bool transcriptionFailed = false;
+            SetNPCBodyActivity(NPCBodyActivity.THINKING, conversationHistory.Count(t => t.speaker == "NPC") + 1);
+            int historyCountBeforeTranscription = conversationHistory.Count;
             StartCoroutine(speechController.TranscribeUserAudioRoutine(
                 wavBytes, speechDuration, silenceDuration, conversationHistory,
                 fillers => totalFillerWordsDetected += fillers,
-                () => turnDone = true
+                () => turnDone = true,
+                () => transcriptionFailed = true
             ));
 
             yield return new WaitUntil(() => turnDone);
-            string userTranscript = (conversationHistory.Count > 0 && conversationHistory[conversationHistory.Count - 1].speaker == "User")
+            if (!isSessionActive) yield break;
+            if (transcriptionFailed)
+            {
+                uiManager.SetStatus("Speech recognition failed. Please try speaking again.");
+                yield return new WaitForSeconds(1.5f);
+                continue;
+            }
+            string userTranscript = (conversationHistory.Count > historyCountBeforeTranscription && conversationHistory[conversationHistory.Count - 1].speaker == "User")
     ? conversationHistory[conversationHistory.Count - 1].dialogue
     : "";
             yield return ProcessLLMTurnRoutine(userTranscript);
@@ -354,17 +373,44 @@ public class InteractionManager : MonoBehaviour
         //int turnCounter = (conversationHistory.Count / 2) + 1;
         int turnCounter = conversationHistory.Count(t => t.speaker == "NPC");
         int expectedTurnNumber = turnCounter + 1;
+        SetNPCBodyActivity(NPCBodyActivity.THINKING, expectedTurnNumber);
 
-        LLMResponse response = null; bool llmDone = false;
-        StartCoroutine(openAIManager.SendChatRequest(
-            PromptBuilder.BuildSystemPrompt(activeConfig, turnCounter, previousEmotion),
-            conversationHistory,
-            formattedTranscript,
-            res => { response = res; llmDone = true; },
-            err => { Debug.LogError($"[LLM Error] {err}"); llmDone = true; }
-        ));
-
-        yield return new WaitUntil(() => llmDone);
+        LLMResponse response = null;
+        string fallbackEmotion = EmotionIntensityClassifier.IsSupported(previousEmotion)
+            ? previousEmotion.Trim().ToUpperInvariant() : "NEUTRAL";
+        for (int attempt = 0; attempt < 2; attempt++)
+        {
+            LLMResponse candidate = null;
+            bool llmDone = false;
+            string prompt = PromptBuilder.BuildSystemPrompt(activeConfig, turnCounter, previousEmotion);
+            if (attempt > 0)
+                prompt += "\nReassess the emotion using the participant's actual context. Return one valid JSON response with a supported emotion.";
+            StartCoroutine(openAIManager.SendChatRequest(prompt, conversationHistory, formattedTranscript,
+                res => { candidate = res; llmDone = true; },
+                err => { Debug.LogError($"[LLM Error] {err}"); llmDone = true; },
+                true, () => this == null || !isSessionActive));
+            yield return new WaitUntil(() => llmDone || !isSessionActive);
+            if (!isSessionActive) yield break;
+            if (candidate == null)
+            {
+                if (attempt == 0)
+                {
+                    Debug.LogWarning("[LLM] Response failed; retrying once.");
+                    continue;
+                }
+                break;
+            }
+            response = candidate;
+            if (!EmotionIntensityClassifier.NeedsReassessment(candidate.emotion, fallbackEmotion, userTranscript)) break;
+            Debug.LogWarning(EmotionIntensityClassifier.IsSupported(candidate.emotion)
+                ? "[Emotion Validation] Reassessing an emotion change without participant input."
+                : "[Emotion Validation] Reassessing an unsupported emotion label.");
+            if (attempt == 1)
+            {
+                response.emotion = fallbackEmotion;
+                Debug.LogWarning("[Emotion Validation] Reassessment failed; retaining the previous valid emotion.");
+            }
+        }
         if (!isSessionActive) yield break;   // session was closed while waiting for the LLM
         if (response == null || string.IsNullOrEmpty(response.npc_response))
         {
@@ -373,6 +419,8 @@ public class InteractionManager : MonoBehaviour
             yield return new WaitForSeconds(1.5f);
             yield break;
         }
+        if (EmotionIntensityClassifier.NeedsReassessment(response.emotion, fallbackEmotion, userTranscript))
+            response.emotion = fallbackEmotion;
 
         // Check that the response belongs to the expected turn.
         if (response.turn_number != expectedTurnNumber)
@@ -391,10 +439,8 @@ public class InteractionManager : MonoBehaviour
         string validatedEmotion = response.emotion;
         previousEmotion = validatedEmotion;
 
-        // TEMPORARY intensity for integration testing.
-        // Replace with Unity's actual intensity calculation later.
-        int testIntensity =
-            validatedEmotion == "NEUTRAL" ? 0 : 60;
+        int emotionIntensity = EmotionIntensityClassifier.Classify(
+            validatedEmotion, userTranscript, response.npc_response);
 
         if (NPCEmotionSessionManager.Instance != null)
         {
@@ -406,7 +452,7 @@ public class InteractionManager : MonoBehaviour
                 expectedTurnNumber,
                 npcName,
                 validatedEmotion,
-                testIntensity
+                emotionIntensity
             );
         }
         else
@@ -420,12 +466,12 @@ public class InteractionManager : MonoBehaviour
         {
             npcEmotionController.SetEmotion(
                 validatedEmotion,
-                testIntensity
+                emotionIntensity
             );
 
             Debug.Log(
                 $"[NPC Emotion] Turn {expectedTurnNumber}: " +
-                $"{validatedEmotion}, Intensity: {testIntensity}"
+                $"{validatedEmotion}, Intensity: {emotionIntensity}"
             );
         }
         else
@@ -445,14 +491,12 @@ public class InteractionManager : MonoBehaviour
             hintUIController.OnNewTurnStarted();
         }
 
-        uiManager.SetStatus("NPC Speaking...");
+        uiManager.SetStatus("Generating NPC speech...");
         yield return StartCoroutine(speechController.PlayNPCAudioRoutine(
-            response.npc_response, currentActiveNPC, fallbackNpcAudioSource
+            response.npc_response, currentActiveNPC, fallbackNpcAudioSource, expectedTurnNumber
         ));
         //yield return StartCoroutine(PlayNPCAudioRoutine(response.npc_response));
 
-        if (activeConfig != null && activeConfig.maxTurnLimit > 0 &&
-            expectedTurnNumber >= activeConfig.maxTurnLimit)
         if (!isSessionActive) yield break;   // closed during NPC audio (CloseSession already saved)
 
         bool isFinalTurn = activeConfig != null && expectedTurnNumber >= activeConfig.maxTurnLimit;
@@ -491,17 +535,19 @@ public class InteractionManager : MonoBehaviour
     {
         if (isSavingSession) return;
         isSavingSession = true;
+        SetNPCBodyActivity(NPCBodyActivity.IDLE);
 
         resultSaver.ProcessAndSaveResults(
             activeConfig, conversationHistory, sessionTimer.ElapsedTimeSeconds,
             sessionTimer.TotalSpeakingTimeSeconds, sessionTimer.TotalSilenceTimeSeconds, totalFillerWordsDetected,
             sessionTimer.StartTimestamp,
             eyeContactTracker, gestureTracker, hintUIController, uiManager,
-            sessionCompletionStatus, 
             onComplete: () => {
+                if (this == null) return;
                 isSavingSession = false;
                 OnSessionCompletedSequence();
-            }
+            },
+            sessionStatus: sessionCompletionStatus
         );
     }
 
@@ -518,7 +564,8 @@ public class InteractionManager : MonoBehaviour
             return;
         }
 
-        leaveAfterSessionEnds = false; // Stay in the scene!
+        SetNPCBodyActivity(NPCBodyActivity.IDLE);
+        if (speechController != null) speechController.CancelPendingSpeech();
 
         if (activeSpeechLoopCoroutine != null)
         {
@@ -545,6 +592,11 @@ public class InteractionManager : MonoBehaviour
             fallbackNpcAudioSource.Stop();
         }
 
+        if (activeRecordingCoroutine != null)
+        {
+            StopCoroutine(activeRecordingCoroutine);
+            activeRecordingCoroutine = null;
+        }
         if (audioRecorder != null)
         {
             audioRecorder.StopRecording();
@@ -556,7 +608,7 @@ public class InteractionManager : MonoBehaviour
         if (startConfigPanel != null) startConfigPanel.SetActive(false);
 
         // Save results if session is active
-        if (isSessionActive && conversationHistory != null && conversationHistory.Count > 0)
+        if (isSessionActive)
         {
             sessionCompletionStatus = "Incomplete"; // User ended chat early
             isSessionActive = false;
@@ -575,7 +627,10 @@ public class InteractionManager : MonoBehaviour
     /// </summary>
     public void ExitSession()
     {
-        leaveAfterSessionEnds = true; // Transition immediately!
+        if (isExiting) return;
+        leaveAfterSessionEnds = true;
+        // The existing completion callback will navigate after preparation finishes.
+        if (isSavingSession) return;
         CloseSession();
     }
 
@@ -656,23 +711,23 @@ public class InteractionManager : MonoBehaviour
     public void ExecuteSceneTransition()
     {
         if (isExiting) return;
+        // Exit controls and door triggers must not bypass the session-ending path.
+        if (isSessionActive || isSavingSession || initiationCoroutine != null)
+        {
+            ExitSession();
+            return;
+        }
         isExiting = true;
         StartCoroutine(ExecuteSceneTransitionRoutine());
     }
 
     private IEnumerator ExecuteSceneTransitionRoutine()
     {
-        float timeoutCounter = 0f;
-
-        // Timeout safeguard prevents infinite loading hangs if network save stalls
-        while (isSavingSession && timeoutCounter < 5.0f)
+        while (isSavingSession)
         {
             if (uiManager != null) uiManager.SetStatus("Saving progress... Please wait.");
             yield return new WaitForSeconds(0.5f);
-            timeoutCounter += 0.5f;
         }
-
-        isSavingSession = false;
         isSessionActive = false;
 
         yield return transitionController.ExecuteSceneTransitionRoutine(activeConfig, uiManager);
@@ -681,7 +736,18 @@ public class InteractionManager : MonoBehaviour
     public void SelectActiveNPC(NPCPersona targetNPC)
     {
         if (targetNPC == null) return;
+        SetNPCBodyActivity(NPCBodyActivity.IDLE);
         currentActiveNPC = targetNPC;
+        var targetEmotion = targetNPC.GetComponentInParent<NPCEmotionController>() ??
+            targetNPC.GetComponentInChildren<NPCEmotionController>();
+        npcEmotionController = targetEmotion;
+        if (emotionPanel != null)
+        {
+            var indicator = emotionPanel.GetComponentInChildren<NPCEmotionIndicatorUI>(true);
+            if (indicator != null) indicator.SetEmotionSource(targetEmotion);
+        }
+        if (targetEmotion == null)
+            Debug.LogWarning("[InteractionManager] Selected NPC has no emotion controller.", targetNPC);
 
         if (eyeContactTracker != null && targetNPC.facialCollider != null)
             eyeContactTracker.SetTargetFacialCollider(targetNPC.facialCollider);
@@ -697,5 +763,16 @@ public class InteractionManager : MonoBehaviour
         if (roomNPCs == null || roomNPCs.Count <= 1) return;
         currentNPCIndex = (currentNPCIndex + 1) % roomNPCs.Count;
         SelectActiveNPC(roomNPCs[currentNPCIndex]);
+    }
+
+    private void SetNPCBodyActivity(NPCBodyActivity activity, int turnNumber = 0)
+    {
+        NPCEmotionSessionManager.Instance?.SetRealismContext(npcEmotionController,
+            currentActiveNPC != null ? currentActiveNPC.name : null, activity.ToString(), turnNumber);
+        if (currentActiveNPC != null)
+        {
+            currentActiveNPC.GetComponentInParent<NPCBodyAnimation>()?.SetActivity(activity, turnNumber);
+            currentActiveNPC.GetComponentInParent<NPCEyeContactController>()?.SetActivity(activity);
+        }
     }
 }

@@ -10,11 +10,31 @@ public class NPCEmotionRecord
     public string npcName;
     public string emotion;
     public int intensity;
+    public string emotionLogId = Guid.NewGuid().ToString();
+    public string previousEmotion;
+    public string recordedAt;
+    public string emotionTrigger;
+}
+
+[Serializable]
+public class NPCRealismEvent
+{
+    public string id = Guid.NewGuid().ToString();
+    public string kind, npcId, state, emotion, detail, target, text, voiceStyle;
+    public int intensity, turnNumber;
+    public bool blink;
+    public string timestamp = DateTime.UtcNow.ToString("o");
 }
 
 public class NPCEmotionSessionManager : MonoBehaviour
 {
     public static NPCEmotionSessionManager Instance { get; private set; }
+    public static NPCEmotionSessionManager EnsureInstance()
+    {
+        if (Instance == null)
+            new GameObject("NPC Emotion Session Manager").AddComponent<NPCEmotionSessionManager>();
+        return Instance;
+    }
 
     [Header("Session Emotion History")]
     [SerializeField]
@@ -24,6 +44,45 @@ public class NPCEmotionSessionManager : MonoBehaviour
         => emotionHistory;
 
     public int TotalEmotionTurns => emotionHistory.Count;
+    private readonly List<BodyAnimationEventRecord> bodyEvents = new();
+    public IReadOnlyList<BodyAnimationEventRecord> BodyAnimationEvents => bodyEvents;
+    public bool IsCollectingBodyEvents { get; private set; }
+    private readonly List<NPCRealismEvent> realismEvents = new();
+    public IReadOnlyList<NPCRealismEvent> RealismEvents => realismEvents;
+    private NPCEmotionController activeSource;
+    private string activeNpc, activeState;
+    private int activeTurn;
+
+    public void SetRealismContext(NPCEmotionController source, string npc, string state, int turn)
+    {
+        activeSource = source;
+        activeNpc = npc;
+        activeState = state;
+        activeTurn = turn;
+    }
+
+    public void RecordRealismEvent(NPCEmotionController source, string kind, string detail,
+        string target = null, string text = null, string voiceStyle = null, bool blink = false)
+    {
+        if (!IsCollectingBodyEvents || source == null || source != activeSource ||
+            string.IsNullOrWhiteSpace(activeNpc)) return;
+        realismEvents.Add(new NPCRealismEvent {
+            kind = kind, npcId = activeNpc, state = activeState, turnNumber = activeTurn,
+            emotion = source.currentEmotion, intensity = source.emotionIntensity,
+            detail = detail, target = target, text = text, voiceStyle = voiceStyle, blink = blink
+        });
+    }
+
+    public void RecordBodyAnimation(BodyAnimationEventRecord record)
+    {
+        if (IsCollectingBodyEvents && record != null)
+            bodyEvents.Add(record);
+    }
+
+    public void FinishBodyEventCollection()
+    {
+        IsCollectingBodyEvents = false;
+    }
 
     private void Awake()
     {
@@ -40,6 +99,10 @@ public class NPCEmotionSessionManager : MonoBehaviour
     public void StartNewSession()
     {
         emotionHistory.Clear();
+        bodyEvents.Clear();
+        realismEvents.Clear();
+        activeSource = null;
+        IsCollectingBodyEvents = true;
         Debug.Log("[Emotion Session] New session started.");
     }
 
@@ -47,7 +110,8 @@ public class NPCEmotionSessionManager : MonoBehaviour
         int turnNumber,
         string npcName,
         string emotion,
-        int intensity)
+        int intensity,
+        string emotionTrigger = null)
     {
         if (turnNumber < 1 ||
             string.IsNullOrWhiteSpace(emotion))
@@ -85,12 +149,22 @@ public class NPCEmotionSessionManager : MonoBehaviour
             ? 0
             : Mathf.Clamp(intensity, 0, 100);
 
+        string previous = "NEUTRAL";
+        for (int i = emotionHistory.Count - 1; i >= 0; i--)
+            if (emotionHistory[i].npcName == npcName)
+            {
+                previous = emotionHistory[i].emotion;
+                break;
+            }
         emotionHistory.Add(new NPCEmotionRecord
         {
             turnNumber = turnNumber,
             npcName = npcName,
             emotion = emotion,
-            intensity = validIntensity
+            intensity = validIntensity,
+            previousEmotion = previous,
+            recordedAt = DateTime.UtcNow.ToString("o"),
+            emotionTrigger = emotionTrigger
         });
 
         Debug.Log(

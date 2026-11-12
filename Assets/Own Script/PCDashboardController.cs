@@ -141,6 +141,7 @@ public class PCDashboardController : MonoBehaviour
 
     private void PopulateDashboard(NormalizedSessionData data)
     {
+        UserSession.EmotionDashboardSession = data;
         PerformanceMetricRecord metric = data.performance_metric[0];
 
         // 1. Header Metadata (Fixed data.duration_seconds reference)

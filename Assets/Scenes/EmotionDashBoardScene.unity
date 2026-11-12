@@ -6997,6 +6997,17 @@ MonoBehaviour:
     legendValueText: {fileID: 1071398746}
   totalTurnsText: {fileID: 1457473939}
   sessionTotalTurnsText: {fileID: 1943256403}
+  sessionIdText: {fileID: 889865445}
+  scenarioText: {fileID: 2118058585}
+  startTimeText: {fileID: 890848283}
+  durationText: {fileID: 770909791}
+  completionStatusText: {fileID: 0}
+  eyeSummaryText: {fileID: 1098587303}
+  faceSummaryText: {fileID: 300105195}
+  bodySummaryText: {fileID: 487042920}
+  voiceSummaryText: {fileID: 2081710441}
+  lipSyncSummaryText: {fileID: 1896173034}
+  supabaseManager: {fileID: 0}
   activeBarColor: {r: 0.643, g: 0.549, b: 1, a: 1}
   inactiveBarColor: {r: 0.337, g: 0.38, b: 0.494, a: 1}
 --- !u!1 &1071398744

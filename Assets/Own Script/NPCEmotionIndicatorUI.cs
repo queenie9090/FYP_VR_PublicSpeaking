@@ -21,12 +21,20 @@ public class NPCEmotionIndicatorUI : MonoBehaviour
     [SerializeField] private Sprite neutralSprite;
     [SerializeField] private TMP_Text emotionLabel;
     [SerializeField] private TMP_Text intensityText;
+    [SerializeField] private TMP_Text levelText;
 
     [Header("Five Mood Bar Images")]
     [SerializeField] private Image[] moodBars = new Image[5];
 
     private string lastEmotion = "";
     private int lastIntensity = -1;
+
+    public void SetEmotionSource(NPCEmotionController source)
+    {
+        emotionController = source;
+        lastEmotion = "";
+        lastIntensity = -1;
+    }
 
     private void Update()
     {
@@ -89,13 +97,25 @@ public class NPCEmotionIndicatorUI : MonoBehaviour
         if (intensityText != null)
             intensityText.text = $"Intensity: {intensity}%";
 
+        if (levelText != null)
+            levelText.text = levelName;
+
+        Color moodColor = emotion switch
+        {
+            "HAPPY" => new Color(1f, 0.8f, 0.3f),
+            "SAD" => new Color(0.35f, 0.65f, 1f),
+            "ANGRY" => new Color(1f, 0.35f, 0.3f),
+            "NERVOUS" => new Color(0.9f, 0.65f, 0.3f),
+            "THINKING" => new Color(0.65f, 0.55f, 1f),
+            _ => Color.white
+        };
         for (int i = 0; i < moodBars.Length; i++)
         {
             if (moodBars[i] == null)
                 continue;
 
             moodBars[i].color = i < level
-                ? Color.white
+                ? Color.Lerp(Color.white, moodColor, 0.4f + 0.6f * intensity / 100f)
                 : new Color(0.35f, 0.35f, 0.35f, 1f);
         }
     }
