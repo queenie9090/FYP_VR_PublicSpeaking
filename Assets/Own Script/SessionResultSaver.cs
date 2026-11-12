@@ -23,12 +23,14 @@ public class SessionResultSaver : MonoBehaviour
         HintUIController hintUIController,
         DialogueUIManager uiManager,
         Action onComplete,
-        string sessionStatus = "Completed")
+        string sessionStatus = "Completed",
+        Action<string> onFailure = null,
+        bool requireAuthenticatedSave = false)
     {
         if (sessionStartTimestamp == default)
         {
             Debug.LogWarning("[SessionResultSaver] Invalid start timestamp; skipping save.");
-            onComplete?.Invoke();
+            onFailure?.Invoke("Session start time is missing; results were not saved.");
             return;
         }
 
@@ -46,7 +48,7 @@ public class SessionResultSaver : MonoBehaviour
             activeConfig, new List<DialogueTurn>(conversationHistory), sessionElapsedTimeSeconds,
             totalSpeakingTimeSeconds, totalSilenceTimeSeconds, totalFillerWordsDetected,
             sessionStartTimestamp, eyeContactTracker, gestureTracker, hintUIController, uiManager, onComplete,
-            sessionStatus, emotions, bodyEvents, realismEvents
+            sessionStatus, emotions, bodyEvents, realismEvents, onFailure, requireAuthenticatedSave
         ));
     }
 
@@ -66,7 +68,9 @@ public class SessionResultSaver : MonoBehaviour
         string sessionStatus,
         List<NPCEmotionRecord> emotions,
         List<BodyAnimationEventRecord> bodyEvents,
-        List<NPCRealismEvent> realismEvents)
+        List<NPCRealismEvent> realismEvents,
+        Action<string> onFailure,
+        bool requireAuthenticatedSave)
     {
         if (uiManager != null) uiManager.SetStatus("Saving Results...");
 
@@ -106,7 +110,14 @@ public class SessionResultSaver : MonoBehaviour
         // 3. Guest Mode Bypass (Prevents 23503 Foreign Key error)
         if (!UserSession.IsLoggedIn || string.IsNullOrEmpty(UserSession.CurrentUserId))
         {
+            if (requireAuthenticatedSave)
+            {
+                onFailure?.Invoke("Sign in as the original session owner before retrying. Results remain in memory.");
+                yield break;
+            }
             Debug.LogWarning("[SessionResultSaver] Guest user detected. Bypassing database save.");
+            UserSession.CurrentSessionData = null;
+            UserSession.EmotionDashboardSession = null;
             if (uiManager != null) uiManager.SetStatus("Session Complete (Guest Mode)");
             onComplete?.Invoke();
             yield break;
@@ -259,8 +270,8 @@ public class SessionResultSaver : MonoBehaviour
                 onError: (err) =>
                 {
                     Debug.LogError($"[SessionResultSaver] Save Failed: {err}");
-                    if (uiManager != null) uiManager.SetStatus("Save Failed!");
-                    onComplete?.Invoke();
+                    if (uiManager != null) uiManager.SetStatus("Save failed. Exit again to retry.");
+                    onFailure?.Invoke(err);
                 }
             );
         }
@@ -268,7 +279,7 @@ public class SessionResultSaver : MonoBehaviour
         {
             Debug.LogWarning("[SessionResultSaver] SupabaseManager component not found in scene. Skipping database save.");
             Debug.LogError("[SessionResultSaver] SupabaseManager missing. Session was not saved.");
-            onComplete?.Invoke();
+            onFailure?.Invoke("Session save service is unavailable. Results remain in memory.");
         }
     }
 }

@@ -61,6 +61,8 @@ public class InteractionManager : MonoBehaviour
     private List<DialogueTurn> conversationHistory = new List<DialogueTurn>();
     private bool isSessionActive = false;
     private bool isSavingSession = false;
+    private bool sessionSaveFailed;
+    private string sessionSaveOwner;
 
     private int totalFillerWordsDetected = 0;
     private bool leaveAfterSessionEnds = false;
@@ -195,7 +197,7 @@ public class InteractionManager : MonoBehaviour
 
     public void OnUserConfirmedStart()
     {
-        if (!isActiveAndEnabled || isSessionActive || isSavingSession) return;
+        if (!isActiveAndEnabled || isSessionActive || isSavingSession || sessionSaveFailed) return;
         Debug.Log("[InteractionManager] OnUserConfirmedStart called");
         if (startSessionButton != null)
             startSessionButton.interactable = false;
@@ -237,6 +239,8 @@ public class InteractionManager : MonoBehaviour
         UserSession.LastSessionAbortReason = "";
 
         isSessionActive = true;
+        sessionSaveFailed = false;
+        sessionSaveOwner = null;
         conversationHistory.Clear();
 
         SetLocomotionEnabled(false);
@@ -541,6 +545,21 @@ public class InteractionManager : MonoBehaviour
     private void CalculateAndSaveResults()
     {
         if (isSavingSession) return;
+        // Tutorial is calibration, not a saved training result. Keep its history in
+        // memory but do not initialize the shared dashboard/save workflow.
+        if (SceneManager.GetActiveScene().name == "TutorialScene")
+        {
+            SetNPCBodyActivity(NPCBodyActivity.IDLE);
+            NPCEmotionSessionManager.Instance?.FinishBodyEventCollection();
+            OnSessionCompletedSequence();
+            return;
+        }
+        if (sessionSaveFailed && sessionSaveOwner != UserSession.CurrentUserId)
+        {
+            if (uiManager != null) uiManager.SetStatus("Sign in as the original session owner to retry saving.");
+            return;
+        }
+        if (!sessionSaveFailed) sessionSaveOwner = UserSession.CurrentUserId;
         isSavingSession = true;
         SetNPCBodyActivity(NPCBodyActivity.IDLE);
 
@@ -552,9 +571,18 @@ public class InteractionManager : MonoBehaviour
             onComplete: () => {
                 if (this == null) return;
                 isSavingSession = false;
+                sessionSaveFailed = false;
                 OnSessionCompletedSequence();
             },
-            sessionStatus: sessionCompletionStatus
+            sessionStatus: sessionCompletionStatus,
+            onFailure: error => {
+                if (this == null) return;
+                isSavingSession = false;
+                sessionSaveFailed = true;
+                if (uiManager != null) uiManager.SetStatus("Save failed. Results retained; exit again to retry.");
+                if (exitSessionPanel != null) exitSessionPanel.SetActive(true);
+            },
+            requireAuthenticatedSave: sessionSaveFailed
         );
     }
 
@@ -564,6 +592,11 @@ public class InteractionManager : MonoBehaviour
     /// </summary>
     public void CloseSession()
     {
+        if (sessionSaveFailed && !isSavingSession)
+        {
+            CalculateAndSaveResults();
+            return;
+        }
         // GUARD: Prevent re-entry while a save sequence is actively running
         if (isSavingSession)
         {
@@ -629,8 +662,13 @@ public class InteractionManager : MonoBehaviour
         }
         else
         {
-            UserSession.LastSessionEndedBeforeStart = true;
-            UserSession.LastSessionAbortReason = "Session ended early before any conversation took place. No metrics were recorded.";
+            // Leaving after an already completed conversation must not replace
+            // its result with the dashboard's "no session started" state.
+            if (conversationHistory == null || conversationHistory.Count == 0)
+            {
+                UserSession.LastSessionEndedBeforeStart = true;
+                UserSession.LastSessionAbortReason = "Session ended early before any conversation took place. No metrics were recorded.";
+            }
             if (uiManager != null) uiManager.SetStatus("Chat ended.");
             isSessionActive = false;
             OnSessionCompletedSequence();
@@ -646,6 +684,7 @@ public class InteractionManager : MonoBehaviour
         leaveAfterSessionEnds = true;
         // The existing completion callback will navigate after preparation finishes.
         if (isSavingSession) return;
+        if (sessionSaveFailed) { CalculateAndSaveResults(); return; }
         CloseSession();
     }
 
@@ -653,6 +692,8 @@ public class InteractionManager : MonoBehaviour
     {
         isSessionActive = false;
         isSavingSession = false;
+        if (SceneManager.GetActiveScene().name == "TutorialScene")
+            NPCEmotionSessionManager.Instance?.FinishBodyEventCollection();
 
         SetLocomotionEnabled(true);
 
@@ -722,7 +763,7 @@ public class InteractionManager : MonoBehaviour
     {
         if (isExiting) return;
         // Exit controls and door triggers must not bypass the session-ending path.
-        if (isSessionActive || isSavingSession || initiationCoroutine != null)
+        if (isSessionActive || isSavingSession || sessionSaveFailed || initiationCoroutine != null)
         {
             ExitSession();
             return;
