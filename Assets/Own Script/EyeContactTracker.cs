@@ -16,6 +16,7 @@ public class EyeContactTracker : MonoBehaviour
 
     [Tooltip("Maximum raycast distance in meters (Default: 5.0m)")]
     [SerializeField] private float maxDistance = 5.0f;
+    private GameObject activeEyeContactIcon;
 
     private int totalSamples = 0;
     private int hitSamples = 0;
@@ -39,6 +40,7 @@ public class EyeContactTracker : MonoBehaviour
 
 
     // Call when ending a VR session
+    // Call when ending a VR session
     public void StopTracking()
     {
         isTracking = false;
@@ -47,6 +49,12 @@ public class EyeContactTracker : MonoBehaviour
             StopCoroutine(trackingCoroutine);
             trackingCoroutine = null;
         }
+
+        if (activeEyeContactIcon != null)
+        {
+            activeEyeContactIcon.SetActive(false);
+        }
+
         Debug.Log($"[EyeContactTracker] Sampling stopped. Total: {totalSamples}, Hits: {hitSamples}");
     }
 
@@ -55,6 +63,8 @@ public class EyeContactTracker : MonoBehaviour
     {
         while (isTracking)
         {
+            bool isLookingAtNPC = false;
+
             if (headsetTransform != null && avatarFacialCollider != null)
             {
                 Ray gazeRay = new Ray(headsetTransform.position, headsetTransform.forward);
@@ -64,12 +74,12 @@ public class EyeContactTracker : MonoBehaviour
 
                 if (Physics.Raycast(gazeRay, out RaycastHit hitInfo, maxDistance))
                 {
-                    bool isHit = hitInfo.collider == avatarFacialCollider;
+                    isLookingAtNPC = hitInfo.collider == avatarFacialCollider;
 
                     // DEBUG: what did the ray actually hit?
-                    Debug.Log($"[EyeContact] Hit '{hitInfo.collider.name}' | target = '{avatarFacialCollider.name}' | match = {isHit}");
+                    Debug.Log($"[EyeContact] Hit '{hitInfo.collider.name}' | target = '{avatarFacialCollider.name}' | match = {isLookingAtNPC}");
 
-                    if (isHit) hitSamples++;
+                    if (isLookingAtNPC) hitSamples++;
                 }
                 else
                 {
@@ -77,6 +87,11 @@ public class EyeContactTracker : MonoBehaviour
                 }
 
                 totalSamples++;
+            }
+
+            if (activeEyeContactIcon != null && activeEyeContactIcon.activeSelf != isLookingAtNPC)
+            {
+                activeEyeContactIcon.SetActive(isLookingAtNPC);
             }
 
             yield return new WaitForSeconds(samplingInterval);
@@ -99,4 +114,15 @@ public class EyeContactTracker : MonoBehaviour
     {
         avatarFacialCollider = newFacialCollider;
     }
+
+    public void SetEyeContactIcon(GameObject icon)
+    {
+        if (activeEyeContactIcon != null && activeEyeContactIcon != icon)
+            activeEyeContactIcon.SetActive(false);
+
+        activeEyeContactIcon = icon;
+        if (activeEyeContactIcon != null)
+            activeEyeContactIcon.SetActive(false);
+    }
+
 }

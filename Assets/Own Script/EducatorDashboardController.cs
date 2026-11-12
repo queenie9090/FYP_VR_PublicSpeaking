@@ -17,6 +17,7 @@ public class EducatorDashboardController : MonoBehaviour
     [Header("Selected Record Inspector")]
     [SerializeField] private TMP_Text selectedRecordDetailsText; // Left side: Sensor metrics
     [SerializeField] private TMP_Text aiFeedbackText;            // Right side: AI Performance Feedback
+    [SerializeField] private ScrollRect aiFeedbackScrollRect;
 
     [Header("Export Action Buttons")]
     [SerializeField] private Button exportPdfButton;
@@ -176,6 +177,16 @@ public class EducatorDashboardController : MonoBehaviour
 
             aiFeedbackText.text =
                 $"<i>\"{summary}\"</i>";
+        }
+
+        Canvas.ForceUpdateCanvases();
+        if (aiFeedbackText != null && aiFeedbackText.transform.parent is RectTransform feedbackContentRect)
+        {
+            LayoutRebuilder.ForceRebuildLayoutImmediate(feedbackContentRect);
+        }
+        if (aiFeedbackScrollRect != null)
+        {
+            aiFeedbackScrollRect.verticalNormalizedPosition = 1f;
         }
     }
 

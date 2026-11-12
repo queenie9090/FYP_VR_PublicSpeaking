@@ -233,6 +233,9 @@ public class InteractionManager : MonoBehaviour
 
     private void StartCommunicationSession()
     {
+        UserSession.LastSessionEndedBeforeStart = false;
+        UserSession.LastSessionAbortReason = "";
+
         isSessionActive = true;
         conversationHistory.Clear();
 
@@ -267,7 +270,11 @@ public class InteractionManager : MonoBehaviour
 
         if (npcEmotionController != null) npcEmotionController.SetEmotion("NEUTRAL", 0);
         if (eyeContactTracker != null) eyeContactTracker.StartTracking();
-        if (gestureTracker != null) gestureTracker.ResetTracker();
+        if (gestureTracker != null)
+        {
+            gestureTracker.ResetTracker();
+            gestureTracker.StartTracking();
+        }
         if (hintUIController != null) hintUIController.ResetHintCount();
         if (uiManager != null && activeConfig != null) uiManager.InitTurnCounter(activeConfig.maxTurnLimit);
 
@@ -587,6 +594,12 @@ public class InteractionManager : MonoBehaviour
             Animator anim = currentActiveNPC.GetComponent<Animator>();
             if (anim != null) anim.SetBool("IsTalking", false);
         }
+        
+        if (sessionCompletedClip != null && sfxAudioSource != null)
+        {
+            sfxAudioSource.PlayOneShot(sessionCompletedClip);
+        }
+
         if (fallbackNpcAudioSource != null)
         {
             fallbackNpcAudioSource.Stop();
@@ -607,8 +620,8 @@ public class InteractionManager : MonoBehaviour
         if (emotionPanel != null) emotionPanel.SetActive(false);
         if (startConfigPanel != null) startConfigPanel.SetActive(false);
 
-        // Save results if session is active
-        if (isSessionActive)
+        // Save results only if session is active AND at least one dialogue turn occurred
+        if (isSessionActive && conversationHistory != null && conversationHistory.Count > 0)
         {
             sessionCompletionStatus = "Incomplete"; // User ended chat early
             isSessionActive = false;
@@ -616,6 +629,8 @@ public class InteractionManager : MonoBehaviour
         }
         else
         {
+            UserSession.LastSessionEndedBeforeStart = true;
+            UserSession.LastSessionAbortReason = "Session ended early before any conversation took place. No metrics were recorded.";
             if (uiManager != null) uiManager.SetStatus("Chat ended.");
             isSessionActive = false;
             OnSessionCompletedSequence();
@@ -640,11 +655,6 @@ public class InteractionManager : MonoBehaviour
         isSavingSession = false;
 
         SetLocomotionEnabled(true);
-
-        if (sessionCompletedClip != null && sfxAudioSource != null)
-        {
-            sfxAudioSource.PlayOneShot(sessionCompletedClip);
-        }
 
         if (uiManager != null)
         {
@@ -717,6 +727,14 @@ public class InteractionManager : MonoBehaviour
             ExitSession();
             return;
         }
+
+        // If the player walked out the exit door without ever starting a session
+        if (conversationHistory == null || conversationHistory.Count == 0)
+        {
+            UserSession.LastSessionEndedBeforeStart = true;
+            UserSession.LastSessionAbortReason = "Session ended early before starting. No session data was saved.";
+        }
+
         isExiting = true;
         StartCoroutine(ExecuteSceneTransitionRoutine());
     }
@@ -749,13 +767,19 @@ public class InteractionManager : MonoBehaviour
         if (targetEmotion == null)
             Debug.LogWarning("[InteractionManager] Selected NPC has no emotion controller.", targetNPC);
 
-        if (eyeContactTracker != null && targetNPC.facialCollider != null)
-            eyeContactTracker.SetTargetFacialCollider(targetNPC.facialCollider);
+        if (eyeContactTracker != null)
+        {
+            if (targetNPC.facialCollider != null)
+                eyeContactTracker.SetTargetFacialCollider(targetNPC.facialCollider);
+
+            eyeContactTracker.SetEyeContactIcon(targetNPC.eyeContactIcon);
+        }
 
         if (roomNPCs.Contains(targetNPC))
         {
             currentNPCIndex = roomNPCs.IndexOf(targetNPC);
         }
+
     }
 
     public void SelectNextNPC()

@@ -89,12 +89,12 @@ public class HintUIController : MonoBehaviour
         Debug.Log("[hintUIController] OnDisable");
     }
 
-    private void OnControllerHintPressed(InputAction.CallbackContext context)
-    {
-        Debug.Log($"[hintUIController] PRESSED: {context.control.path} | Mode: {currentInputMode} | DialogueActive: {isDialogueActive}");
-        if (currentInputMode != InputMode.Controller) return;
-        ProcessHintTrigger();
-    }
+    //private void OnControllerHintPressed(InputAction.CallbackContext context)
+    //{
+    //    Debug.Log($"[hintUIController] PRESSED: {context.control.path} | Mode: {currentInputMode} | DialogueActive: {isDialogueActive}");
+    //    if (currentInputMode != InputMode.Controller) return;
+    //    ProcessHintTrigger();
+    //}
 
     // -------------------------------------------------------------
     // Hand Tracking Gesture Callbacks (Have a Question & Thumbs Down)
@@ -124,7 +124,7 @@ public class HintUIController : MonoBehaviour
         if (hintPanelRoot != null && hintPanelRoot.activeSelf)
         {
             Debug.Log("<color=orange>[hintUIController]</color> OnThumbsDownGestureTriggered received. Hiding 3D panel...");
-            hintPanelRoot.SetActive(false);
+            HideHintCanvas();
         }
     }
 
@@ -141,7 +141,7 @@ public class HintUIController : MonoBehaviour
         // 1. If panel is ALREADY open, toggle it OFF
         if (hintPanelRoot.activeSelf)
         {
-            hintPanelRoot.SetActive(false);
+            HideHintCanvas();
             return;
         }
 
@@ -200,19 +200,27 @@ public class HintUIController : MonoBehaviour
 
     public void ShowDirectMessage(string message, bool isFinalResult = false)
     {
-        if (isFinalResult && audioSource != null && hintReceivedClip != null)
-            audioSource.PlayOneShot(hintReceivedClip);
+        if (!isDialogueActive) return;
+
+        if (isFinalResult)
+        {
+            currentDialogueHint = message;
+            if (hintPanelRoot != null && hintPanelRoot.activeSelf && audioSource != null && hintReceivedClip != null)
+            {
+                audioSource.PlayOneShot(hintReceivedClip);
+            }
+        }
 
         if (hintPanelRoot == null || hintText == null) return;
 
         hintText.text = message;
 
         // Only force open if this is the final AI hint result arriving from OpenAI
-        if (isFinalResult && !hintPanelRoot.activeSelf)
-        {
-            PositionInFrontOfPlayer(hintPanelRoot);
-            hintPanelRoot.SetActive(true);
-        }
+        //if (isFinalResult && !hintPanelRoot.activeSelf)
+        //{
+        //    PositionInFrontOfPlayer(hintPanelRoot);
+        //    hintPanelRoot.SetActive(true);
+        //}
     }
 
     public void SyncInputModeFromUserSession()
