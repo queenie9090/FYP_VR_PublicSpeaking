@@ -40,6 +40,12 @@ public class NPCLipSync : MonoBehaviour
     private float originalMouthWeight;
     private float originalTeethWeight;
 
+    // Follow the AudioSource actually selected for this NPC's speech.
+    public void SetAudioSource(AudioSource source)
+    {
+        npcAudioSource = source;
+    }
+
     private void Start()
     {
         if (faceMesh == null || faceMesh.sharedMesh == null)
@@ -157,6 +163,7 @@ public class NPCLipSync : MonoBehaviour
 
     private void OnDisable()
     {
+        currentWeight = originalMouthWeight;
         if (faceMesh != null && mouthIndex >= 0)
         {
             faceMesh.SetBlendShapeWeight(

@@ -16,6 +16,16 @@ public class NPCEmotionRecord
     public string emotionTrigger;
 }
 
+[Serializable]
+public class NPCRealismEvent
+{
+    public string id = Guid.NewGuid().ToString();
+    public string kind, npcId, state, emotion, detail, target, text, voiceStyle;
+    public int intensity, turnNumber;
+    public bool blink;
+    public string timestamp = DateTime.UtcNow.ToString("o");
+}
+
 public class NPCEmotionSessionManager : MonoBehaviour
 {
     public static NPCEmotionSessionManager Instance { get; private set; }
@@ -37,6 +47,31 @@ public class NPCEmotionSessionManager : MonoBehaviour
     private readonly List<BodyAnimationEventRecord> bodyEvents = new();
     public IReadOnlyList<BodyAnimationEventRecord> BodyAnimationEvents => bodyEvents;
     public bool IsCollectingBodyEvents { get; private set; }
+    private readonly List<NPCRealismEvent> realismEvents = new();
+    public IReadOnlyList<NPCRealismEvent> RealismEvents => realismEvents;
+    private NPCEmotionController activeSource;
+    private string activeNpc, activeState;
+    private int activeTurn;
+
+    public void SetRealismContext(NPCEmotionController source, string npc, string state, int turn)
+    {
+        activeSource = source;
+        activeNpc = npc;
+        activeState = state;
+        activeTurn = turn;
+    }
+
+    public void RecordRealismEvent(NPCEmotionController source, string kind, string detail,
+        string target = null, string text = null, string voiceStyle = null, bool blink = false)
+    {
+        if (!IsCollectingBodyEvents || source == null || source != activeSource ||
+            string.IsNullOrWhiteSpace(activeNpc)) return;
+        realismEvents.Add(new NPCRealismEvent {
+            kind = kind, npcId = activeNpc, state = activeState, turnNumber = activeTurn,
+            emotion = source.currentEmotion, intensity = source.emotionIntensity,
+            detail = detail, target = target, text = text, voiceStyle = voiceStyle, blink = blink
+        });
+    }
 
     public void RecordBodyAnimation(BodyAnimationEventRecord record)
     {
@@ -65,6 +100,8 @@ public class NPCEmotionSessionManager : MonoBehaviour
     {
         emotionHistory.Clear();
         bodyEvents.Clear();
+        realismEvents.Clear();
+        activeSource = null;
         IsCollectingBodyEvents = true;
         Debug.Log("[Emotion Session] New session started.");
     }

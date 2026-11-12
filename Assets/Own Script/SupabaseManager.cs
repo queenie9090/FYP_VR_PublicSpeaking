@@ -35,7 +35,8 @@ public class SupabaseManager : MonoBehaviour
         Action onSuccess,
         Action<string> onError,
         List<NPCEmotionRecord> emotions = null,
-        List<BodyAnimationEventRecord> bodyEvents = null)
+        List<BodyAnimationEventRecord> bodyEvents = null,
+        List<NPCRealismEvent> realismEvents = null)
     {
         string key = userId + "|" + startTime;
         if (!pendingSaves.TryGetValue(key, out var save))
@@ -82,11 +83,41 @@ public class SupabaseManager : MonoBehaviour
                     session_id = sessionId, turn_id = turnId
                 });
             }
+            var eyeEvents = new List<object>();
+            var facialEvents = new List<object>();
+            var voiceEvents = new List<object>();
+            foreach (var record in realismEvents ?? new List<NPCRealismEvent>())
+            {
+                turnIds.TryGetValue(record.turnNumber, out string turnId);
+                if (record.kind == "eye")
+                    eyeEvents.Add(new { eye_event_id = record.id, session_id = sessionId, turn_id = turnId,
+                        npc_id = record.npcId, npc_state = record.state, emotion = record.emotion,
+                        gaze_target = record.target, eye_behaviour = record.detail,
+                        blink_event = record.blink, timestamp = record.timestamp });
+                else if (record.kind == "face")
+                    facialEvents.Add(new { expression_event_id = record.id, session_id = sessionId, turn_id = turnId,
+                        npc_id = record.npcId, npc_state = record.state, emotion = record.emotion,
+                        emotion_intensity = record.intensity, expression_type = record.detail,
+                        micro_expression = (string)null, timestamp = record.timestamp });
+                else if (record.kind == "voice")
+                {
+                    if (turnId == null)
+                    {
+                        onError?.Invoke("[Voice mapping] No dialogue turn for voice event " + record.turnNumber);
+                        yield break;
+                    }
+                    voiceEvents.Add(new { voice_event_id = record.id, session_id = sessionId, turn_id = turnId,
+                        npc_id = record.npcId, emotion = record.emotion, emotion_intensity = record.intensity,
+                        voice_style = record.voiceStyle, dialogue_text = record.text, tts_status = record.detail,
+                        timestamp = record.timestamp });
+                }
+            }
             save = new PendingSave
             {
                 UserId = userId,
                 SessionId = sessionId,
-                Operation = animationLogs.Count > 0 ? "save_training_session_v2" : "save_training_session",
+                Operation = realismEvents != null && realismEvents.Count > 0 ? "save_training_session_v3" :
+                    animationLogs.Count > 0 ? "save_training_session_v2" : "save_training_session",
                 Json = JsonConvert.SerializeObject(new { payload = new {
                     session = new { session_id = sessionId, user_id = userId,
                         scenario_type = scenarioType, selected_role = selectedRole,
@@ -98,7 +129,8 @@ public class SupabaseManager : MonoBehaviour
                         eye_contact_pct = eyeContactPct, hand_gesture_score = gestureScore,
                         average_wpm = wpm, filler_word_count = totalFillers, gestures_per_minute = gpm,
                         total_silence_seconds = totalSilenceSeconds, ai_feedback_summary = feedbackSummary },
-                    turns, emotions = logs, body_events = animationLogs } })
+                    turns, emotions = logs, body_events = animationLogs, eye_events = eyeEvents,
+                    facial_events = facialEvents, voice_events = voiceEvents } })
             };
             pendingSaves.Add(key, save);
         }
@@ -116,6 +148,50 @@ public class SupabaseManager : MonoBehaviour
     }
 
     private static readonly Dictionary<string, PendingSave> pendingSaves = new();
+
+    public IEnumerator GetSessionBehaviourSummary(string sessionId, Action<Dictionary<string, string>> onSuccess,
+        Action<string> onError)
+    {
+        var summary = new Dictionary<string, string>();
+        string token = UserSession.AuthClient?.Auth.CurrentSession?.AccessToken;
+        if (!Guid.TryParse(sessionId, out _) || string.IsNullOrEmpty(token))
+        {
+            onError?.Invoke("A valid session and signed-in account are required.");
+            yield break;
+        }
+        var tables = new[] { "eye_behaviour_event", "facial_expression_event", "body_animation_event", "voice_event" };
+        var fields = new[] { "eye_behaviour", "expression_type", "animation_name", "tts_status,voice_style" };
+        for (int i = 0; i < tables.Length; i++)
+        {
+            string endpoint = ConfigLoader.GetSupabaseUrl().TrimEnd('/') + "/rest/v1/" + tables[i] +
+                "?session_id=eq." + UnityWebRequest.EscapeURL(sessionId) + "&select=" + fields[i] +
+                "&order=timestamp.desc&limit=1";
+            using (var request = UnityWebRequest.Get(endpoint))
+            {
+                request.timeout = 20;
+                request.SetRequestHeader("apikey", ConfigLoader.GetSupabaseAnonKey().Trim());
+                request.SetRequestHeader("Authorization", "Bearer " + token);
+                yield return request.SendWebRequest();
+                if (request.result != UnityWebRequest.Result.Success)
+                {
+                    onError?.Invoke($"[{tables[i]} HTTP {request.responseCode}] {request.error} | {request.downloadHandler.text}");
+                    yield break;
+                }
+                List<Dictionary<string, object>> rows;
+                try { rows = JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(request.downloadHandler.text); }
+                catch (Exception ex) { onError?.Invoke("Behaviour response parsing failed: " + ex.Message); yield break; }
+                if (rows != null && rows.Count > 0)
+                {
+                    string primaryField = i == 3 ? "tts_status" : fields[i];
+                    if (rows[0].TryGetValue(primaryField, out var value))
+                        summary[tables[i]] = value?.ToString();
+                    if (i == 3 && rows[0].TryGetValue("voice_style", out var style))
+                        summary["voice_style"] = style?.ToString();
+                }
+            }
+        }
+        onSuccess?.Invoke(summary);
+    }
 
     [ContextMenu("Retry Pending Session Saves")]
     public void RetryPendingSaves()

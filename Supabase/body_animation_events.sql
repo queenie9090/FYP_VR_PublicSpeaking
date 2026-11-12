@@ -21,12 +21,20 @@ CREATE INDEX IF NOT EXISTS body_animation_event_session_time
 ON public.body_animation_event(session_id, timestamp);
 ALTER TABLE public.body_animation_event ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.body_animation_event TO authenticated;
-DROP POLICY IF EXISTS body_animation_owner_read ON public.body_animation_event;
-CREATE POLICY body_animation_owner_read ON public.body_animation_event
-FOR SELECT TO authenticated USING (EXISTS (
-    SELECT 1 FROM public.session s
-    WHERE s.session_id = body_animation_event.session_id AND s.user_id = auth.uid()
-));
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE schemaname = 'public' AND tablename = 'body_animation_event'
+          AND policyname = 'body_animation_owner_read'
+    ) THEN
+        CREATE POLICY body_animation_owner_read ON public.body_animation_event
+        FOR SELECT TO authenticated USING (EXISTS (
+            SELECT 1 FROM public.session s
+            WHERE s.session_id = body_animation_event.session_id AND s.user_id = auth.uid()
+        ));
+    END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION public.save_training_session_v2(payload jsonb)
 RETURNS uuid

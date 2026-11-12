@@ -67,6 +67,7 @@ public class InteractionManager : MonoBehaviour
     private string sessionCompletionStatus = "Completed";
     private Coroutine initiationCoroutine;
     private Coroutine activeSpeechLoopCoroutine;
+    private Coroutine activeRecordingCoroutine;
 
     private void Start()
     {
@@ -310,7 +311,7 @@ public class InteractionManager : MonoBehaviour
             bool recDone = false;
 
             // Pass live remaining time directly into the UI status text bar
-            StartCoroutine(audioRecorder.RecordUserSpeechRoutine(
+            activeRecordingCoroutine = StartCoroutine(audioRecorder.RecordUserSpeechRoutine(
                 (bytes, sDuration, silDuration) => {
                     wavBytes = bytes; speechDuration = sDuration; silenceDuration = silDuration;
                     recDone = true;
@@ -322,20 +323,37 @@ public class InteractionManager : MonoBehaviour
             ));
 
             yield return new WaitUntil(() => recDone);
+            activeRecordingCoroutine = null;
 
             if (!isSessionActive) yield break;
+            if (wavBytes == null || wavBytes.Length == 0)
+            {
+                uiManager.SetStatus("Microphone unavailable. Check the microphone and restart the session.");
+                Debug.LogError("[InteractionManager] No microphone audio was recorded. The conversation was not advanced.");
+                yield break;
+            }
 
             sessionTimer.RecordTurnDurations(speechDuration, silenceDuration);
 
             bool turnDone = false;
+            bool transcriptionFailed = false;
+            int historyCountBeforeTranscription = conversationHistory.Count;
             StartCoroutine(speechController.TranscribeUserAudioRoutine(
                 wavBytes, speechDuration, silenceDuration, conversationHistory,
                 fillers => totalFillerWordsDetected += fillers,
-                () => turnDone = true
+                () => turnDone = true,
+                () => transcriptionFailed = true
             ));
 
             yield return new WaitUntil(() => turnDone);
-            string userTranscript = (conversationHistory.Count > 0 && conversationHistory[conversationHistory.Count - 1].speaker == "User")
+            if (!isSessionActive) yield break;
+            if (transcriptionFailed)
+            {
+                uiManager.SetStatus("Speech recognition failed. Please try speaking again.");
+                yield return new WaitForSeconds(1.5f);
+                continue;
+            }
+            string userTranscript = (conversationHistory.Count > historyCountBeforeTranscription && conversationHistory[conversationHistory.Count - 1].speaker == "User")
     ? conversationHistory[conversationHistory.Count - 1].dialogue
     : "";
             yield return ProcessLLMTurnRoutine(userTranscript);
@@ -355,16 +373,42 @@ public class InteractionManager : MonoBehaviour
         int expectedTurnNumber = turnCounter + 1;
         SetNPCBodyActivity(NPCBodyActivity.THINKING, expectedTurnNumber);
 
-        LLMResponse response = null; bool llmDone = false;
-        StartCoroutine(openAIManager.SendChatRequest(
-            PromptBuilder.BuildSystemPrompt(activeConfig, turnCounter, previousEmotion),
-            conversationHistory,
-            formattedTranscript,
-            res => { response = res; llmDone = true; },
-            err => { Debug.LogError($"[LLM Error] {err}"); llmDone = true; }
-        ));
-
-        yield return new WaitUntil(() => llmDone);
+        LLMResponse response = null;
+        string fallbackEmotion = EmotionIntensityClassifier.IsSupported(previousEmotion)
+            ? previousEmotion.Trim().ToUpperInvariant() : "NEUTRAL";
+        for (int attempt = 0; attempt < 2; attempt++)
+        {
+            LLMResponse candidate = null;
+            bool llmDone = false;
+            string prompt = PromptBuilder.BuildSystemPrompt(activeConfig, turnCounter, previousEmotion);
+            if (attempt > 0)
+                prompt += "\nReassess the emotion using the participant's actual context. Return one valid JSON response with a supported emotion.";
+            StartCoroutine(openAIManager.SendChatRequest(prompt, conversationHistory, formattedTranscript,
+                res => { candidate = res; llmDone = true; },
+                err => { Debug.LogError($"[LLM Error] {err}"); llmDone = true; },
+                true, () => this == null || !isSessionActive));
+            yield return new WaitUntil(() => llmDone || !isSessionActive);
+            if (!isSessionActive) yield break;
+            if (candidate == null)
+            {
+                if (attempt == 0)
+                {
+                    Debug.LogWarning("[LLM] Response failed; retrying once.");
+                    continue;
+                }
+                break;
+            }
+            response = candidate;
+            if (!EmotionIntensityClassifier.NeedsReassessment(candidate.emotion, fallbackEmotion, userTranscript)) break;
+            Debug.LogWarning(EmotionIntensityClassifier.IsSupported(candidate.emotion)
+                ? "[Emotion Validation] Reassessing an emotion change without participant input."
+                : "[Emotion Validation] Reassessing an unsupported emotion label.");
+            if (attempt == 1)
+            {
+                response.emotion = fallbackEmotion;
+                Debug.LogWarning("[Emotion Validation] Reassessment failed; retaining the previous valid emotion.");
+            }
+        }
         if (!isSessionActive) yield break;   // session was closed while waiting for the LLM
         if (response == null || string.IsNullOrEmpty(response.npc_response))
         {
@@ -373,6 +417,8 @@ public class InteractionManager : MonoBehaviour
             yield return new WaitForSeconds(1.5f);
             yield break;
         }
+        if (EmotionIntensityClassifier.NeedsReassessment(response.emotion, fallbackEmotion, userTranscript))
+            response.emotion = fallbackEmotion;
 
         // Check that the response belongs to the expected turn.
         if (response.turn_number != expectedTurnNumber)
@@ -391,10 +437,8 @@ public class InteractionManager : MonoBehaviour
         string validatedEmotion = response.emotion;
         previousEmotion = validatedEmotion;
 
-        // TEMPORARY intensity for integration testing.
-        // Replace with Unity's actual intensity calculation later.
-        int testIntensity =
-            validatedEmotion == "NEUTRAL" ? 0 : 60;
+        int emotionIntensity = EmotionIntensityClassifier.Classify(
+            validatedEmotion, userTranscript, response.npc_response);
 
         if (NPCEmotionSessionManager.Instance != null)
         {
@@ -406,7 +450,7 @@ public class InteractionManager : MonoBehaviour
                 expectedTurnNumber,
                 npcName,
                 validatedEmotion,
-                testIntensity
+                emotionIntensity
             );
         }
         else
@@ -420,12 +464,12 @@ public class InteractionManager : MonoBehaviour
         {
             npcEmotionController.SetEmotion(
                 validatedEmotion,
-                testIntensity
+                emotionIntensity
             );
 
             Debug.Log(
                 $"[NPC Emotion] Turn {expectedTurnNumber}: " +
-                $"{validatedEmotion}, Intensity: {testIntensity}"
+                $"{validatedEmotion}, Intensity: {emotionIntensity}"
             );
         }
         else
@@ -445,7 +489,7 @@ public class InteractionManager : MonoBehaviour
             hintUIController.OnNewTurnStarted();
         }
 
-        uiManager.SetStatus("NPC Speaking...");
+        uiManager.SetStatus("Generating NPC speech...");
         yield return StartCoroutine(speechController.PlayNPCAudioRoutine(
             response.npc_response, currentActiveNPC, fallbackNpcAudioSource, expectedTurnNumber
         ));
@@ -520,6 +564,7 @@ public class InteractionManager : MonoBehaviour
 
         if (isSavingSession) return;
         SetNPCBodyActivity(NPCBodyActivity.IDLE);
+        if (speechController != null) speechController.CancelPendingSpeech();
         leaveAfterSessionEnds = false; // Stay in the scene!
 
         if (activeSpeechLoopCoroutine != null)
@@ -547,6 +592,11 @@ public class InteractionManager : MonoBehaviour
             fallbackNpcAudioSource.Stop();
         }
 
+        if (activeRecordingCoroutine != null)
+        {
+            StopCoroutine(activeRecordingCoroutine);
+            activeRecordingCoroutine = null;
+        }
         if (audioRecorder != null)
         {
             audioRecorder.StopRecording();
@@ -685,8 +735,16 @@ public class InteractionManager : MonoBehaviour
         if (targetNPC == null) return;
         SetNPCBodyActivity(NPCBodyActivity.IDLE);
         currentActiveNPC = targetNPC;
-        var targetEmotion = targetNPC.GetComponentInChildren<NPCEmotionController>();
-        if (targetEmotion != null) npcEmotionController = targetEmotion;
+        var targetEmotion = targetNPC.GetComponentInParent<NPCEmotionController>() ??
+            targetNPC.GetComponentInChildren<NPCEmotionController>();
+        npcEmotionController = targetEmotion;
+        if (emotionPanel != null)
+        {
+            var indicator = emotionPanel.GetComponentInChildren<NPCEmotionIndicatorUI>(true);
+            if (indicator != null) indicator.SetEmotionSource(targetEmotion);
+        }
+        if (targetEmotion == null)
+            Debug.LogWarning("[InteractionManager] Selected NPC has no emotion controller.", targetNPC);
 
         if (eyeContactTracker != null && targetNPC.facialCollider != null)
             eyeContactTracker.SetTargetFacialCollider(targetNPC.facialCollider);
@@ -706,7 +764,12 @@ public class InteractionManager : MonoBehaviour
 
     private void SetNPCBodyActivity(NPCBodyActivity activity, int turnNumber = 0)
     {
+        NPCEmotionSessionManager.Instance?.SetRealismContext(npcEmotionController,
+            currentActiveNPC != null ? currentActiveNPC.name : null, activity.ToString(), turnNumber);
         if (currentActiveNPC != null)
+        {
             currentActiveNPC.GetComponentInParent<NPCBodyAnimation>()?.SetActivity(activity, turnNumber);
+            currentActiveNPC.GetComponentInParent<NPCEyeContactController>()?.SetActivity(activity);
+        }
     }
 }

@@ -94,6 +94,8 @@ public class NPCEyeBlinkController : MonoBehaviour
     {
         isBlinking = true;
         blinkProgress = 0f;
+        NPCEmotionSessionManager.Instance?.RecordRealismEvent(
+            GetComponentInParent<NPCEmotionController>(), "eye", "Blink", blink: true);
 
         Debug.Log($"[{name}] BlinkEvent triggered.");
     }
@@ -151,6 +153,9 @@ public class NPCEyeBlinkController : MonoBehaviour
 
     private void OnDisable()
     {
+        isBlinking = false;
+        blinkProgress = 0f;
+        blinkTimer = 0f;
         if (faceMesh == null)
             return;
 

@@ -57,6 +57,22 @@ public class NPCEyeContactController : MonoBehaviour
     private float gazeDuration;
 
     private bool isGazeShifting = false;
+    private NPCBodyActivity activity = NPCBodyActivity.IDLE;
+    private float thinkingStarted;
+    private bool thinkingShiftRecorded;
+
+    // Scene code can reconnect a replacement tracked headset without recreating the NPC.
+    public void SetPlayerHead(Transform trackedHead) => playerHead = trackedHead;
+
+    public void SetActivity(NPCBodyActivity value)
+    {
+        if (activity == value) return;
+        activity = value;
+        thinkingStarted = Time.time;
+        thinkingShiftRecorded = false;
+        isGazeShifting = false;
+        gazeOffset = Vector2.zero;
+    }
 
     // X = horizontal angle, Y = vertical angle
     private Vector2 gazeOffset = Vector2.zero;
@@ -65,8 +81,7 @@ public class NPCEyeContactController : MonoBehaviour
     {
         if (eyeMesh == null ||
             eyeMesh.sharedMesh == null ||
-            gazeReference == null ||
-            playerHead == null)
+            gazeReference == null)
         {
             Debug.LogError(
                 $"[{name}] Eye Contact references are missing."
@@ -75,6 +90,9 @@ public class NPCEyeContactController : MonoBehaviour
             enabled = false;
             return;
         }
+
+        if (playerHead == null)
+            Debug.LogWarning($"[{name}] Assign the tracked headset to Player Head for eye contact.");
 
         Mesh mesh = eyeMesh.sharedMesh;
 
@@ -110,9 +128,9 @@ public class NPCEyeContactController : MonoBehaviour
                 return;
             }
 
-            originalWeights[i] =
-                eyeMesh.GetBlendShapeWeight(indices[i]);
         }
+        for (int i = 0; i < indices.Length; i++)
+            originalWeights[i] = eyeMesh.GetBlendShapeWeight(indices[i]);
 
         if (emotionController == null)
         {
@@ -129,10 +147,14 @@ public class NPCEyeContactController : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (eyeMesh == null ||
-            gazeReference == null ||
-            playerHead == null)
+        if (eyeMesh == null || gazeReference == null)
             return;
+
+        if (playerHead == null || !playerHead.gameObject.activeInHierarchy)
+        {
+            ReturnToNeutral();
+            return;
+        }
 
         // Step 1: Calculate normal eye contact direction.
         Vector3 direction =
@@ -165,6 +187,10 @@ public class NPCEyeContactController : MonoBehaviour
 
         // Step 2: Apply emotion-based gaze modifier.
         Vector2 emotionOffset = UpdateEmotionGaze();
+        // A slow, small idle variation avoids a fixed stare without disturbing
+        // the stronger thinking or emotion-driven gaze changes.
+        if (activity == NPCBodyActivity.IDLE && emotionOffset.sqrMagnitude < 0.0001f)
+            emotionOffset.x += 1.0f * Mathf.Sin(Time.time * 0.45f);
 
         horizontalAngle += emotionOffset.x;
         verticalAngle += emotionOffset.y;
@@ -208,6 +234,22 @@ public class NPCEyeContactController : MonoBehaviour
 
     private Vector2 UpdateEmotionGaze()
     {
+        if (activity == NPCBodyActivity.THINKING)
+        {
+            float elapsed = Time.time - thinkingStarted;
+            if (elapsed >= 0.4f && elapsed < 1.8f)
+            {
+                if (!thinkingShiftRecorded)
+                {
+                    thinkingShiftRecorded = true;
+                    NPCEmotionSessionManager.Instance?.RecordRealismEvent(
+                        emotionController, "eye", "Thinking gaze shift");
+                }
+                float phase = (elapsed - 0.4f) / 1.4f;
+                return new Vector2(4f, 1f) * Mathf.Sin(phase * Mathf.PI);
+            }
+            return Vector2.zero;
+        }
         if (!enableEmotionGaze ||
             emotionController == null)
         {
@@ -343,6 +385,8 @@ public class NPCEyeContactController : MonoBehaviour
         Debug.Log(
             $"[{name}] Emotion gaze event: {emotion}"
         );
+        NPCEmotionSessionManager.Instance?.RecordRealismEvent(
+            emotionController, "eye", "Emotion gaze shift");
     }
 
     private void ScheduleNextGaze()
