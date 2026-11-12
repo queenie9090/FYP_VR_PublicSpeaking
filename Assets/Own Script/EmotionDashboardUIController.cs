@@ -91,21 +91,20 @@ public class EmotionDashboardUIController : MonoBehaviour
                 SetSummary(bodySummaryText, result, "body_animation_event");
                 SetSummary(voiceSummaryText, result, "voice_style");
                 if (lipSyncSummaryText != null)
-                    lipSyncSummaryText.text = result.TryGetValue("voice_event", out var tts) && !string.IsNullOrWhiteSpace(tts)
+                    lipSyncSummaryText.text = result != null && result.TryGetValue("voice_event", out var tts) && !string.IsNullOrWhiteSpace(tts)
                         ? "TTS: " + tts + " | Lip sync: Not Recorded" : "Not Recorded";
             }, error =>
             {
                 Debug.LogError("[Emotion Dashboard] " + error);
                 if (this == null || UserSession.EmotionDashboardSession?.session_id != sessionId) return;
-                foreach (var label in new[] { eyeSummaryText, faceSummaryText, bodySummaryText, voiceSummaryText, lipSyncSummaryText })
-                    if (label != null) label.text = "Unavailable";
+                ShowBehaviourUnavailable();
             }));
             var savedHistory = new List<NPCEmotionRecord>();
             foreach (var turn in (selectedSession.dialogue_turn ?? new List<DialogueTurnRecord>())
-                .OrderBy(t => t.turn_sequence))
+                .Where(t => t != null).OrderBy(t => t.turn_sequence))
             {
                 foreach (var item in (turn.npc_emotion_log ?? new List<NPCEmotionLogData>())
-                    .OrderBy(e => e.recorded_at))
+                    .Where(e => e != null).OrderBy(e => e.recorded_at))
                 {
                     if (!emotionOrder.Contains(item.current_emotion)) continue;
                     savedHistory.Add(new NPCEmotionRecord
@@ -122,7 +121,8 @@ public class EmotionDashboardUIController : MonoBehaviour
             UpdateTimeline(savedHistory);
             UpdateDistribution(savedHistory, savedHistory.Count);
             if (sessionTotalTurnsText != null)
-                sessionTotalTurnsText.text = (selectedSession.dialogue_turn?.Count ?? 0).ToString();
+                sessionTotalTurnsText.text = selectedSession.dialogue_turn != null
+                    ? selectedSession.dialogue_turn.Count(t => t != null).ToString() : "Not Available";
             return;
         }
         NPCEmotionSessionManager manager =
@@ -193,6 +193,7 @@ public class EmotionDashboardUIController : MonoBehaviour
 
         string emotion = record.emotion;
         int intensity = Mathf.Clamp(record.intensity, 0, 100);
+        if (string.Equals(emotion, "NEUTRAL", StringComparison.OrdinalIgnoreCase)) intensity = 0;
 
         if (finalEmotionLabel != null)
             finalEmotionLabel.text = emotion;
@@ -275,7 +276,7 @@ public class EmotionDashboardUIController : MonoBehaviour
             item.SetActive(true);
 
             Transform iconTransform =
-                item.transform.Find("EmotionIcon");
+                item.transform.Find("EmotionIcon") ?? item.transform.Find("Emotion Icon");
 
             Transform labelTransform =
                 item.transform.Find("EmotionLabel");
@@ -455,7 +456,13 @@ public class EmotionDashboardUIController : MonoBehaviour
     private static void SetSummary(TMP_Text label, Dictionary<string, string> values, string table)
     {
         if (label != null)
-            label.text = values.TryGetValue(table, out var value) && !string.IsNullOrWhiteSpace(value)
+            label.text = values != null && values.TryGetValue(table, out var value) && !string.IsNullOrWhiteSpace(value)
                 ? value : "Not Recorded";
+    }
+
+    private void ShowBehaviourUnavailable()
+    {
+        foreach (var label in new[] { eyeSummaryText, faceSummaryText, bodySummaryText, voiceSummaryText, lipSyncSummaryText })
+            if (label != null) label.text = "Unavailable";
     }
 }

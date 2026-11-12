@@ -227,6 +227,7 @@ public class InteractionManager : MonoBehaviour
         }
 
         uiManager.SetStatus("Session Started");
+        initiationCoroutine = null;
         StartCommunicationSession();
     }
 
@@ -337,6 +338,7 @@ public class InteractionManager : MonoBehaviour
 
             bool turnDone = false;
             bool transcriptionFailed = false;
+            SetNPCBodyActivity(NPCBodyActivity.THINKING, conversationHistory.Count(t => t.speaker == "NPC") + 1);
             int historyCountBeforeTranscription = conversationHistory.Count;
             StartCoroutine(speechController.TranscribeUserAudioRoutine(
                 wavBytes, speechDuration, silenceDuration, conversationHistory,
@@ -562,10 +564,8 @@ public class InteractionManager : MonoBehaviour
             return;
         }
 
-        if (isSavingSession) return;
         SetNPCBodyActivity(NPCBodyActivity.IDLE);
         if (speechController != null) speechController.CancelPendingSpeech();
-        leaveAfterSessionEnds = false; // Stay in the scene!
 
         if (activeSpeechLoopCoroutine != null)
         {
@@ -627,7 +627,10 @@ public class InteractionManager : MonoBehaviour
     /// </summary>
     public void ExitSession()
     {
-        leaveAfterSessionEnds = true; // Transition immediately!
+        if (isExiting) return;
+        leaveAfterSessionEnds = true;
+        // The existing completion callback will navigate after preparation finishes.
+        if (isSavingSession) return;
         CloseSession();
     }
 
@@ -708,23 +711,23 @@ public class InteractionManager : MonoBehaviour
     public void ExecuteSceneTransition()
     {
         if (isExiting) return;
+        // Exit controls and door triggers must not bypass the session-ending path.
+        if (isSessionActive || isSavingSession || initiationCoroutine != null)
+        {
+            ExitSession();
+            return;
+        }
         isExiting = true;
         StartCoroutine(ExecuteSceneTransitionRoutine());
     }
 
     private IEnumerator ExecuteSceneTransitionRoutine()
     {
-        float timeoutCounter = 0f;
-
-        // Timeout safeguard prevents infinite loading hangs if network save stalls
-        while (isSavingSession && timeoutCounter < 5.0f)
+        while (isSavingSession)
         {
             if (uiManager != null) uiManager.SetStatus("Saving progress... Please wait.");
             yield return new WaitForSeconds(0.5f);
-            timeoutCounter += 0.5f;
         }
-
-        isSavingSession = false;
         isSessionActive = false;
 
         yield return transitionController.ExecuteSceneTransitionRoutine(activeConfig, uiManager);

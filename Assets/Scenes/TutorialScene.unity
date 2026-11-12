@@ -14282,7 +14282,7 @@ MonoBehaviour:
         m_CallState: 2
       - m_Target: {fileID: 1296169304}
         m_TargetAssemblyTypeName: InteractionManager, Assembly-CSharp
-        m_MethodName: ExecuteSceneTransition
+        m_MethodName: ExitSession
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -15510,6 +15510,18 @@ PrefabInstance:
     - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: layerName
       value: BodyGestures
+      objectReference: {fileID: 0}
+    - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: seatedActivityGestures
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6112067455029907596, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: expressionStrengthMultiplier
+      value: 1.3
+      objectReference: {fileID: 0}
+    - target: {fileID: 6112067455029907596, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: useExpressiveTutorialProfile
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: actions.Array.size
