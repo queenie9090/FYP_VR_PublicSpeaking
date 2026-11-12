@@ -15,7 +15,7 @@ public class OpenAIManager : MonoBehaviour
     public string DeepgramApiKey => ConfigLoader.GetDeepgramApiKey();
 
     #region Speech-to-Text (Deepgram Nova-3 with Verbatim Fillers)
-    public IEnumerator TranscribeAudioWithPrompt(byte[] wavData, string initialPrompt, Action<string> onSuccess, Action<string> onError)
+    public IEnumerator TranscribeAudioWithPrompt(byte[] wavData, string initialPrompt, Action<string> onSuccess, Action<string> onError, Func<bool> shouldCancel = null)
     {
         using (UnityWebRequest www = new UnityWebRequest(DeepgramUrl, "POST"))
         {
@@ -24,7 +24,9 @@ public class OpenAIManager : MonoBehaviour
             www.SetRequestHeader("Content-Type", "audio/wav");
             www.SetRequestHeader("Authorization", "Token " + DeepgramApiKey);
 
-            yield return www.SendWebRequest();
+            www.timeout = 45;
+            yield return WaitForRequest(www, shouldCancel);
+            if (shouldCancel != null && shouldCancel()) yield break;
 
             if (www.result != UnityWebRequest.Result.Success)
             {
@@ -51,7 +53,7 @@ public class OpenAIManager : MonoBehaviour
     #endregion
 
     #region LLM Structured Completion
-    public IEnumerator SendChatRequest(string systemPrompt, List<DialogueTurn> history, string currentTranscript, Action<LLMResponse> onSuccess, Action<string> onError)
+    public IEnumerator SendChatRequest(string systemPrompt, List<DialogueTurn> history, string currentTranscript, Action<LLMResponse> onSuccess, Action<string> onError, bool preserveInvalidEmotion = false, Func<bool> shouldCancel = null)
     {
         var messages = new List<object>
         {
@@ -82,13 +84,15 @@ public class OpenAIManager : MonoBehaviour
 
         using (UnityWebRequest www = new UnityWebRequest(ChatUrl, "POST"))
         {
+            www.timeout = 45;
             byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonPayload);
             www.uploadHandler = new UploadHandlerRaw(bodyRaw);
             www.downloadHandler = new DownloadHandlerBuffer();
             www.SetRequestHeader("Content-Type", "application/json");
             www.SetRequestHeader("Authorization", "Bearer " + ApiKey);
 
-            yield return www.SendWebRequest();
+            yield return WaitForRequest(www, shouldCancel);
+            if (shouldCancel != null && shouldCancel()) yield break;
 
             if (www.result != UnityWebRequest.Result.Success)
             {
@@ -96,23 +100,9 @@ public class OpenAIManager : MonoBehaviour
             }
             else
             {
-                string rawJson = www.downloadHandler.text;
-                var chatRes = Newtonsoft.Json.JsonConvert.DeserializeObject<ChatCompletionResponse>(rawJson);
-                string contentJson = chatRes.choices[0].message.content;
-
-                // Return to NEUTRAL when the AI give the emotion not suitable with the 6 basic emmotion.
-                LLMResponse response;
-
-                try
+                if (!TryParseNPCResponse(www.downloadHandler.text, out LLMResponse response, out string parseError))
                 {
-                    response =
-                        Newtonsoft.Json.JsonConvert.DeserializeObject<LLMResponse>(
-                            contentJson
-                        );
-                }
-                catch (Exception ex)
-                {
-                    onError?.Invoke("Invalid NPC response JSON: " + ex.Message);
+                    onError?.Invoke(parseError);
                     yield break;
                 }
 
@@ -125,8 +115,12 @@ public class OpenAIManager : MonoBehaviour
 
                 if (string.IsNullOrWhiteSpace(response.emotion))
                 {
-                    onError?.Invoke("NPC emotion is missing.");
-                    yield break;
+                    if (!preserveInvalidEmotion)
+                    {
+                        onError?.Invoke("NPC emotion is missing.");
+                        yield break;
+                    }
+                    response.emotion = "";
                 }
 
                 response.emotion = response.emotion.Trim().ToUpperInvariant();
@@ -137,7 +131,7 @@ public class OpenAIManager : MonoBehaviour
                         "Unsupported NPC emotion: " + response.emotion
                     );
 
-                    response.emotion = "NEUTRAL";
+                    if (!preserveInvalidEmotion) response.emotion = "NEUTRAL";
                 }
 
                 // Return the validated response.
@@ -193,7 +187,7 @@ public class OpenAIManager : MonoBehaviour
     #endregion
 
     #region Text-to-Speech (OpenAI Speech)
-    public IEnumerator TextToSpeech(string text, string voice, Action<AudioClip> onSuccess, Action<string> onError)
+    public IEnumerator TextToSpeech(string text, string voice, Action<AudioClip> onSuccess, Action<string> onError, Func<bool> shouldCancel = null)
     {
         var requestBody = new
         {
@@ -208,13 +202,15 @@ public class OpenAIManager : MonoBehaviour
 
         using (UnityWebRequest request = new UnityWebRequest(TtsUrl, "POST"))
         {
+            request.timeout = 45;
             request.uploadHandler = new UploadHandlerRaw(bodyRaw);
             request.downloadHandler = new DownloadHandlerAudioClip(TtsUrl, AudioType.MPEG);
 
             request.SetRequestHeader("Content-Type", "application/json");
             request.SetRequestHeader("Authorization", $"Bearer {ApiKey}");
 
-            yield return request.SendWebRequest();
+            yield return WaitForRequest(request, shouldCancel);
+            if (shouldCancel != null && shouldCancel()) yield break;
 
             if (request.result != UnityWebRequest.Result.Success)
             {
@@ -235,6 +231,28 @@ public class OpenAIManager : MonoBehaviour
     #region Helper Classes
     private class ChatCompletionResponse { public List<Choice> choices; }
     private class Choice { public Message message; }
+    private static bool TryParseNPCResponse(string json, out LLMResponse response, out string error)
+    {
+        response = null;
+        error = null;
+        try
+        {
+            var envelope = Newtonsoft.Json.JsonConvert.DeserializeObject<ChatCompletionResponse>(json);
+            if (envelope?.choices == null || envelope.choices.Count == 0 ||
+                envelope.choices[0]?.message == null || string.IsNullOrWhiteSpace(envelope.choices[0].message.content))
+            {
+                error = "NPC response envelope is missing message content.";
+                return false;
+            }
+            response = Newtonsoft.Json.JsonConvert.DeserializeObject<LLMResponse>(envelope.choices[0].message.content);
+            return true;
+        }
+        catch (Exception)
+        {
+            error = "Invalid NPC response JSON.";
+            return false;
+        }
+    }
     private class Message { public string content; }
     [Serializable] private class HintResponse { public string hint; }
 
@@ -263,6 +281,20 @@ public class OpenAIManager : MonoBehaviour
         public float confidence;
     }
     #endregion
+
+    private static IEnumerator WaitForRequest(UnityWebRequest request, Func<bool> shouldCancel)
+    {
+        var operation = request.SendWebRequest();
+        while (!operation.isDone)
+        {
+            if (shouldCancel != null && shouldCancel())
+            {
+                request.Abort();
+                yield break;
+            }
+            yield return null;
+        }
+    }
 
     private static bool IsValidEmotion(string emotion)
     {

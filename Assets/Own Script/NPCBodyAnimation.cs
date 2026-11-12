@@ -141,7 +141,10 @@ public class NPCBodyAnimation : MonoBehaviour
         if (value == NPCBodyActivity.IDLE) return true;
         switch (SceneType())
         {
-            case "HALL": return value == NPCBodyActivity.UsePhone;
+            // Group actions require an explicit activity/event; only phone use
+            // is considered automatically during ordinary idle periods.
+            case "HALL": return value == NPCBodyActivity.UsePhone ||
+                value == NPCBodyActivity.Cheer || value == NPCBodyActivity.Clap;
             case "CLASSROOM": return value == NPCBodyActivity.UsePhone ||
                 value == NPCBodyActivity.Talk || value == NPCBodyActivity.Selfie;
             case "KOPITIAM": return value == NPCBodyActivity.UsePhone ||

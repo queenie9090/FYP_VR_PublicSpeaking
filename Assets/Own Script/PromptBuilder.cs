@@ -105,7 +105,7 @@ The JSON must contain exactly five fields.
 Do not include markdown, explanations, or additional properties.
 {{ 
   ""npc_response"": ""string"",
-  ""emotion"": ""NEUTRAL"", //degault emotion
+  ""emotion"": ""NEUTRAL"",
   ""is_relevant"": true,
   ""turn_number"": {currentTurnCount + 1},
   ""end_conversation"": false 

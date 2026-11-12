@@ -35,11 +35,12 @@ public class SessionResultSaver : MonoBehaviour
         var emotions = new List<NPCEmotionRecord>(runner.EmotionHistory);
         runner.FinishBodyEventCollection();
         var bodyEvents = new List<BodyAnimationEventRecord>(runner.BodyAnimationEvents);
+        var realismEvents = new List<NPCRealismEvent>(runner.RealismEvents);
         runner.StartCoroutine(ProcessResultsRoutine(
             activeConfig, new List<DialogueTurn>(conversationHistory), sessionElapsedTimeSeconds,
             totalSpeakingTimeSeconds, totalSilenceTimeSeconds, totalFillerWordsDetected,
             sessionStartTimestamp, eyeContactTracker, gestureTracker, hintUIController, uiManager, onComplete,
-            sessionStatus, emotions, bodyEvents
+            sessionStatus, emotions, bodyEvents, realismEvents
         ));
     }
 
@@ -58,7 +59,8 @@ public class SessionResultSaver : MonoBehaviour
         Action onComplete,
         string sessionStatus,
         List<NPCEmotionRecord> emotions,
-        List<BodyAnimationEventRecord> bodyEvents)
+        List<BodyAnimationEventRecord> bodyEvents,
+        List<NPCRealismEvent> realismEvents)
     {
         if (uiManager != null) uiManager.SetStatus("Saving Results...");
 
@@ -227,6 +229,7 @@ public class SessionResultSaver : MonoBehaviour
                 dialogueTurns: turnRecords,
                 emotions: emotions,
                 bodyEvents: bodyEvents,
+                realismEvents: realismEvents,
                 onSuccess: () => {
                     Debug.Log("[SessionResultSaver] Session successfully saved!");
                     if (uiManager != null) uiManager.SetStatus("Session Saved!");

@@ -1,5 +1,6 @@
 public static class UserSession
 {
+    public static Supabase.Client AuthClient { get; set; }
     public static string CurrentUserId { get; set; }
     public static string CurrentUserEmail { get; set; }
 
@@ -8,13 +9,14 @@ public static class UserSession
 
     // Configured scenario parameters from Setup UI
     public static ScenarioConfig SelectedScenarioConfig { get; set; } = new ScenarioConfig();
-    public static string InputMode { get; set; } = "Hands-Tracking"; //"Controller";
+    public static string InputMode { get; set; } = "Controller";//"Hands-Tracking"; 
 
     // Session control flags
     public static bool IsRunningTutorial { get; set; } = false;
 
     // Active session payload for detailed analytics view
     public static NormalizedSessionData CurrentSessionData { get; set; }
+    public static NormalizedSessionData EmotionDashboardSession { get; set; }
 
     public static bool IsLoggedIn => !string.IsNullOrEmpty(CurrentUserId);
     public static bool IsEducator => UserRole?.ToLower() == "educator";

@@ -29,6 +29,12 @@ public class AudioRecorder : MonoBehaviour
         int targetSampleRate = 16000;
         int maxClipSeconds = 60;
         AudioClip recordedClip = Microphone.Start(selectedMic, false, maxClipSeconds, targetSampleRate);
+        if (recordedClip == null)
+        {
+            Debug.LogError("[AudioRecorder] The microphone could not start recording.");
+            onRecordingComplete?.Invoke(null, 0f, 0f);
+            yield break;
+        }
 
         if (micVolumeMeter != null)
             micVolumeMeter.EnableVolumeMeter(true, recordedClip, selectedMic);
