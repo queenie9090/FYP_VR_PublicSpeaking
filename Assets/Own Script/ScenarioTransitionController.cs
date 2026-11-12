@@ -58,10 +58,15 @@ public class ScenarioTransitionController : MonoBehaviour
         if (isExitingFromTutorial)
         {
             UserSession.IsRunningTutorial = false;
+            // A standalone tutorial has no saved result to show on a dashboard.
+            targetScene = "MainMenu";
 
             if (UserSession.SelectedScenarioConfig != null &&
                 !string.IsNullOrEmpty(UserSession.SelectedScenarioConfig.scenario) &&
-                UserSession.SelectedScenarioConfig.scenario != "TutorialScene")
+                UserSession.SelectedScenarioConfig.scenario != "TutorialScene" &&
+                !UserSession.SelectedScenarioConfig.scenario.Equals("DashboardScene", System.StringComparison.OrdinalIgnoreCase) &&
+                !UserSession.SelectedScenarioConfig.scenario.Equals("PCDashboardScene", System.StringComparison.OrdinalIgnoreCase) &&
+                !UserSession.SelectedScenarioConfig.scenario.Equals("EmotionDashboardScene", System.StringComparison.OrdinalIgnoreCase))
             {
                 targetScene = UserSession.SelectedScenarioConfig.scenario;
             }
@@ -71,7 +76,7 @@ public class ScenarioTransitionController : MonoBehaviour
 
         Debug.Log($"[ScenarioTransitionController] Exiting from '{currentSceneName}' to target scene: '{targetScene}'");
 
-        if (targetScene == defaultDashboardScene || targetScene == "DashboardScene" || targetScene == "PCDashboardScene")
+        if (targetScene == "MainMenu" || targetScene == defaultDashboardScene || targetScene == "DashboardScene" || targetScene == "PCDashboardScene")
         {
             yield return StartCoroutine(VRSceneLoader.DisableVRAndReturnToMenu(targetScene));
         }

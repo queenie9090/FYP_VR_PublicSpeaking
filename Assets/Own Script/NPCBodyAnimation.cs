@@ -50,6 +50,8 @@ public class NPCBodyAnimation : MonoBehaviour
     [Tooltip("Optional seated forearm gestures. Requires IK Pass on the configured body layer.")]
     [SerializeField] private bool seatedActivityGestures;
     [SerializeField, Range(0f, 10f)] private float seatedGestureDegrees = 5f;
+    [Tooltip("Optional speaking forearm motion; zero leaves existing NPCs unchanged.")]
+    [SerializeField, Range(0f, 5f)] private float seatedSpeakingDegrees;
     [SerializeField] private ActionBinding[] actions = Array.Empty<ActionBinding>();
     private readonly List<ActionBinding> validActions = new();
     private readonly List<ActionBinding> candidates = new();
@@ -68,6 +70,8 @@ public class NPCBodyAnimation : MonoBehaviour
     private int selectedTurn;
     private float oneShotCooldownUntil;
     private float seatedGestureWeight;
+    private float speakingGestureWeight;
+    private float speakingStartedAt;
     private float activityStartedAt;
     private bool seatedGestureRecorded;
     private Transform leftForearm, rightForearm;
@@ -123,6 +127,7 @@ public class NPCBodyAnimation : MonoBehaviour
         {
             oneShotCooldownUntil = 0f;
             activityStartedAt = Time.time;
+            if (value == NPCBodyActivity.SPEAKING) speakingStartedAt = Time.time;
             seatedGestureRecorded = false;
         }
         activity = value;
@@ -181,6 +186,11 @@ public class NPCBodyAnimation : MonoBehaviour
             (activity == NPCBodyActivity.LISTENING || activity == NPCBodyActivity.THINKING);
         seatedGestureWeight = Mathf.MoveTowards(seatedGestureWeight, seatedActivity ? 1f : 0f,
             Time.deltaTime / Mathf.Max(0.25f, blendSeconds));
+        bool seatedSpeaking = seatedActivityGestures && seatedSpeakingDegrees > 0f &&
+            npcType == NPCBodyType.INTERVIEWER && string.IsNullOrEmpty(pendingEvent) &&
+            animator.isHuman && rightForearm != null && activity == NPCBodyActivity.SPEAKING;
+        speakingGestureWeight = Mathf.MoveTowards(speakingGestureWeight, seatedSpeaking ? 1f : 0f,
+            Time.deltaTime / Mathf.Max(0.25f, blendSeconds));
         string emotion = emotionSource != null ? emotionSource.currentEmotion : "NEUTRAL";
         string context = activity + "|" + emotion + "|" + pendingEvent;
         if (selected != null)
@@ -238,6 +248,24 @@ public class NPCBodyAnimation : MonoBehaviour
     // writes or face/head/root/leg bones are owned by this component.
     private void OnAnimatorIK(int layerIndex)
     {
+        if (seatedActivityGestures && layerIndex == layer && speakingGestureWeight > 0f &&
+            string.IsNullOrEmpty(pendingEvent) && rightForearm != null &&
+            (activity == NPCBodyActivity.SPEAKING || activity == NPCBodyActivity.IDLE))
+        {
+            float speakingCycle = .5f - .5f * Mathf.Cos(Mathf.Max(0f, Time.time - speakingStartedAt) * 2f);
+            float speakingAngle = Mathf.Clamp(seatedSpeakingDegrees, 0f, 5f) * speakingGestureWeight * speakingCycle;
+            if (speakingAngle > .01f)
+            {
+                animator.SetBoneLocalRotation(HumanBodyBones.RightLowerArm,
+                    rightForearm.localRotation * Quaternion.AngleAxis(-speakingAngle, Vector3.right));
+                if (activity == NPCBodyActivity.SPEAKING && !seatedGestureRecorded)
+                {
+                    seatedGestureRecorded = true;
+                    RecordSeatedGestureStart();
+                }
+            }
+            return;
+        }
         if (!seatedActivityGestures || layerIndex != layer || seatedGestureWeight <= 0f ||
             !string.IsNullOrEmpty(pendingEvent) ||
             leftForearm == null || rightForearm == null ||
@@ -346,5 +374,6 @@ public class NPCBodyAnimation : MonoBehaviour
         lastContext = null;
         pendingEvent = null;
         seatedGestureWeight = 0f;
+        speakingGestureWeight = 0f;
     }
 }

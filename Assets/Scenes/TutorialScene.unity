@@ -3042,7 +3042,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NPCFaceZoom
   interactionManager: {fileID: 0}
   panelDistance: 1.3
-  faceDistance: 0.65
+  faceDistance: 0.81
   fieldOfView: 32
 --- !u!114 &179973872
 MonoBehaviour:
@@ -31991,7 +31991,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -17.725, y: 8.872739}
+  m_AnchoredPosition: {x: -17.725, y: 8.872914}
   m_SizeDelta: {x: 35.45, y: 0}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &2118013199

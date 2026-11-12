@@ -5,6 +5,7 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 public class SupabaseManager : MonoBehaviour
 {
@@ -47,6 +48,11 @@ public class SupabaseManager : MonoBehaviour
             var turnIds = new Dictionary<int, string>();
             foreach (var turn in dialogueTurns ?? new List<DialogueTurnRecord>())
             {
+                if (turn == null || turn.turn_sequence < 1 || turnIds.ContainsKey(turn.turn_sequence))
+                {
+                    onError?.Invoke("[Dialogue mapping] A dialogue turn is missing or has an invalid or duplicate sequence.");
+                    yield break;
+                }
                 string turnId = Guid.NewGuid().ToString();
                 turnIds.Add(turn.turn_sequence, turnId);
                 turns.Add(new { turn_id = turnId, session_id = sessionId,
@@ -134,7 +140,55 @@ public class SupabaseManager : MonoBehaviour
             };
             pendingSaves.Add(key, save);
         }
-        yield return SubmitPending(save, onSuccess, onError);
+        yield return SubmitPending(save, () =>
+        {
+            // The performance dashboard already consumes CurrentSessionData.
+            // Hand it the exact confirmed payload instead of querying the latest
+            // session, which may belong to a different concurrent session.
+            try
+            {
+                if (UserSession.CurrentUserId != save.UserId ||
+                    UserSession.AuthClient?.Auth.CurrentUser?.Id != save.UserId)
+                    throw new InvalidOperationException("Signed-in account changed during the save.");
+                var confirmed = BuildConfirmedSessionSnapshot(save.Json);
+                UserSession.CurrentSessionData = confirmed;
+                UserSession.EmotionDashboardSession = confirmed;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("[Session save] Saved, but dashboard handoff failed: " + ex.Message);
+                onError?.Invoke("Session was saved, but dashboard handoff failed. Retry to open the confirmed session.");
+                return;
+            }
+            onSuccess?.Invoke();
+        }, onError);
+    }
+
+    private static NormalizedSessionData BuildConfirmedSessionSnapshot(string json)
+    {
+        var payload = JObject.Parse(json)["payload"];
+        if (payload == null) throw new InvalidOperationException("Missing confirmed session payload.");
+        var session = payload["session"]?.ToObject<NormalizedSessionData>();
+        if (session == null || !Guid.TryParse(session.session_id, out _))
+            throw new InvalidOperationException("Missing confirmed session ID.");
+        var metric = payload["metric"]?.ToObject<PerformanceMetricRecord>();
+        session.performance_metric = metric != null ? new List<PerformanceMetricRecord> { metric } : new List<PerformanceMetricRecord>();
+        session.dialogue_turn = payload["turns"]?.ToObject<List<DialogueTurnRecord>>() ?? new List<DialogueTurnRecord>();
+        var emotions = payload["emotions"]?.ToObject<List<NPCEmotionLogData>>() ?? new List<NPCEmotionLogData>();
+        var turns = new Dictionary<string, DialogueTurnRecord>();
+        foreach (var turn in session.dialogue_turn)
+        {
+            if (turn == null || string.IsNullOrEmpty(turn.turn_id)) continue;
+            turn.npc_emotion_log = new List<NPCEmotionLogData>();
+            turns.Add(turn.turn_id, turn);
+        }
+        foreach (var emotion in emotions)
+        {
+            if (emotion == null || !turns.TryGetValue(emotion.turn_id ?? "", out var turn))
+                throw new InvalidOperationException("Emotion does not match a confirmed dialogue turn.");
+            turn.npc_emotion_log.Add(emotion);
+        }
+        return session;
     }
 
     private class PendingSave
