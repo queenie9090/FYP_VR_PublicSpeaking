@@ -8,11 +8,10 @@ public class SettingsUIController : MonoBehaviour
     [SerializeField] private TMP_Dropdown locomotionDropdown; // 0 = Dynamic, 1 = Teleport Only, 2 = Continuous
     [SerializeField] private TMP_Dropdown turningDropdown;    // 0 = Snap Turning, 1 = Continuous Turning
     [SerializeField] private Toggle seatedModeToggle;
-    [SerializeField] private Toggle quickExitToggle;
 
     [Header("Action Buttons")]
     [SerializeField] private Button resetTutorialButton;
-    [SerializeField] private LocomotionApplier locomotionApplier;
+    private LocomotionApplier locomotionApplier;
 
     private void ApplyNow()
     {
@@ -58,12 +57,6 @@ public class SettingsUIController : MonoBehaviour
         {
             seatedModeToggle.SetIsOnWithoutNotify(AppSystemManager.Instance.isSeatedModeEnabled);
         }
-
-        // Quick Exit Toggle
-        //if (quickExitToggle != null)
-        //{
-        //    quickExitToggle.SetIsOnWithoutNotify(AppSystemManager.Instance.isQuickExitEnabled);
-        //}
     }
 
     private void BindUIListeners()
@@ -84,12 +77,6 @@ public class SettingsUIController : MonoBehaviour
         {
             seatedModeToggle.onValueChanged.RemoveAllListeners();
             seatedModeToggle.onValueChanged.AddListener(OnSeatedModeToggled);
-        }
-
-        if (quickExitToggle != null)
-        {
-            quickExitToggle.onValueChanged.RemoveAllListeners();
-            quickExitToggle.onValueChanged.AddListener(OnQuickExitToggled);
         }
 
         if (resetTutorialButton != null)
@@ -124,12 +111,6 @@ public class SettingsUIController : MonoBehaviour
             AppSystemManager.Instance.SaveSeatedModeSetting(value);
             ApplyNow();
         }
-    }
-
-    public void OnQuickExitToggled(bool value)
-    {
-        if (AppSystemManager.Instance != null)
-            AppSystemManager.Instance.SaveQuickExitSetting(value);
     }
 
     public void OnResetTutorialClicked()

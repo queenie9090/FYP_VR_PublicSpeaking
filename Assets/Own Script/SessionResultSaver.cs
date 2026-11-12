@@ -25,7 +25,13 @@ public class SessionResultSaver : MonoBehaviour
         Action onComplete,
         string sessionStatus = "Completed")
     {
-        if (sessionStartTimestamp == default) return;
+        if (sessionStartTimestamp == default)
+        {
+            Debug.LogWarning("[SessionResultSaver] Invalid start timestamp; skipping save.");
+            onComplete?.Invoke();
+            return;
+        }
+
         if (supabaseManager == null) supabaseManager = FindFirstObjectByType<SupabaseManager>();
         if (openAIManager == null) openAIManager = FindFirstObjectByType<OpenAIManager>();
         var runner = NPCEmotionSessionManager.EnsureInstance();
@@ -84,6 +90,17 @@ public class SessionResultSaver : MonoBehaviour
             var gestureMetrics = gestureTracker.CalculateGestureMetrics(sessionElapsedTimeSeconds);
             totalExpressiveGestures = gestureMetrics.expressiveCount;
             gpm = gestureMetrics.gpm;
+        }
+
+        // 2. Tutorial Bypass (Does not save to DB)
+        string currentScene = SceneManager.GetActiveScene().name;
+        bool isTutorial = UserSession.IsRunningTutorial || currentScene == "TutorialScene";
+        if (isTutorial)
+        {
+            Debug.Log("[SessionResultSaver] Tutorial completed. Bypassing database save.");
+            if (uiManager != null) uiManager.SetStatus("Calibration Complete!");
+            onComplete?.Invoke();
+            yield break;
         }
 
         // 3. Guest Mode Bypass (Prevents 23503 Foreign Key error)
@@ -155,7 +172,8 @@ public class SessionResultSaver : MonoBehaviour
         string summaryText = $"Gestures: {totalExpressiveGestures} Hits ({gpm:F1} GPM) | Inappropriate: {unprofessionalCount}";
         Debug.Log($"[SessionResultSaver] Gesture Summary: {summaryText}");
 
-        string summaryPrompt = $"You are an expert VR speech coach. Provide a concise 2-3 sentence constructive feedback summary with actionable suggestions for improvement based on this participant's performance in a '{currentScenario}' simulation: " +
+        string summaryPrompt = $"You are an expert VR speech coach. Respond ONLY with a valid JSON object using this exact schema: {{\"npc_response\": \"<your 2-3 sentence constructive feedback summary here>\", \"emotion\": \"NEUTRAL\"}}. " +
+                               $"Provide a concise 2-3 sentence constructive feedback summary with actionable suggestions for improvement based on this participant's performance in a '{currentScenario}' simulation: " +
                                $"Overall Score: {overallScore:F0}%, Speech Clarity: {clarityScore:F0}%, Speaking Rate: {overallWpm:F0} WPM, " +
                                $"Filler Words Used: {totalFillerWordsDetected}, Eye Contact: {eyeContactPct:F0}%, Expressive Gestures: {totalExpressiveGestures} ({gpm:F1} GPM), " +
                                $"Hints Requested: {totalHintsUsed}, Unprofessional Gestures Flagged: {unprofessionalCount}.";
@@ -197,6 +215,9 @@ public class SessionResultSaver : MonoBehaviour
         {
             Debug.LogWarning("[SessionResultSaver] OpenAIManager not found. Using default summary.");
         }
+
+        string statsHeader = $"<b>Session Counts:</b> Expressive Gestures: {totalExpressiveGestures} | Inappropriate Gestures: {unprofessionalCount} | Hints Used: {totalHintsUsed}\n\n";
+        aiSummary = statsHeader + aiSummary;
 
         // 6. Supabase database save
         if (supabaseManager == null)
