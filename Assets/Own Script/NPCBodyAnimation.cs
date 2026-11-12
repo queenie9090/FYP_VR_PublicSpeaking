@@ -47,6 +47,9 @@ public class NPCBodyAnimation : MonoBehaviour
     [SerializeField, Min(0.1f)] private float blendSeconds = 0.5f;
     [SerializeField, Min(3f)] private float variationInterval = 8f;
     [SerializeField, Range(0.1f, 1f)] private float layerWeight = 0.8f;
+    [Tooltip("Optional seated forearm gestures. Requires IK Pass on the configured body layer.")]
+    [SerializeField] private bool seatedActivityGestures;
+    [SerializeField, Range(0f, 10f)] private float seatedGestureDegrees = 5f;
     [SerializeField] private ActionBinding[] actions = Array.Empty<ActionBinding>();
     private readonly List<ActionBinding> validActions = new();
     private readonly List<ActionBinding> candidates = new();
@@ -64,6 +67,10 @@ public class NPCBodyAnimation : MonoBehaviour
     private string recordedActivity;
     private int selectedTurn;
     private float oneShotCooldownUntil;
+    private float seatedGestureWeight;
+    private float activityStartedAt;
+    private bool seatedGestureRecorded;
+    private Transform leftForearm, rightForearm;
 
     public bool ControlsLayer(Animator target, int index) =>
         isActiveAndEnabled && animator == target && layer == index && layer > 0;
@@ -87,6 +94,13 @@ public class NPCBodyAnimation : MonoBehaviour
             enabled = false;
             return;
         }
+        if (seatedActivityGestures && animator.isHuman)
+        {
+            leftForearm = animator.GetBoneTransform(HumanBodyBones.LeftLowerArm);
+            rightForearm = animator.GetBoneTransform(HumanBodyBones.RightLowerArm);
+            if (leftForearm == null || rightForearm == null)
+                Debug.LogWarning("[Body Animation] Seated gestures need both Humanoid forearms.", this);
+        }
         foreach (var action in actions)
         {
             if (action == null || string.IsNullOrWhiteSpace(action.state)) continue;
@@ -105,7 +119,12 @@ public class NPCBodyAnimation : MonoBehaviour
 
     public void SetActivity(NPCBodyActivity value, int dialogueTurn = 0)
     {
-        if (activity != value) oneShotCooldownUntil = 0f;
+        if (activity != value)
+        {
+            oneShotCooldownUntil = 0f;
+            activityStartedAt = Time.time;
+            seatedGestureRecorded = false;
+        }
         activity = value;
         turnNumber = dialogueTurn;
     }
@@ -156,6 +175,12 @@ public class NPCBodyAnimation : MonoBehaviour
     private void Update()
     {
         if (layer <= 0 || animator == null) return;
+        bool seatedActivity = seatedActivityGestures && npcType == NPCBodyType.INTERVIEWER &&
+            string.IsNullOrEmpty(pendingEvent) &&
+            animator.isHuman && leftForearm != null && rightForearm != null &&
+            (activity == NPCBodyActivity.LISTENING || activity == NPCBodyActivity.THINKING);
+        seatedGestureWeight = Mathf.MoveTowards(seatedGestureWeight, seatedActivity ? 1f : 0f,
+            Time.deltaTime / Mathf.Max(0.25f, blendSeconds));
         string emotion = emotionSource != null ? emotionSource.currentEmotion : "NEUTRAL";
         string context = activity + "|" + emotion + "|" + pendingEvent;
         if (selected != null)
@@ -207,6 +232,45 @@ public class NPCBodyAnimation : MonoBehaviour
         float target = selected != null ? layerWeight * Mathf.Lerp(0.75f, 1f, intensity) : 0f;
         animator.SetLayerWeight(layer, Mathf.MoveTowards(animator.GetLayerWeight(layer),
             target, Time.deltaTime / Mathf.Max(0.1f, blendSeconds)));
+    }
+
+    // Animator IK Pass applies a small offset to the animated pose; no Transform
+    // writes or face/head/root/leg bones are owned by this component.
+    private void OnAnimatorIK(int layerIndex)
+    {
+        if (!seatedActivityGestures || layerIndex != layer || seatedGestureWeight <= 0f ||
+            !string.IsNullOrEmpty(pendingEvent) ||
+            leftForearm == null || rightForearm == null ||
+            (activity != NPCBodyActivity.LISTENING && activity != NPCBodyActivity.THINKING)) return;
+
+        float elapsed = Mathf.Max(0f, Time.time - activityStartedAt);
+        float cycle = .5f - .5f * Mathf.Cos(elapsed * (activity == NPCBodyActivity.THINKING ? 1.4f : 1f));
+        float angle = Mathf.Clamp(seatedGestureDegrees, 0f, 10f) * seatedGestureWeight * cycle;
+        if (angle <= .01f) return;
+        animator.SetBoneLocalRotation(HumanBodyBones.RightLowerArm,
+            rightForearm.localRotation * Quaternion.AngleAxis(angle, Vector3.right));
+        if (activity == NPCBodyActivity.LISTENING)
+            animator.SetBoneLocalRotation(HumanBodyBones.LeftLowerArm,
+                leftForearm.localRotation * Quaternion.AngleAxis(angle * .45f, Vector3.right));
+        if (!seatedGestureRecorded)
+        {
+            seatedGestureRecorded = true;
+            RecordSeatedGestureStart();
+        }
+    }
+
+    private void RecordSeatedGestureStart()
+    {
+        var session = NPCEmotionSessionManager.Instance;
+        if (session == null || !session.IsCollectingBodyEvents || string.IsNullOrWhiteSpace(npcId)) return;
+        session.RecordBodyAnimation(new BodyAnimationEventRecord
+        {
+            animation_event_id = Guid.NewGuid().ToString(), npc_id = npcId,
+            npc_type = npcType.ToString(), scene_type = gameObject.scene.name,
+            npc_activity = activity.ToString(), emotion = emotionSource != null ? emotionSource.currentEmotion : "NEUTRAL",
+            animation_name = "Seated " + activity + " forearm gesture", timestamp = DateTime.UtcNow.ToString("o"),
+            turnNumber = turnNumber
+        });
     }
 
     private void SelectAction(string emotion)
@@ -281,5 +345,6 @@ public class NPCBodyAnimation : MonoBehaviour
         selected = null;
         lastContext = null;
         pendingEvent = null;
+        seatedGestureWeight = 0f;
     }
 }

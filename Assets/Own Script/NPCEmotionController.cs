@@ -17,6 +17,11 @@ public class NPCEmotionController : MonoBehaviour
     [Range(1f, 10f)]
     public float transitionSpeed = 4f;
 
+    [Tooltip("Scales expression targets without changing recorded emotion intensity.")]
+    [SerializeField, Range(0f, 2f)] private float expressionStrengthMultiplier = 1f;
+    [Tooltip("Adds subtle eye and mouth cues for the Tutorial Businessman.")]
+    [SerializeField] private bool useExpressiveTutorialProfile;
+
     private readonly Dictionary<string, List<int>> shapeIndices = new();
     private readonly Dictionary<string, float> targets = new();
     private readonly Dictionary<int, float> baselineWeights = new();
@@ -176,6 +181,11 @@ public class NPCEmotionController : MonoBehaviour
                 SetTarget("mouthSmileRight", 80f * strength);
                 SetTarget("cheekSquintLeft", 30f * strength);
                 SetTarget("cheekSquintRight", 30f * strength);
+                if (useExpressiveTutorialProfile)
+                {
+                    SetTarget("eyeSquintLeft", 12f * strength);
+                    SetTarget("eyeSquintRight", 12f * strength);
+                }
                 break;
 
             case "SAD":
@@ -189,6 +199,11 @@ public class NPCEmotionController : MonoBehaviour
                 SetTarget("browDownRight", 75f * strength);
                 SetTarget("eyeSquintLeft", 35f * strength);
                 SetTarget("eyeSquintRight", 35f * strength);
+                if (useExpressiveTutorialProfile)
+                {
+                    SetTarget("mouthPressLeft", 20f * strength);
+                    SetTarget("mouthPressRight", 20f * strength);
+                }
                 break;
 
             case "NERVOUS":
@@ -202,6 +217,8 @@ public class NPCEmotionController : MonoBehaviour
             case "THINKING":
                 SetTarget("browInnerUp", 25f * strength);
                 SetTarget("mouthPucker", 20f * strength);
+                if (useExpressiveTutorialProfile)
+                    SetTarget("browDownLeft", 18f * strength);
                 break;
 
                 // NEUTRAL keeps all expression targets at zero.
@@ -218,7 +235,7 @@ public class NPCEmotionController : MonoBehaviour
     private void SetTarget(string shape, float value)
     {
         if (targets.ContainsKey(shape))
-            targets[shape] = value;
+            targets[shape] = value * Mathf.Clamp(expressionStrengthMultiplier, 0f, 2f);
     }
 
     private void LateUpdate()
