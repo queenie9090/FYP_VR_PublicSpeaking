@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Globalization;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -66,8 +67,13 @@ public class EmotionDashboardUIController : MonoBehaviour
         "NEUTRAL"
     };
 
+    private readonly Dictionary<TMP_Text, Image> summaryIcons = new Dictionary<TMP_Text, Image>();
+    private Sprite[] summaryStatusSprites;
+
     private void Start()
     {
+        EnsureLegendSwatches();
+        ConfigureSummaryText();
         RefreshDashboard();
     }
 
@@ -80,6 +86,7 @@ public class EmotionDashboardUIController : MonoBehaviour
             UpdateBehaviourSummary(null);
             foreach (var label in new[] { eyeSummaryText, faceSummaryText, bodySummaryText, voiceSummaryText, lipSyncSummaryText })
                 if (label != null) label.text = "Loading...";
+            RefreshSummaryIcons();
             if (supabaseManager == null) supabaseManager = FindFirstObjectByType<SupabaseManager>();
             if (supabaseManager == null) supabaseManager = gameObject.AddComponent<SupabaseManager>();
             string sessionId = selectedSession.session_id;
@@ -92,7 +99,8 @@ public class EmotionDashboardUIController : MonoBehaviour
                 SetSummary(voiceSummaryText, result, "voice_style");
                 if (lipSyncSummaryText != null)
                     lipSyncSummaryText.text = result != null && result.TryGetValue("voice_event", out var tts) && !string.IsNullOrWhiteSpace(tts)
-                        ? "TTS: " + tts + " | Lip sync: Not Recorded" : "Not Recorded";
+                        ? FormatTts(tts) + "; lip sync not recorded" : "Not Recorded";
+                RefreshSummaryIcons();
             }, error =>
             {
                 Debug.LogError("[Emotion Dashboard] " + error);
@@ -129,6 +137,7 @@ public class EmotionDashboardUIController : MonoBehaviour
             NPCEmotionSessionManager.Instance;
         UpdateSessionInfo(null);
         UpdateBehaviourSummary(manager);
+        RefreshSummaryIcons();
 
         if (manager == null)
         {
@@ -318,8 +327,7 @@ public class EmotionDashboardUIController : MonoBehaviour
                     turnTransform.GetComponent<TMP_Text>();
 
                 if (turnLabel != null)
-                    turnLabel.text = string.IsNullOrWhiteSpace(record.npcName)
-                        ? $"T{record.turnNumber}" : $"T{record.turnNumber} · {record.npcName}";
+                    turnLabel.text = string.IsNullOrWhiteSpace(record.npcName) ? "" : record.npcName;
             }
         }
     }
@@ -418,18 +426,156 @@ public class EmotionDashboardUIController : MonoBehaviour
         return null;
     }
 
+    private void EnsureLegendSwatches()
+    {
+        if (emotions == null) return;
+        foreach (var binding in emotions)
+        {
+            if (binding?.legendIcon == null || binding.donutSlice == null) continue;
+            var icon = binding.legendIcon.rectTransform;
+            var parent = icon.parent as RectTransform;
+            if (parent == null || (timelineItemsContainer != null && icon.IsChildOf(timelineItemsContainer))) continue;
+            var existing = parent.Find("Distribution Colour Key") ?? icon.Find("Distribution Colour Key");
+            var swatch = existing != null ? existing.GetComponent<Image>() : null;
+            if (swatch == null)
+            {
+                var item = new GameObject("Distribution Colour Key", typeof(RectTransform), typeof(Image));
+                item.layer = parent.gameObject.layer;
+                swatch = item.GetComponent<Image>();
+                swatch.raycastTarget = false;
+            }
+            // Keep the key in the distribution row, separate from any timeline icon.
+            var rect = swatch.rectTransform;
+            rect.SetParent(parent, false);
+            rect.anchorMin = icon.anchorMin;
+            rect.anchorMax = icon.anchorMax;
+            rect.pivot = new Vector2(1f, 0.5f);
+            rect.anchoredPosition = new Vector2(
+                -211f, icon.anchoredPosition.y + icon.rect.height * (0.5f - icon.pivot.y));
+            rect.sizeDelta = new Vector2(18f, 18f);
+            swatch.color = binding.donutSlice.color;
+        }
+    }
+
+    private void ConfigureSummaryText()
+    {
+        foreach (var label in new[] { eyeSummaryText, faceSummaryText, bodySummaryText, voiceSummaryText, lipSyncSummaryText })
+        {
+            if (label == null) continue;
+            label.enabled = false;
+            var existing = label.transform.Find("Behaviour Status Icon");
+            var icon = existing != null ? existing.GetComponent<Image>() : null;
+            if (icon == null)
+            {
+                var item = new GameObject("Behaviour Status Icon", typeof(RectTransform), typeof(Image));
+                item.layer = label.gameObject.layer;
+                item.transform.SetParent(label.transform, false);
+                icon = item.GetComponent<Image>();
+            }
+            var rect = icon.rectTransform;
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = new Vector2(30f, 30f);
+            icon.raycastTarget = false;
+            summaryIcons[label] = icon;
+        }
+        if (summaryStatusSprites == null)
+            summaryStatusSprites = new[] { CreateStatusSprite(0), CreateStatusSprite(1), CreateStatusSprite(2), CreateStatusSprite(3) };
+    }
+
+    // 0 = recorded, 1 = not recorded, 2 = unavailable/error, 3 = loading.
+    private static int SummaryStatusIndex(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Equals("Not Recorded", StringComparison.OrdinalIgnoreCase)) return 1;
+        if (value.Equals("Loading...", StringComparison.OrdinalIgnoreCase)) return 3;
+        if (value.IndexOf("unavailable", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            value.IndexOf("failed", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            value.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0) return 2;
+        return 0;
+    }
+
+    private void RefreshSummaryIcons()
+    {
+        if (summaryStatusSprites == null) return;
+        foreach (var pair in summaryIcons)
+            if (pair.Key != null && pair.Value != null)
+                pair.Value.sprite = summaryStatusSprites[SummaryStatusIndex(pair.Key.text)];
+    }
+
+    private static Sprite CreateStatusSprite(int status)
+    {
+        const int size = 64;
+        var texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        texture.name = "Dashboard behaviour status " + status;
+        texture.filterMode = FilterMode.Bilinear;
+        var pixels = new Color32[size * size];
+        Color32 fill = status == 0 ? new Color32(44, 159, 99, 255) :
+            status == 1 ? new Color32(125, 136, 149, 255) :
+            status == 2 ? new Color32(196, 61, 61, 255) : new Color32(80, 133, 185, 255);
+        var white = new Color32(255, 255, 255, 255);
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+        {
+            var p = new Vector2(x + 0.5f, y + 0.5f);
+            bool inside = (p - new Vector2(32f, 32f)).sqrMagnitude <= 30f * 30f;
+            bool mark = status == 0 ? DistanceToSegment(p, new Vector2(17, 32), new Vector2(27, 22)) < 3f || DistanceToSegment(p, new Vector2(27, 22), new Vector2(48, 44)) < 3f :
+                status == 1 ? Mathf.Abs(p.y - 32f) < 3f && p.x >= 18f && p.x <= 46f :
+                status == 2 ? (Mathf.Abs(p.x - 32f) < 3f && p.y >= 29f && p.y <= 46f) || (p - new Vector2(32, 20)).sqrMagnitude < 10f :
+                (p - new Vector2(22, 32)).sqrMagnitude < 9f || (p - new Vector2(32, 32)).sqrMagnitude < 9f || (p - new Vector2(42, 32)).sqrMagnitude < 9f;
+            pixels[y * size + x] = !inside ? new Color32(0, 0, 0, 0) : mark ? white : fill;
+        }
+        texture.SetPixels32(pixels);
+        texture.Apply();
+        return Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+    }
+
+    private static float DistanceToSegment(Vector2 point, Vector2 start, Vector2 end)
+    {
+        Vector2 segment = end - start;
+        float t = Mathf.Clamp01(Vector2.Dot(point - start, segment) / segment.sqrMagnitude);
+        return Vector2.Distance(point, start + t * segment);
+    }
+
+    private void OnDestroy()
+    {
+        if (summaryStatusSprites == null) return;
+        foreach (var sprite in summaryStatusSprites)
+        {
+            if (sprite == null) continue;
+            Destroy(sprite.texture);
+            Destroy(sprite);
+        }
+    }
+
     private void UpdateSessionInfo(NormalizedSessionData session)
     {
         if (sessionIdText != null) sessionIdText.text = Available(session?.session_id);
         if (scenarioText != null) scenarioText.text = Available(session?.scenario_type);
-        if (startTimeText != null) startTimeText.text = Available(session?.start_time);
+        if (startTimeText != null) startTimeText.text = FormatStartTime(session?.start_time);
         if (durationText != null) durationText.text = session != null
-            ? TimeSpan.FromSeconds(Math.Max(0, session.duration_seconds)).ToString(@"hh\:mm\:ss") : "Not Available";
+            ? FormatDuration(session.duration_seconds) : "Not Available";
         if (completionStatusText != null) completionStatusText.text = Available(session?.status);
     }
 
     private static string Available(string value) =>
         string.IsNullOrWhiteSpace(value) ? "Not Available" : value;
+
+    private static string FormatStartTime(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "Not Available";
+        return DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal, out var timestamp)
+            ? timestamp.ToLocalTime().ToString("dd MMM yyyy, HH:mm", CultureInfo.InvariantCulture)
+            : "Not Available";
+    }
+
+    private static string FormatDuration(float seconds)
+    {
+        if (float.IsNaN(seconds) || float.IsInfinity(seconds)) return "Not Available";
+        var duration = TimeSpan.FromSeconds(Math.Max(0, seconds));
+        return $"{(long)duration.TotalHours:00}:{duration.Minutes:00}:{duration.Seconds:00}";
+    }
 
     private void UpdateBehaviourSummary(NPCEmotionSessionManager manager)
     {
@@ -439,30 +585,51 @@ public class EmotionDashboardUIController : MonoBehaviour
         if (voiceSummaryText != null) voiceSummaryText.text = voice != null && !string.IsNullOrWhiteSpace(voice.voiceStyle)
             ? voice.voiceStyle : "Not Recorded";
         if (lipSyncSummaryText != null) lipSyncSummaryText.text = voice != null && !string.IsNullOrWhiteSpace(voice.detail)
-            ? "TTS: " + voice.detail + " | Lip sync: Not Recorded" : "Not Recorded";
+            ? FormatTts(voice.detail) + "; lip sync not recorded" : "Not Recorded";
         if (bodySummaryText != null)
         {
             var last = manager?.BodyAnimationEvents.LastOrDefault();
-            bodySummaryText.text = last != null ? Available(last.animation_name) : "Not Recorded";
+            bodySummaryText.text = last != null ? FormatEvent(last.animation_name) : "Not Recorded";
         }
     }
 
     private static string EventSummary(NPCEmotionSessionManager manager, string kind)
     {
         var last = manager?.RealismEvents.LastOrDefault(item => item.kind == kind);
-        return last != null && !string.IsNullOrWhiteSpace(last.detail) ? last.detail : "Not Recorded";
+        return last != null ? FormatEvent(last.detail) : "Not Recorded";
     }
 
     private static void SetSummary(TMP_Text label, Dictionary<string, string> values, string table)
     {
         if (label != null)
             label.text = values != null && values.TryGetValue(table, out var value) && !string.IsNullOrWhiteSpace(value)
-                ? value : "Not Recorded";
+                ? FormatEvent(value) : "Not Recorded";
+    }
+
+    private static string FormatEvent(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "Not Recorded";
+        if (value == "Expression blendshape transition started") return "Expression changed";
+        if (value.StartsWith("Seated ", StringComparison.Ordinal) && value.EndsWith(" forearm gesture", StringComparison.Ordinal))
+            return value.Substring(7, value.Length - 7 - " forearm gesture".Length) + " gesture";
+        return value.Replace("BodyGestures.", "").Replace('_', ' ');
+    }
+
+    private static string FormatTts(string value)
+    {
+        switch (value)
+        {
+            case "playback_started": return "TTS started";
+            case "playback_failed": return "TTS playback failed";
+            case "generation_failed": return "TTS generation failed";
+            default: return "TTS: " + FormatEvent(value);
+        }
     }
 
     private void ShowBehaviourUnavailable()
     {
         foreach (var label in new[] { eyeSummaryText, faceSummaryText, bodySummaryText, voiceSummaryText, lipSyncSummaryText })
             if (label != null) label.text = "Unavailable";
+        RefreshSummaryIcons();
     }
 }
