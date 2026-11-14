@@ -23,7 +23,6 @@ public class EmotionDashboardUIController : MonoBehaviour
     [SerializeField] private Image finalEmotionIcon;
     [SerializeField] private TMP_Text finalEmotionLabel;
     [SerializeField] private TMP_Text intensityText;
-    [SerializeField] private TMP_Text levelText;
     [SerializeField] private Image[] intensityBars;
 
     [Header("Emotion Timeline")]
@@ -40,7 +39,6 @@ public class EmotionDashboardUIController : MonoBehaviour
     [SerializeField] private TMP_Text scenarioText;
     [SerializeField] private TMP_Text startTimeText;
     [SerializeField] private TMP_Text durationText;
-    [SerializeField] private TMP_Text completionStatusText;
     [SerializeField] private TMP_Text eyeSummaryText;
     [SerializeField] private TMP_Text faceSummaryText;
     [SerializeField] private TMP_Text bodySummaryText;
@@ -185,10 +183,7 @@ public class EmotionDashboardUIController : MonoBehaviour
                 finalEmotionLabel.text = "NO DATA";
 
             if (intensityText != null)
-                intensityText.text = "Intensity: --";
-
-            if (levelText != null)
-                levelText.text = "Level: Not Recorded";
+                intensityText.text = "Intensity --";
 
             if (finalEmotionIcon != null)
             {
@@ -208,10 +203,7 @@ public class EmotionDashboardUIController : MonoBehaviour
             finalEmotionLabel.text = emotion;
 
         if (intensityText != null)
-            intensityText.text = $"Intensity: {intensity}%";
-
-        if (levelText != null)
-            levelText.text = $"Level: {GetIntensityLevel(intensity)}";
+            intensityText.text = $"Intensity {intensity}%";
 
         EmotionDisplayBinding binding = FindBinding(emotion);
 
@@ -225,16 +217,6 @@ public class EmotionDashboardUIController : MonoBehaviour
         }
 
         UpdateIntensityBars(intensity);
-    }
-
-    private string GetIntensityLevel(int intensity)
-    {
-        if (intensity <= 0) return "None";
-        if (intensity <= 20) return "Very Low";
-        if (intensity <= 40) return "Low";
-        if (intensity <= 60) return "Moderate";
-        if (intensity <= 80) return "High";
-        return "Very High";
     }
 
     private void UpdateIntensityBars(int intensity)
@@ -290,9 +272,6 @@ public class EmotionDashboardUIController : MonoBehaviour
             Transform labelTransform =
                 item.transform.Find("EmotionLabel");
 
-            Transform turnTransform =
-                item.transform.Find("TurnLabel");
-
             EmotionDisplayBinding binding =
                 FindBinding(record.emotion);
 
@@ -321,14 +300,6 @@ public class EmotionDashboardUIController : MonoBehaviour
                     label.text = record.emotion;
             }
 
-            if (turnTransform != null)
-            {
-                TMP_Text turnLabel =
-                    turnTransform.GetComponent<TMP_Text>();
-
-                if (turnLabel != null)
-                    turnLabel.text = string.IsNullOrWhiteSpace(record.npcName) ? "" : record.npcName;
-            }
         }
     }
 
@@ -555,7 +526,6 @@ public class EmotionDashboardUIController : MonoBehaviour
         if (startTimeText != null) startTimeText.text = FormatStartTime(session?.start_time);
         if (durationText != null) durationText.text = session != null
             ? FormatDuration(session.duration_seconds) : "Not Available";
-        if (completionStatusText != null) completionStatusText.text = Available(session?.status);
     }
 
     private static string Available(string value) =>

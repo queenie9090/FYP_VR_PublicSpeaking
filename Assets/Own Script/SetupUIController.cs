@@ -23,6 +23,24 @@ public class SetupUIController : MonoBehaviour
     [Header("Tutorial Modal Preferences")]
     [SerializeField] private Toggle dontShowTutorialAgainToggle;  // "Don't show this message again" Toggle
 
+#if UNITY_EDITOR
+    [Header("Editor VR Testing")]
+    [Tooltip("Use each scene's XR Device Simulator for Tutorial and Interview without a headset. Disable to test OpenXR in the Editor.")]
+    [UnityEngine.Serialization.FormerlySerializedAs("tutorialEditorSimulatorMode")]
+    [SerializeField] private bool editorVrSimulatorMode;
+
+    private void ConfigureEditorSimulator(string targetScene)
+    {
+        VRSceneLoader.SetEditorSimulatorMode(editorVrSimulatorMode);
+        if (editorVrSimulatorMode && (targetScene == "TutorialScene" || targetScene == "Interview") && UserSession.InputMode != "Controller")
+        {
+            // The existing simulator supplies controller poses, not physical hand tracking.
+            UserSession.InputMode = "Controller";
+            Debug.Log("[VR Loader] Editor VR Simulator Mode uses controller input for this session.");
+        }
+    }
+#endif
+
     private const string NeverShowTutorialKey = "Tutorial_NeverShowAgain";
 
     private void Awake()
@@ -166,6 +184,9 @@ public class SetupUIController : MonoBehaviour
         if (tutorialModalPanel != null) tutorialModalPanel.SetActive(false);
 
         Debug.Log($"[Flow] Starting Tutorial Session in VR with mode: {UserSession.InputMode}...");
+#if UNITY_EDITOR
+        ConfigureEditorSimulator("TutorialScene");
+#endif
         StartCoroutine(VRSceneLoader.EnableVROnDemandAndLoad("TutorialScene"));
     }
 
@@ -178,6 +199,9 @@ public class SetupUIController : MonoBehaviour
         if (tutorialModalPanel != null) tutorialModalPanel.SetActive(false);
 
         string targetScene = UserSession.SelectedScenarioConfig.scenario;
+#if UNITY_EDITOR
+        ConfigureEditorSimulator(targetScene);
+#endif
         Debug.Log($"[Flow] Skipping Tutorial. Loading target scene: {targetScene}");
         StartCoroutine(VRSceneLoader.EnableVROnDemandAndLoad(targetScene));
     }

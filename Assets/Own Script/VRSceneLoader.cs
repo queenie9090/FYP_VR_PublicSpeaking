@@ -5,11 +5,27 @@ using UnityEngine.XR.Management;
 
 public class VRSceneLoader : MonoBehaviour
 {
+#if UNITY_EDITOR
+    private static bool editorVrSimulatorMode;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetEditorSimulatorMode() => editorVrSimulatorMode = false;
+
+    public static void SetEditorSimulatorMode(bool enabled) => editorVrSimulatorMode = enabled;
+#endif
     /// <summary>
     /// Initializes OpenXR subsystems on demand and transitions to the target VR scene.
     /// </summary>
     public static IEnumerator EnableVROnDemandAndLoad(string targetSceneName)
     {
+#if UNITY_EDITOR
+        if (editorVrSimulatorMode && (targetSceneName == "TutorialScene" || targetSceneName == "Interview"))
+        {
+            Debug.Log($"[VR Loader] Editor VR Simulator Mode: loading '{targetSceneName}' without initializing a physical XR loader.");
+            SceneManager.LoadScene(targetSceneName);
+            yield break;
+        }
+#endif
         Debug.Log($"[VR Loader] Initializing XR Subsystems for scene: '{targetSceneName}'...");
 
         // 1. Temporarily pause AudioListener to prevent audio pops during initialization
