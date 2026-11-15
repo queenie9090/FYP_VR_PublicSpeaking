@@ -76,6 +76,17 @@ public class NPCBodyAnimation : MonoBehaviour
     private bool seatedGestureRecorded;
     private Transform leftForearm, rightForearm;
 
+#if UNITY_EDITOR
+    [Header("Editor Diagnostics")]
+    [Tooltip("Log activity and up to two sampled bone results per activity. Editor only.")]
+    [SerializeField] private bool diagnoseSeatedGestures;
+    private int diagnosticSamples;
+    private float nextDiagnosticTime;
+    private int diagnosticIkFrame = -1;
+    private Quaternion diagnosticBefore;
+    private float diagnosticRequestedAngle;
+#endif
+
     public bool ControlsLayer(Animator target, int index) =>
         isActiveAndEnabled && animator == target && layer == index && layer > 0;
 
@@ -125,6 +136,12 @@ public class NPCBodyAnimation : MonoBehaviour
     {
         if (activity != value)
         {
+#if UNITY_EDITOR
+            if (diagnoseSeatedGestures)
+                Debug.Log($"[Body Animation Diagnostic] {name}: requested {value}; previous activity {activity}.", this);
+            diagnosticSamples = 0;
+            nextDiagnosticTime = Time.time + 0.75f;
+#endif
             oneShotCooldownUntil = 0f;
             activityStartedAt = Time.time;
             if (value == NPCBodyActivity.SPEAKING) speakingStartedAt = Time.time;
@@ -256,6 +273,9 @@ public class NPCBodyAnimation : MonoBehaviour
             float speakingAngle = Mathf.Clamp(seatedSpeakingDegrees, 0f, 5f) * speakingGestureWeight * speakingCycle;
             if (speakingAngle > .01f)
             {
+#if UNITY_EDITOR
+                CaptureDiagnosticIk(speakingAngle);
+#endif
                 animator.SetBoneLocalRotation(HumanBodyBones.RightLowerArm,
                     rightForearm.localRotation * Quaternion.AngleAxis(-speakingAngle, Vector3.right));
                 if (activity == NPCBodyActivity.SPEAKING && !seatedGestureRecorded)
@@ -275,6 +295,9 @@ public class NPCBodyAnimation : MonoBehaviour
         float cycle = .5f - .5f * Mathf.Cos(elapsed * (activity == NPCBodyActivity.THINKING ? 1.4f : 1f));
         float angle = Mathf.Clamp(seatedGestureDegrees, 0f, 10f) * seatedGestureWeight * cycle;
         if (angle <= .01f) return;
+#if UNITY_EDITOR
+        CaptureDiagnosticIk(angle);
+#endif
         animator.SetBoneLocalRotation(HumanBodyBones.RightLowerArm,
             rightForearm.localRotation * Quaternion.AngleAxis(angle, Vector3.right));
         if (activity == NPCBodyActivity.LISTENING)
@@ -286,6 +309,36 @@ public class NPCBodyAnimation : MonoBehaviour
             RecordSeatedGestureStart();
         }
     }
+
+#if UNITY_EDITOR
+    private void CaptureDiagnosticIk(float requestedAngle)
+    {
+        if (!diagnoseSeatedGestures || rightForearm == null) return;
+        diagnosticBefore = rightForearm.localRotation;
+        diagnosticRequestedAngle = requestedAngle;
+        diagnosticIkFrame = Time.frameCount;
+    }
+
+    private void LateUpdate()
+    {
+        if (!diagnoseSeatedGestures || diagnosticSamples >= 2 || Time.time < nextDiagnosticTime) return;
+        diagnosticSamples++;
+        nextDiagnosticTime = Time.time + 1f;
+        string state = "unavailable";
+        float weight = 0f;
+        if (animator != null && layer >= 0 && layer < animator.layerCount)
+        {
+            var info = animator.GetCurrentAnimatorStateInfo(layer);
+            state = info.IsName("BodyGestures.Idle") ? "BodyGestures.Idle" : $"hash {info.fullPathHash}";
+            weight = animator.GetLayerWeight(layer);
+        }
+        bool observedIk = diagnosticIkFrame == Time.frameCount && rightForearm != null;
+        string bone = observedIk
+            ? $"requested offset {diagnosticRequestedAngle:F2}°, observed rotation delta {Quaternion.Angle(diagnosticBefore, rightForearm.localRotation):F2}°"
+            : "no forearm IK sample this frame";
+        Debug.Log($"[Body Animation Diagnostic] {name}: activity={activity}, controller={(animator != null && animator.runtimeAnimatorController != null ? animator.runtimeAnimatorController.name : "none")}, layer={layer}, weight={weight:F2}, state={state}, humanoid={(animator != null && animator.isHuman)}, {bone}.", this);
+    }
+#endif
 
     private void RecordSeatedGestureStart()
     {
