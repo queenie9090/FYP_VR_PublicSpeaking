@@ -48,14 +48,27 @@ public class SupabaseAuthManager : MonoBehaviour
 
     private bool isBusy;
 
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            enabled = false;          // prevents Start() from running
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
+    }
+
     private async void Start()
     {
-        Instance = this;
+        if (Instance != this) return; // extra safety
+    
+        if (!IsReady || Client == null)
+        {
+            await InitializeSupabase();
+        }
 
-        // 1. Initialize Supabase first so Client & Auth objects exist!
-        await InitializeSupabase();
-
-        // 2. Now check if the user is logged in
         if (UserSession.IsLoggedIn || (Client != null && Client.Auth.CurrentSession != null))
         {
             OpenMainMenuPanel();
@@ -66,9 +79,19 @@ public class SupabaseAuthManager : MonoBehaviour
             ShowFirstPanel();
         }
     }
-
     private async Task InitializeSupabase()
     {
+        // Check FIRST before creating a new client or overwriting UserSession.AuthClient
+        if (UserSession.AuthClient != null &&
+            UserSession.AuthClient.Auth.CurrentSession != null &&
+            !string.IsNullOrEmpty(UserSession.AuthClient.Auth.CurrentSession.AccessToken))
+        {
+            Client = UserSession.AuthClient;
+            IsReady = true;
+            ExtractUserMetaDataAndSetSession();
+            return;
+        }
+
         IsReady = false;
 
         string trimmedUrl = ConfigLoader.GetSupabaseUrl().Trim();
@@ -92,14 +115,12 @@ public class SupabaseAuthManager : MonoBehaviour
             Client = new Supabase.Client(trimmedUrl, trimmedKey, options);
             await Client.InitializeAsync();
             UserSession.AuthClient = Client;
-
             IsReady = true;
 
             // Auto-Login Check: If an active session is saved on disk
             if (Client.Auth.CurrentSession != null && !string.IsNullOrEmpty(Client.Auth.CurrentSession.AccessToken))
             {
                 ExtractUserMetaDataAndSetSession();
-
                 Debug.Log($"[Auth] Active session found! User: {UserSession.CurrentUserId} | Role: {UserSession.UserRole}");
                 OpenMainMenuPanel();
             }
@@ -341,7 +362,7 @@ public class SupabaseAuthManager : MonoBehaviour
     // --- EXTRACT USER METADATA (ROLE, EMAIL, ID) ---
     private void ExtractUserMetaDataAndSetSession()
     {
-        var user = Client.Auth.CurrentUser;
+        var user = Client?.Auth?.CurrentUser ?? Client?.Auth?.CurrentSession?.User;
         if (user == null) return;
 
         UserSession.CurrentUserId = user.Id;
@@ -374,11 +395,11 @@ public class SupabaseAuthManager : MonoBehaviour
                 await Client.Auth.SignOut();
             }
 
-            UserSession.CurrentUserId = null;
-            UserSession.CurrentUserEmail = null;
-            UserSession.UserRole = "student";
+            UserSession.ClearAuthSession();
+            SupabaseManager.ClearPendingSaves();
 
             if (userNameText != null) userNameText.text = "";
+
             if (profileAvatarImage != null && defaultAvatarSprite != null)
             {
                 profileAvatarImage.sprite = defaultAvatarSprite;

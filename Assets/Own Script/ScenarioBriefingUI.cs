@@ -7,7 +7,7 @@ public class ScenarioBriefingUI : MonoBehaviour
     [SerializeField] private TMP_Text scenarioTitleText;
     [SerializeField] private TMP_Text roleText;
     [SerializeField] private TMP_Text difficultyText;
-    [SerializeField] private TMP_Text objectiveText;
+    //[SerializeField] private TMP_Text objectiveText;
     [SerializeField] private TMP_Text personaText;
     [SerializeField] private TMP_Text topicText;
     [SerializeField] private TMP_Text turnLimitText;
@@ -25,8 +25,8 @@ public class ScenarioBriefingUI : MonoBehaviour
         if (difficultyText != null)
             difficultyText.text = config.difficulty;
 
-        if (objectiveText != null)
-            objectiveText.text = config.sessionObjective;
+        //if (objectiveText != null)
+        //    objectiveText.text = config.sessionObjective;
 
         if (personaText != null)
             personaText.text = config.persona;

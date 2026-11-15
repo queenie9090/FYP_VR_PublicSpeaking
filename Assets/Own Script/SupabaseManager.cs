@@ -142,13 +142,11 @@ public class SupabaseManager : MonoBehaviour
         }
         yield return SubmitPending(save, () =>
         {
-            // The performance dashboard already consumes CurrentSessionData.
-            // Hand it the exact confirmed payload instead of querying the latest
-            // session, which may belong to a different concurrent session.
             try
             {
-                if (UserSession.CurrentUserId != save.UserId ||
-                    UserSession.AuthClient?.Auth.CurrentUser?.Id != save.UserId)
+                string currentAuthUserId = UserSession.AuthClient?.Auth.CurrentUser?.Id
+                    ?? UserSession.AuthClient?.Auth.CurrentSession?.User?.Id;
+                if (UserSession.CurrentUserId != save.UserId || currentAuthUserId != save.UserId)
                     throw new InvalidOperationException("Signed-in account changed during the save.");
                 var confirmed = BuildConfirmedSessionSnapshot(save.Json);
                 UserSession.CurrentSessionData = confirmed;
@@ -202,6 +200,11 @@ public class SupabaseManager : MonoBehaviour
     }
 
     private static readonly Dictionary<string, PendingSave> pendingSaves = new();
+
+    public static void ClearPendingSaves()
+    {
+        pendingSaves.Clear();
+    }
 
     public IEnumerator GetSessionBehaviourSummary(string sessionId, Action<Dictionary<string, string>> onSuccess,
         Action<string> onError)
@@ -259,11 +262,20 @@ public class SupabaseManager : MonoBehaviour
     {
         while (save.Saving) yield return null;
         if (save.Saved) { onSuccess?.Invoke(); yield break; }
+
+        // Ensure AuthClient reference is intact
+        if (UserSession.AuthClient == null && SupabaseAuthManager.Instance != null)
+        {
+            UserSession.AuthClient = SupabaseAuthManager.Instance.Client;
+        }
+
         var auth = UserSession.AuthClient?.Auth;
         string token = auth?.CurrentSession?.AccessToken;
-        if (string.IsNullOrEmpty(token) || auth.CurrentUser?.Id != save.UserId)
+        string currentAuthUserId = auth?.CurrentUser?.Id ?? auth?.CurrentSession?.User?.Id;
+
+        if (string.IsNullOrEmpty(token) || currentAuthUserId != save.UserId)
         {
-            string error = "[Session save] Sign in as the session owner before retrying. Data retained in memory.";
+            string error = $"[Session save] Sign in as the session owner before retrying. (Expected: {save.UserId}, Current: {currentAuthUserId ?? "null"}, HasToken: {!string.IsNullOrEmpty(token)})";
             Debug.LogError(error);
             onError?.Invoke(error);
             yield break;
