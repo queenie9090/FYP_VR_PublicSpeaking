@@ -272,6 +272,14 @@ public class EmotionDashboardUIController : MonoBehaviour
             Transform labelTransform =
                 item.transform.Find("EmotionLabel");
 
+            Transform turnTransform = item.transform.Find("TurnLabel");
+            if (turnTransform != null)
+            {
+                TMP_Text turnLabel = turnTransform.GetComponent<TMP_Text>();
+                if (turnLabel != null)
+                    turnLabel.text = record.turnNumber > 0 ? $"T{record.turnNumber}" : "";
+            }
+
             EmotionDisplayBinding binding =
                 FindBinding(record.emotion);
 
