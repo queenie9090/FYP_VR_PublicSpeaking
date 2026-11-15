@@ -43,9 +43,10 @@ public class SessionResultSaver : MonoBehaviour
         var emotions = new List<NPCEmotionRecord>(runner.EmotionHistory);
         runner.FinishBodyEventCollection();
         var bodyEvents = new List<BodyAnimationEventRecord>(runner.BodyAnimationEvents);
-        var realismEvents = new List<NPCRealismEvent>(runner.RealismEvents);
+       var realismEvents = new List<NPCRealismEvent>(runner.RealismEvents);
+        var safeHistory = conversationHistory != null ? new List<DialogueTurn>(conversationHistory) : new List<DialogueTurn>();
         runner.StartCoroutine(ProcessResultsRoutine(
-            activeConfig, new List<DialogueTurn>(conversationHistory), sessionElapsedTimeSeconds,
+            activeConfig, safeHistory, sessionElapsedTimeSeconds,
             totalSpeakingTimeSeconds, totalSilenceTimeSeconds, totalFillerWordsDetected,
             sessionStartTimestamp, eyeContactTracker, gestureTracker, hintUIController, uiManager, onComplete,
             sessionStatus, emotions, bodyEvents, realismEvents, onFailure, requireAuthenticatedSave

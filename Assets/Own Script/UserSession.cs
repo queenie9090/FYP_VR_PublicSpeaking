@@ -9,7 +9,7 @@ public static class UserSession
 
     // Configured scenario parameters from Setup UI
     public static ScenarioConfig SelectedScenarioConfig { get; set; } = new ScenarioConfig();
-    public static string InputMode { get; set; } = "Hands-Tracking"; //"Controller";
+    public static string InputMode { get; set; } =  "Controller";// "Hands-Tracking";
 
     // Session control flags
     public static bool IsRunningTutorial { get; set; } = false;
@@ -18,8 +18,22 @@ public static class UserSession
     public static NormalizedSessionData CurrentSessionData { get; set; }
     public static NormalizedSessionData EmotionDashboardSession { get; set; }
 
-    public static bool IsLoggedIn => !string.IsNullOrEmpty(CurrentUserId);
+    public static bool IsLoggedIn =>
+            !string.IsNullOrEmpty(CurrentUserId) &&
+            AuthClient != null &&
+            AuthClient.Auth?.CurrentSession != null &&
+            !string.IsNullOrEmpty(AuthClient.Auth.CurrentSession.AccessToken);
+
     public static bool IsEducator => UserRole?.ToLower() == "educator";
+
+    public static void ClearAuthSession()
+    {
+        CurrentUserId = null;
+        CurrentUserEmail = null;
+        UserRole = "student";
+        CurrentSessionData = null;
+        EmotionDashboardSession = null;
+    }
 
     public static bool LastSessionEndedBeforeStart = false;
     public static string LastSessionAbortReason = "";
