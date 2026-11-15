@@ -31,6 +31,7 @@ public class InteractionManager : MonoBehaviour
     [Header("Audio Feedback")]
     [SerializeField] private AudioSource sfxAudioSource;
     [SerializeField] private AudioClip sessionCompletedClip;
+    [SerializeField] private AudioClip countdownTickClip;
 
     [Header("Multi-NPC Setup")]
     [Tooltip("Assign all NPCs available in this scene. Leave size = 1 for single-NPC scenes.")]
@@ -46,6 +47,9 @@ public class InteractionManager : MonoBehaviour
 
     [Header("UI Controls")]
     [SerializeField] private GameObject startConfigPanel;
+    [SerializeField] private GameObject countdownTimerPanel;
+    [SerializeField] private TMP_Text countdownTimerText;
+    [SerializeField] private float preSessionCountdownSeconds = 5f;
     [SerializeField] private GameObject emotionPanel;
     [SerializeField] private GameObject viewNPCFaceButton;
     [SerializeField] private Button startSessionButton;
@@ -113,7 +117,7 @@ public class InteractionManager : MonoBehaviour
         {
             startSessionButton.onClick.RemoveAllListeners();
             startSessionButton.onClick.AddListener(OnUserConfirmedStart);
-            uiManager.SetStatus("Press 'Start Conversation' to begin.");
+            if (uiManager != null) uiManager.SetStatus("Press 'Start Conversation' to begin.");
         }
     }
 
@@ -170,7 +174,7 @@ public class InteractionManager : MonoBehaviour
         }
         else
         {
-            activeConfig = UserSession.SelectedScenarioConfig;
+            activeConfig = UserSession.SelectedScenarioConfig ?? new ScenarioConfig();
         }
 
         if (scenarioBriefingUI != null)
@@ -181,6 +185,11 @@ public class InteractionManager : MonoBehaviour
         if (!isTutorial && objectiveManager != null)
         {
             objectiveManager.SetPanelActive(true);
+        }
+
+        if (countdownTimerPanel != null)
+        {
+            countdownTimerPanel.SetActive(false);
         }
 
         if (emotionPanel != null)
@@ -218,17 +227,31 @@ public class InteractionManager : MonoBehaviour
 
     private IEnumerator HandsFreeSessionInitiationRoutine()
     {
-        for (int i = 5; i > 0; i--)
+        int totalSeconds = Mathf.Max(1, Mathf.CeilToInt(preSessionCountdownSeconds));
+
+        if (countdownTimerPanel != null)
+            countdownTimerPanel.SetActive(true);
+
+        if (uiManager != null)
+            uiManager.SetStatus("Get ready...");
+
+        for (int i = totalSeconds; i > 0; i--)
         {
-            if (!isSessionActive && startConfigPanel == null)
-            {
-                // Safety check if session was cancelled
-            }
-            uiManager.SetStatus($"Starting in {i}s...");
+            if (countdownTimerText != null)
+                countdownTimerText.text = i.ToString();
+
+            if (countdownTickClip != null && sfxAudioSource != null)
+                sfxAudioSource.PlayOneShot(countdownTickClip);
+
             yield return new WaitForSeconds(1.0f);
         }
 
-        uiManager.SetStatus("Session Started");
+        if (countdownTimerPanel != null)
+            countdownTimerPanel.SetActive(false);
+
+        if (uiManager != null)
+            uiManager.SetStatus("Session Started");
+
         initiationCoroutine = null;
         StartCommunicationSession();
     }
@@ -321,6 +344,13 @@ public class InteractionManager : MonoBehaviour
             byte[] wavBytes = null;
             float speechDuration = 0f, silenceDuration = 0f;
             bool recDone = false;
+
+            if (audioRecorder == null)
+            {
+                if (uiManager != null) uiManager.SetStatus("Audio recorder missing.");
+                Debug.LogError("[InteractionManager] AudioRecorder reference is null.");
+                yield break;
+            }
 
             // Pass live remaining time directly into the UI status text bar
             activeRecordingCoroutine = StartCoroutine(audioRecorder.RecordUserSpeechRoutine(
@@ -554,11 +584,14 @@ public class InteractionManager : MonoBehaviour
             OnSessionCompletedSequence();
             return;
         }
-        if (sessionSaveFailed && sessionSaveOwner != UserSession.CurrentUserId)
+        string currentAuthId = UserSession.AuthClient?.Auth?.CurrentUser?.Id
+                    ?? UserSession.AuthClient?.Auth?.CurrentSession?.User?.Id;
+        if (sessionSaveFailed && (sessionSaveOwner != UserSession.CurrentUserId || currentAuthId != sessionSaveOwner))
         {
             if (uiManager != null) uiManager.SetStatus("Sign in as the original session owner to retry saving.");
             return;
         }
+
         if (!sessionSaveFailed) sessionSaveOwner = UserSession.CurrentUserId;
         isSavingSession = true;
         SetNPCBodyActivity(NPCBodyActivity.IDLE);
