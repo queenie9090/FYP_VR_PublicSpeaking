@@ -91,6 +91,9 @@ public class NPCFaceZoom : MonoBehaviour
         button.targetGraphic = buttonImage;
         var source = GetComponent<Button>();
         if (source != null) button.colors = source.colors;
+        var exitColors = button.colors;
+        exitColors.normalColor = Color.black;
+        button.colors = exitColors;
         button.onClick.AddListener(CloseFaceZoom);
         var labelRect = MakeRect("Label", exit, new Vector2(500, 70), Vector2.zero);
         var label = labelRect.gameObject.AddComponent<TextMeshProUGUI>();

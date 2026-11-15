@@ -1598,11 +1598,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1243776288163151064, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -0.134
+      value: -0.004
       objectReference: {fileID: 0}
     - target: {fileID: 1243776288163151064, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 2.25071
+      value: 2.28
       objectReference: {fileID: 0}
     - target: {fileID: 1243776288163151064, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: m_LocalRotation.w
@@ -1751,7 +1751,7 @@ PrefabInstance:
     - target: {fileID: 5161946668030584482, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: m_Controller
       value: 
-      objectReference: {fileID: 9100000, guid: 321b0f3e9a62b974ea1851af55d50b27, type: 2}
+      objectReference: {fileID: 9100000, guid: 73b69701f63843d891b25bc8d5eeb3a1, type: 2}
     - target: {fileID: 5161946668030584482, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: m_CullingMode
       value: 0
@@ -1773,15 +1773,39 @@ PrefabInstance:
       value: BodyGestures
       objectReference: {fileID: 0}
     - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: listeningNodPause
+      value: 0.4
+      objectReference: {fileID: 0}
+    - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: actions.Array.size
       value: 4
       objectReference: {fileID: 0}
     - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: listeningNodDegrees
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: listeningNodFrequency
+      value: 0.9
+      objectReference: {fileID: 0}
+    - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: seatedSpeakingDegrees
-      value: 2.5
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: diagnoseSeatedGestures
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: seatedActivityGestures
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: sceneControllerOverride
+      value: 
+      objectReference: {fileID: 9100000, guid: 73b69701f63843d891b25bc8d5eeb3a1, type: 2}
+    - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: interviewActivityGestures
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
@@ -1801,7 +1825,23 @@ PrefabInstance:
       value: BodyGestures.Idle
       objectReference: {fileID: 0}
     - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: enableInterviewAngryPointing
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: interviewPointingLayerWeight
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: previewSeatedPoseCorrections
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: actions.Array.data[3].oneShot
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: useSeatedConversationGestures
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
@@ -1815,6 +1855,10 @@ PrefabInstance:
     - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: actions.Array.data[3].activity
       value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: enableTutorialSpeakingInInterview
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5689895497933472589, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: m_Layer
@@ -2171,12 +2215,16 @@ MonoBehaviour:
   hintUIController: {fileID: 1262756090}
   sfxAudioSource: {fileID: 2072756188}
   sessionCompletedClip: {fileID: 8300000, guid: 2fca128f4bab5124fa97f482a14f6ebf, type: 3}
+  countdownTickClip: {fileID: 0}
   roomNPCs:
   - {fileID: 2100000002}
   currentActiveNPC: {fileID: 2100000002}
   fallbackNpcAudioSource: {fileID: 0}
   npcEmotionController: {fileID: 2100000001}
   startConfigPanel: {fileID: 355607159}
+  countdownTimerPanel: {fileID: 0}
+  countdownTimerText: {fileID: 0}
+  preSessionCountdownSeconds: 5
   emotionPanel: {fileID: 828402924}
   viewNPCFaceButton: {fileID: 1988000001}
   startSessionButton: {fileID: 984489749}
@@ -18442,7 +18490,6 @@ MonoBehaviour:
   scenarioTitleText: {fileID: 454470499}
   roleText: {fileID: 1538251598}
   difficultyText: {fileID: 1281444279}
-  objectiveText: {fileID: 803720316}
   personaText: {fileID: 1881606773}
   topicText: {fileID: 1263526234}
   turnLimitText: {fileID: 382038862}
@@ -19592,6 +19639,64 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b1d1c4c8e4e047f4c81d1b7176555e9c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NPCPersona
+--- !u!114 &2100000003 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+  m_PrefabInstance: {fileID: 231675880}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee06fbaafad5af64c9cfc829e5f6321f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NPCBodyAnimation
+--- !u!1 &2100000010
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2100000011}
+  - component: {fileID: 2100000012}
+  m_Layer: 0
+  m_Name: Interview Animation Keyboard Tester
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2100000011
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2100000010}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2100000012
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2100000010}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5e38a3b46d2e4bb7af596eedc781c785, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::InterviewNPCAnimationKeyboardTester
+  bodyAnimation: {fileID: 2100000003}
+  enableKeyboardAnimationTesting: 1
+  previewTutorialSpeaking: 1
 --- !u!1 &2106013375
 GameObject:
   m_ObjectHideFlags: 0
@@ -20629,3 +20734,4 @@ SceneRoots:
   - {fileID: 1997467008}
   - {fileID: 1368003695}
   - {fileID: 231675880}
+  - {fileID: 2100000011}
