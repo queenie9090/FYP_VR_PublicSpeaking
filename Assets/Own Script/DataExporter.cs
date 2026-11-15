@@ -1,15 +1,20 @@
 using System;
 using System.IO;
+using System.Net;
+using System.Runtime.InteropServices;
 using System.Text;
-using System.Collections.Generic;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 public class DataExporter : MonoBehaviour
 {
     /// <summary>
     /// Exports complete session metrics and detailed dialogue logs to a formatted CSV file.
+    /// Prompts the user to choose a save location on Windows PC by default.
     /// </summary>
-    public static string ExportToCSV(NormalizedSessionData data)
+    public static string ExportToCSV(NormalizedSessionData data, bool promptUserForPath = true)
     {
         if (data == null || data.performance_metric == null || data.performance_metric.Count == 0)
         {
@@ -17,10 +22,14 @@ public class DataExporter : MonoBehaviour
             return null;
         }
 
+        string defaultName = $"SessionReport_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+        string filePath = ResolveSavePath(defaultName, "csv", promptUserForPath);
+        if (string.IsNullOrEmpty(filePath)) return null; // User cancelled dialog
+
         var metric = data.performance_metric[0];
         StringBuilder sb = new StringBuilder();
 
-        // 1. Session Summary Section (Includes Session Status)
+        // 1. Session Summary Section
         string sessionStatus = string.IsNullOrEmpty(data.status) ? "Completed" : data.status;
 
         sb.AppendLine("=== VR COMMUNICATION EVALUATION SUMMARY ===");
@@ -55,7 +64,6 @@ public class DataExporter : MonoBehaviour
             }
         }
 
-        string filePath = Path.Combine(Application.persistentDataPath, $"SessionReport_{DateTime.Now:yyyyMMdd_HHmmss}.csv");
         File.WriteAllText(filePath, sb.ToString(), Encoding.UTF8);
 
         Debug.Log($"[DataExporter] Complete CSV exported successfully to: {filePath}");
@@ -64,8 +72,9 @@ public class DataExporter : MonoBehaviour
 
     /// <summary>
     /// Exports full session structure and turns into a structured JSON payload.
+    /// Prompts the user to choose a save location on Windows PC by default.
     /// </summary>
-    public static string ExportToJSON(NormalizedSessionData data)
+    public static string ExportToJSON(NormalizedSessionData data, bool promptUserForPath = true)
     {
         if (data == null)
         {
@@ -73,9 +82,11 @@ public class DataExporter : MonoBehaviour
             return null;
         }
 
-        string jsonString = JsonUtility.ToJson(data, true);
-        string filePath = Path.Combine(Application.persistentDataPath, $"SessionReport_{DateTime.Now:yyyyMMdd_HHmmss}.json");
+        string defaultName = $"SessionReport_{DateTime.Now:yyyyMMdd_HHmmss}.json";
+        string filePath = ResolveSavePath(defaultName, "json", promptUserForPath);
+        if (string.IsNullOrEmpty(filePath)) return null; // User cancelled dialog
 
+        string jsonString = JsonUtility.ToJson(data, true);
         File.WriteAllText(filePath, jsonString, Encoding.UTF8);
 
         Debug.Log($"[DataExporter] Complete JSON exported successfully to: {filePath}");
@@ -84,8 +95,9 @@ public class DataExporter : MonoBehaviour
 
     /// <summary>
     /// Generates a printable HTML/PDF report containing all session details, metrics, and dialogue logs.
+    /// Prompts the user to choose a save location on Windows PC by default.
     /// </summary>
-    public static string ExportToPDFReport(NormalizedSessionData data)
+    public static string ExportToPDFReport(NormalizedSessionData data, bool promptUserForPath = true)
     {
         if (data == null || data.performance_metric == null || data.performance_metric.Count == 0)
         {
@@ -93,13 +105,17 @@ public class DataExporter : MonoBehaviour
             return null;
         }
 
+        string defaultName = $"SessionReport_{DateTime.Now:yyyyMMdd_HHmmss}.html";
+        string filePath = ResolveSavePath(defaultName, "html", promptUserForPath);
+        if (string.IsNullOrEmpty(filePath)) return null; // User cancelled dialog
+
         var metric = data.performance_metric[0];
         StringBuilder html = new StringBuilder();
 
         string sessionStatus = string.IsNullOrEmpty(data.status) ? "Completed" : data.status;
         string statusColor = string.Equals(sessionStatus, "Incomplete", StringComparison.OrdinalIgnoreCase) ? "#ef4444" : "#22c55e";
 
-        html.AppendLine("<!DOCTYPE html><html><head><meta charset='UTF-8'><style>");
+        html.AppendLine("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>VR Communication Evaluation Report</title><style>");
         html.AppendLine("body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background: #0f172a; color: #f8fafc; }");
         html.AppendLine(".header { border-bottom: 2px solid #38bdf8; padding-bottom: 10px; margin-bottom: 20px; }");
         html.AppendLine(".card { background: #1e293b; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }");
@@ -110,16 +126,17 @@ public class DataExporter : MonoBehaviour
         html.AppendLine("th { background: #334155; color: #38bdf8; }");
         html.AppendLine(".user-dialogue { color: #38bdf8; font-weight: bold; }");
         html.AppendLine(".npc-dialogue { color: #4ade80; font-weight: bold; }");
+        html.AppendLine("@media print { body { background: #ffffff; color: #0f172a; } .card { background: #f8fafc; box-shadow: none; border: 1px solid #cbd5e1; } th { background: #e2e8f0; color: #0f172a; } }");
         html.AppendLine("</style></head><body>");
 
         // Header Section
-        html.AppendLine($"<div class='header'><h1>VR Communication Evaluation Report</h1>");
+        html.AppendLine("<div class='header'><h1>VR Communication Evaluation Report</h1>");
         html.AppendLine($"<p><b>Date Generated:</b> {DateTime.Now:MMMM dd, yyyy HH:mm} | <b>Session Duration:</b> {data.duration_seconds:F0}s</p></div>");
 
         // Scenario Metadata Card (Includes Status Badge)
-        html.AppendLine($"<div class='card'><h2>Scenario Configuration</h2>");
-        html.AppendLine($"<p><b>Scenario Type:</b> {data.scenario_type} | <b>Status:</b> <span style='color:{statusColor}; font-weight:bold;'>{sessionStatus.ToUpper()}</span></p>");
-        html.AppendLine($"<p><b>Topic:</b> {data.scenario_topic} | <b>Difficulty:</b> {data.difficulty_level} | <b>Input Mode:</b> {data.input_mode_used}</p>");
+        html.AppendLine("<div class='card'><h2>Scenario Configuration</h2>");
+        html.AppendLine($"<p><b>Scenario Type:</b> {EscapeHtml(data.scenario_type)} | <b>Status:</b> <span style='color:{statusColor}; font-weight:bold;'>{EscapeHtml(sessionStatus.ToUpper())}</span></p>");
+        html.AppendLine($"<p><b>Topic:</b> {EscapeHtml(data.scenario_topic)} | <b>Difficulty:</b> {EscapeHtml(data.difficulty_level)} | <b>Input Mode:</b> {EscapeHtml(data.input_mode_used)}</p>");
         html.AppendLine($"<p><b>Overall Composite Score:</b> <span style='font-size: 20px; color: #38bdf8; font-weight: bold;'>{metric.overall_score:F0}%</span></p></div>");
 
         // Detailed Metrics Table Card
@@ -138,7 +155,7 @@ public class DataExporter : MonoBehaviour
 
         // AI Coaching Summary Card
         html.AppendLine("<div class='card'><h2>AI Executive Coaching Summary</h2>");
-        html.AppendLine($"<p>{metric.ai_feedback_summary}</p></div>");
+        html.AppendLine($"<p>{EscapeHtml(metric.ai_feedback_summary)}</p></div>");
 
         // Conversation Transcript Card
         html.AppendLine("<div class='card'><h2>Conversation Transcript Log</h2>");
@@ -146,8 +163,8 @@ public class DataExporter : MonoBehaviour
         {
             foreach (var turn in data.dialogue_turn)
             {
-                html.AppendLine($"<p><span class='user-dialogue'>Turn {turn.turn_sequence} - You:</span> {turn.user_transcript}</p>");
-                html.AppendLine($"<p><span class='npc-dialogue'>NPC Response:</span> {turn.ai_response_text}</p>");
+                html.AppendLine($"<p><span class='user-dialogue'>Turn {turn.turn_sequence} - You:</span> {EscapeHtml(turn.user_transcript)}</p>");
+                html.AppendLine($"<p><span class='npc-dialogue'>NPC Response:</span> {EscapeHtml(turn.ai_response_text)}</p>");
                 html.AppendLine($"<p style='font-size: 12px; color: #94a3b8;'>[Turn Metrics -> WPM: {turn.speaking_rate_wpm:F0} | Fillers: {turn.filler_word_count} | Silence: {turn.silence_duration_seconds:F1}s]</p><hr style='border: 0.5px solid #334155;'>");
             }
         }
@@ -155,14 +172,87 @@ public class DataExporter : MonoBehaviour
         {
             html.AppendLine("<p>No dialogue turns recorded for this session.</p>");
         }
-        html.AppendLine("</div>");
+        html.AppendLine("</div></body></html>");
 
-        html.AppendLine("</body></html>");
-
-        string filePath = Path.Combine(Application.persistentDataPath, $"SessionReport_{DateTime.Now:yyyyMMdd_HHmmss}.html");
         File.WriteAllText(filePath, html.ToString(), Encoding.UTF8);
 
         Debug.Log($"[DataExporter] Complete HTML/PDF report saved to: {filePath}");
         return filePath;
     }
+
+    private static string EscapeHtml(string text)
+        => string.IsNullOrEmpty(text) ? "" : WebUtility.HtmlEncode(text);
+
+    private static string ResolveSavePath(string defaultFileName, string extension, bool promptUserForPath)
+    {
+        if (!promptUserForPath)
+            return Path.Combine(Application.persistentDataPath, defaultFileName);
+
+#if UNITY_EDITOR
+        string editorPath = EditorUtility.SaveFilePanel(
+            "Export Session Report",
+            Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+            Path.GetFileNameWithoutExtension(defaultFileName),
+            extension
+        );
+        return string.IsNullOrEmpty(editorPath) ? null : editorPath;
+#elif UNITY_STANDALONE_WIN
+        return ShowWindowsSaveDialog(defaultFileName, extension);
+#else
+        return Path.Combine(Application.persistentDataPath, defaultFileName);
+#endif
+    }
+
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private struct OpenFileName
+    {
+        public int lStructSize;
+        public IntPtr hwndOwner;
+        public IntPtr hInstance;
+        public string lpstrFilter;
+        public string lpstrCustomFilter;
+        public int nMaxCustFilter;
+        public int nFilterIndex;
+        public string lpstrFile;
+        public int nMaxFile;
+        public string lpstrFileTitle;
+        public int nMaxFileTitle;
+        public string lpstrInitialDir;
+        public string lpstrTitle;
+        public int Flags;
+        public short nFileOffset;
+        public short nFileExtension;
+        public string lpstrDefExt;
+        public IntPtr lCustData;
+        public IntPtr lpfnHook;
+        public string lpTemplateName;
+        public IntPtr pvReserved;
+        public int dwReserved;
+        public int flagsEx;
+    }
+
+    [DllImport("comdlg32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    private static extern bool GetSaveFileName(ref OpenFileName ofn);
+
+    private static string ShowWindowsSaveDialog(string defaultFileName, string extension)
+    {
+        OpenFileName ofn = new OpenFileName();
+        ofn.lStructSize = Marshal.SizeOf(ofn);
+        ofn.lpstrFilter = $"{extension.ToUpper()} Files (*.{extension})\0*.{extension}\0All Files (*.*)\0*.*\0";
+        ofn.lpstrFile = defaultFileName.PadRight(260, '\0');
+        ofn.nMaxFile = 260;
+        ofn.lpstrInitialDir = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        ofn.lpstrTitle = "Export Session Report";
+        ofn.lpstrDefExt = extension;
+        ofn.Flags = 0x00000002 | 0x00000800; // OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST
+
+        if (GetSaveFileName(ref ofn))
+        {
+            int nullIdx = ofn.lpstrFile.IndexOf('\0');
+            return nullIdx >= 0 ? ofn.lpstrFile.Substring(0, nullIdx) : ofn.lpstrFile;
+        }
+        return null;
+    }
+#endif
 }

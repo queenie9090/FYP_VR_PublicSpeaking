@@ -38,6 +38,7 @@ public class HintUIController : MonoBehaviour
     private string currentDialogueHint = "";
     private float lastGestureToggle = 0f;
     private int hintTriggerCount = 0;
+    private bool isHintPrefetching = false;
 
     public void ResetHintCount() => hintTriggerCount = 0;
     public int GetTotalHintCount() => hintTriggerCount;
@@ -108,9 +109,13 @@ public class HintUIController : MonoBehaviour
         Debug.Log($"[hintUIController] HaveAQuestion gesture received. Mode = {currentInputMode}");
         if (currentInputMode != InputMode.HandTracking) return;
         if (Time.time - lastGestureToggle < 1.0f) return;
-       
+
+        // Prevent holding/jittering the "point up" pose from closing the panel right after opening it.
+        // Let Thumbs Down handle closing in Hand Tracking mode.
+        if (hintPanelRoot != null && hintPanelRoot.activeSelf) return;
+
         lastGestureToggle = Time.time;
-        Debug.Log("<color=green>[hintUIController]</color> OnHaveAQuestionGestureTriggered received. Processing toggle...");
+        Debug.Log("<color=green>[hintUIController]</color> OnHaveAQuestionGestureTriggered received. Opening panel...");
         ProcessHintTrigger();
     }
 
@@ -127,6 +132,12 @@ public class HintUIController : MonoBehaviour
             HideHintCanvas();
         }
     }
+
+    public void SetHintPrefetching(bool prefetching)
+    {
+        isHintPrefetching = prefetching;
+    }
+
 
     /// <summary>
     /// Unified hint activation pipeline for both Controller and Hand Tracking modes.
@@ -149,16 +160,32 @@ public class HintUIController : MonoBehaviour
         PositionInFrontOfPlayer(hintPanelRoot);
         hintPanelRoot.SetActive(true);
 
-        // 3. Set text based on dialogue state
+        // 3. Set text based on dialogue state & cached hint
         if (isDialogueActive && interactionManager != null)
         {
-            hintText.text = "Generating AI hint...";
             hintTriggerCount++;
-            interactionManager.TriggerHintActivation();
+
+            if (!string.IsNullOrEmpty(currentDialogueHint))
+            {
+                // Hint was already pre-generated while NPC was speaking!
+                hintText.text = currentDialogueHint;
+                if (audioSource != null && hintReceivedClip != null)
+                    audioSource.PlayOneShot(hintReceivedClip);
+            }
+            else if (isHintPrefetching)
+            {
+                // Prefetch is currently in-flight; ShowDirectMessage will populate it on arrival
+                hintText.text = "Generating AI hint...";
+            }
+            else
+            {
+                // Fallback: fetch on demand if no prefetch ran
+                hintText.text = "Generating AI hint...";
+                interactionManager.TriggerHintActivation();
+            }
         }
         else
         {
-            // Allowed before session starts!
             hintText.text = "Hint panel ready. Hints will be generated once you start the conversation.";
         }
     }
@@ -204,7 +231,9 @@ public class HintUIController : MonoBehaviour
 
         if (isFinalResult)
         {
+            isHintPrefetching = false;
             currentDialogueHint = message;
+
             if (hintPanelRoot != null && hintPanelRoot.activeSelf && audioSource != null && hintReceivedClip != null)
             {
                 audioSource.PlayOneShot(hintReceivedClip);
@@ -213,14 +242,12 @@ public class HintUIController : MonoBehaviour
 
         if (hintPanelRoot == null || hintText == null) return;
 
-        hintText.text = message;
-
-        // Only force open if this is the final AI hint result arriving from OpenAI
-        //if (isFinalResult && !hintPanelRoot.activeSelf)
-        //{
-        //    PositionInFrontOfPlayer(hintPanelRoot);
-        //    hintPanelRoot.SetActive(true);
-        //}
+        // Only overwrite visible text if the panel is currently open (prevents background prefetch
+        // from popping the panel open uninvited, while still caching currentDialogueHint above)
+        if (hintPanelRoot.activeSelf)
+        {
+            hintText.text = message;
+        }
     }
 
     public void SyncInputModeFromUserSession()
@@ -249,6 +276,7 @@ public class HintUIController : MonoBehaviour
     {
         isDialogueActive = active;
         currentDialogueHint = activeHint;
+        isHintPrefetching = false;
     }
 
     /// <summary>
@@ -291,22 +319,23 @@ public class HintUIController : MonoBehaviour
     }
 
     /// <summary>
-    /// Called by InteractionManager at the start of a new turn.
-    /// If the panel is currently open in VR space, it automatically requests a fresh AI hint.
+    /// Called by InteractionManager as soon as the NPC's new line is added to history.
+    /// Pre-generates the hint in the background while the NPC is speaking.
     /// </summary>
     public void OnNewTurnStarted()
     {
-        // Clear stored text from the previous turn
         currentDialogueHint = "";
 
-        if (hintPanelRoot != null && hintPanelRoot.activeSelf && isDialogueActive)
+        if (!isDialogueActive || interactionManager == null) return;
+
+        if (hintPanelRoot != null && hintPanelRoot.activeSelf && hintText != null)
         {
-            if (interactionManager != null)
-            {
-                hintTriggerCount++;
-                interactionManager.TriggerHintActivation();
-            }
+            hintText.text = "Generating AI hint...";
+            hintTriggerCount++;
         }
+
+        isHintPrefetching = true;
+        interactionManager.PrefetchHintForCurrentTurn();
     }
 
 }

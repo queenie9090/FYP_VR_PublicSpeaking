@@ -54,7 +54,7 @@ public class InteractionManager : MonoBehaviour
     [SerializeField] private GameObject viewNPCFaceButton;
     [SerializeField] private Button startSessionButton;
     [SerializeField] private Button exitButton;
-    [SerializeField] private ScenarioBriefingUI scenarioBriefingUI;
+    [SerializeField] private ScenarioBriefingUI[] scenarioBriefingPanels;
     [SerializeField] private GameObject exitSessionPanel;
 
 
@@ -177,9 +177,13 @@ public class InteractionManager : MonoBehaviour
             activeConfig = UserSession.SelectedScenarioConfig ?? new ScenarioConfig();
         }
 
-        if (scenarioBriefingUI != null)
+        if (scenarioBriefingPanels != null)
         {
-            scenarioBriefingUI.SetupBriefing(activeConfig);
+            foreach (var briefingUI in scenarioBriefingPanels)
+            {
+                if (briefingUI != null)
+                    briefingUI.SetupBriefing(activeConfig);
+            }
         }
 
         if (!isTutorial && objectiveManager != null)
@@ -338,67 +342,33 @@ public class InteractionManager : MonoBehaviour
 
             if (!isSessionActive) yield break;
 
-            uiManager.SetStatus("Listening...");
-            SetNPCBodyActivity(NPCBodyActivity.LISTENING, conversationHistory.Count(t => t.speaker == "NPC") + 1);
+            int nextTurnNumber = conversationHistory.Count(t => t.speaker == "NPC") + 1;
 
-            byte[] wavBytes = null;
+            string userTranscript = "";
             float speechDuration = 0f, silenceDuration = 0f;
-            bool recDone = false;
+            bool captureDone = false;
+            bool fatalError = false;
 
-            if (audioRecorder == null)
-            {
-                if (uiManager != null) uiManager.SetStatus("Audio recorder missing.");
-                Debug.LogError("[InteractionManager] AudioRecorder reference is null.");
-                yield break;
-            }
-
-            // Pass live remaining time directly into the UI status text bar
-            activeRecordingCoroutine = StartCoroutine(audioRecorder.RecordUserSpeechRoutine(
-                (bytes, sDuration, silDuration) => {
-                    wavBytes = bytes; speechDuration = sDuration; silenceDuration = silDuration;
-                    recDone = true;
+            yield return StartCoroutine(speechController.CaptureUserTurnWithRetriesRoutine(
+                conversationHistory,
+                fillers => totalFillerWordsDetected += fillers,
+                (transcript, sDuration, silDuration) => {
+                    userTranscript = transcript;
+                    speechDuration = sDuration;
+                    silenceDuration = silDuration;
+                    captureDone = true;
                 },
-                (currentSec, maxSec) => {
-                    int remainingSec = Mathf.CeilToInt(maxSec - currentSec);
-                    uiManager.SetStatus($"Recording... {remainingSec}s remaining");
-                }
+                () => {
+                    fatalError = true;
+                    captureDone = true;
+                },
+                onListeningAttemptStarted: () => SetNPCBodyActivity(NPCBodyActivity.LISTENING, nextTurnNumber),
+                shouldCancel: () => !isSessionActive
             ));
 
-            yield return new WaitUntil(() => recDone);
-            activeRecordingCoroutine = null;
-
-            if (!isSessionActive) yield break;
-            if (wavBytes == null || wavBytes.Length == 0)
-            {
-                uiManager.SetStatus("Microphone unavailable. Check the microphone and restart the session.");
-                Debug.LogError("[InteractionManager] No microphone audio was recorded. The conversation was not advanced.");
-                yield break;
-            }
+            if (!isSessionActive || fatalError || !captureDone) yield break;
 
             sessionTimer.RecordTurnDurations(speechDuration, silenceDuration);
-
-            bool turnDone = false;
-            bool transcriptionFailed = false;
-            SetNPCBodyActivity(NPCBodyActivity.THINKING, conversationHistory.Count(t => t.speaker == "NPC") + 1);
-            int historyCountBeforeTranscription = conversationHistory.Count;
-            StartCoroutine(speechController.TranscribeUserAudioRoutine(
-                wavBytes, speechDuration, silenceDuration, conversationHistory,
-                fillers => totalFillerWordsDetected += fillers,
-                () => turnDone = true,
-                () => transcriptionFailed = true
-            ));
-
-            yield return new WaitUntil(() => turnDone);
-            if (!isSessionActive) yield break;
-            if (transcriptionFailed)
-            {
-                uiManager.SetStatus("Speech recognition failed. Please try speaking again.");
-                yield return new WaitForSeconds(1.5f);
-                continue;
-            }
-            string userTranscript = (conversationHistory.Count > historyCountBeforeTranscription && conversationHistory[conversationHistory.Count - 1].speaker == "User")
-    ? conversationHistory[conversationHistory.Count - 1].dialogue
-    : "";
             yield return ProcessLLMTurnRoutine(userTranscript);
         }
     }
@@ -523,20 +493,25 @@ public class InteractionManager : MonoBehaviour
         }
 
         conversationHistory.Add(new DialogueTurn { speaker = "NPC", dialogue = response.npc_response });
-        uiManager.RenderDialogue(conversationHistory);
+        uiManager.RenderDialogueWithPartialLatest(conversationHistory, "");
 
         if (hintUIController != null)
         {
-            // Notify hintUIController that a new turn began.
-            // If the panel is open in VR, it will automatically fetch and render the new turn's hint!
+            // Starts prefetching the hint in the background BEFORE/WHILE the NPC speaks!
             hintUIController.OnNewTurnStarted();
         }
 
         uiManager.SetStatus("Generating NPC speech...");
         yield return StartCoroutine(speechController.PlayNPCAudioRoutine(
-            response.npc_response, currentActiveNPC, fallbackNpcAudioSource, expectedTurnNumber
+            response.npc_response,
+            currentActiveNPC,
+            fallbackNpcAudioSource,
+            expectedTurnNumber,
+            onPartialTextUpdated: partial => {
+                if (uiManager != null)
+                    uiManager.RenderDialogueWithPartialLatest(conversationHistory, partial);
+            }
         ));
-        //yield return StartCoroutine(PlayNPCAudioRoutine(response.npc_response));
 
         if (!isSessionActive) yield break;   // closed during NPC audio (CloseSession already saved)
 
@@ -569,6 +544,14 @@ public class InteractionManager : MonoBehaviour
         if (hintService != null)
         {
             hintService.TriggerHintActivation(isSessionActive, activeConfig, conversationHistory, hintUIController, uiManager);
+        }
+    }
+
+    public void PrefetchHintForCurrentTurn()
+    {
+        if (hintService != null)
+        {
+            hintService.TriggerHintActivation(isSessionActive, activeConfig, conversationHistory, hintUIController, uiManager, isBackgroundPrefetch: true);
         }
     }
 
@@ -639,6 +622,7 @@ public class InteractionManager : MonoBehaviour
 
         SetNPCBodyActivity(NPCBodyActivity.IDLE);
         if (speechController != null) speechController.CancelPendingSpeech();
+        if (hintService != null) hintService.CancelPendingHints();
 
         if (activeSpeechLoopCoroutine != null)
         {
@@ -652,6 +636,7 @@ public class InteractionManager : MonoBehaviour
         {
             StopCoroutine(initiationCoroutine);
             initiationCoroutine = null;
+            if (countdownTimerPanel != null) countdownTimerPanel.SetActive(false);
         }
 
         if (currentActiveNPC != null && currentActiveNPC.npcAudioSource != null)
@@ -671,11 +656,6 @@ public class InteractionManager : MonoBehaviour
             fallbackNpcAudioSource.Stop();
         }
 
-        if (activeRecordingCoroutine != null)
-        {
-            StopCoroutine(activeRecordingCoroutine);
-            activeRecordingCoroutine = null;
-        }
         if (audioRecorder != null)
         {
             audioRecorder.StopRecording();

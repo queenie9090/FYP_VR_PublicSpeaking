@@ -1,11 +1,123 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
+using TMPro;
 
 public class AudioRecorder : MonoBehaviour
 {
+    private const string SavedMicPrefKey = "UserSelectedMicrophone";
+
     [SerializeField] private MicrophoneVolumeMeter micVolumeMeter;
+
+    [Header("Optional UI Microphone Selector")]
+    [Tooltip("Assign a TMP_Dropdown if you want users to pick their microphone in UI. Leave empty to use default/saved mic.")]
+    [SerializeField] private TMP_Dropdown micDropdown;
+
+    [Header("Recording Timers")]
+    [Tooltip("Minimum seconds to keep recording even if no speech is detected yet.")]
+    [SerializeField] private float minRecordDuration = 2.0f;
+
+    [Tooltip("Seconds of silence allowed BEFORE the user starts speaking.")]
+    [SerializeField] private float initialSilenceTimeout = 4.0f;
+
+    [Tooltip("Seconds of silence allowed AFTER the user speaks before ending the turn.")]
+    [SerializeField] private float trailingSilenceTimeout = 1.8f;
+
+    [Tooltip("Maximum recording length per attempt.")]
+    [SerializeField] private float maxAllowedDuration = 60.0f;
+
+    [Header("Voice Activity Detection")]
+    [SerializeField] private float loudnessThreshold = 0.003f;
+
     private bool stopRequested = false;
+    private string activeMicDevice = null;
+    private string userSelectedMic = null;
+
+    private void OnEnable()
+    {
+        userSelectedMic = PlayerPrefs.GetString(SavedMicPrefKey, "");
+        RefreshMicrophoneDropdown();
+    }
+
+    private void OnDisable()
+    {
+        if (micDropdown != null)
+            micDropdown.onValueChanged.RemoveListener(OnMicDropdownChanged);
+    }
+
+    /// <summary>
+    /// Populates the UI dropdown with all connected microphones and restores the user's saved choice.
+    /// </summary>
+    public void RefreshMicrophoneDropdown()
+    {
+        if (micDropdown == null) return;
+
+        micDropdown.onValueChanged.RemoveListener(OnMicDropdownChanged);
+        micDropdown.ClearOptions();
+
+        string[] devices = Microphone.devices;
+        if (devices == null || devices.Length == 0)
+        {
+            micDropdown.AddOptions(new List<string> { "No Microphone Detected" });
+            micDropdown.interactable = false;
+            return;
+        }
+
+        micDropdown.interactable = true;
+        var options = new List<string>(devices);
+        micDropdown.AddOptions(options);
+
+        int selectedIndex = 0;
+        if (!string.IsNullOrEmpty(userSelectedMic))
+        {
+            int found = Array.IndexOf(devices, userSelectedMic);
+            if (found >= 0) selectedIndex = found;
+        }
+
+        micDropdown.SetValueWithoutNotify(selectedIndex);
+        userSelectedMic = devices[selectedIndex];
+        micDropdown.onValueChanged.AddListener(OnMicDropdownChanged);
+    }
+
+    private void OnMicDropdownChanged(int index)
+    {
+        string[] devices = Microphone.devices;
+        if (devices == null || index < 0 || index >= devices.Length) return;
+
+        SetSelectedMicrophone(devices[index]);
+    }
+
+    /// <summary>
+    /// Call from any UI or settings script to set and persist the user's preferred microphone.
+    /// </summary>
+    public void SetSelectedMicrophone(string deviceName)
+    {
+        userSelectedMic = deviceName;
+        PlayerPrefs.SetString(SavedMicPrefKey, deviceName ?? "");
+        PlayerPrefs.Save();
+        Debug.Log($"[AudioRecorder] User selected microphone: '{deviceName}'");
+    }
+
+    private string ResolveMicrophoneDevice()
+    {
+        string[] devices = Microphone.devices;
+        if (devices == null || devices.Length == 0)
+            return null;
+
+        // 1. Use the user's explicitly chosen microphone if it is still connected
+        if (!string.IsNullOrEmpty(userSelectedMic))
+        {
+            for (int i = 0; i < devices.Length; i++)
+            {
+                if (string.Equals(devices[i], userSelectedMic, StringComparison.OrdinalIgnoreCase))
+                    return devices[i];
+            }
+        }
+
+        // 2. Otherwise fall back to the default system microphone (index 0)
+        return devices[0];
+    }
 
     public void RequestStopRecording()
     {
@@ -15,20 +127,20 @@ public class AudioRecorder : MonoBehaviour
     public IEnumerator RecordUserSpeechRoutine(Action<byte[], float, float> onRecordingComplete, Action<float, float> onProgress = null)
     {
         stopRequested = false;
-        string selectedMic = Microphone.devices.Length > 0 ? Microphone.devices[0] : null;
+        activeMicDevice = ResolveMicrophoneDevice();
 
-        if (string.IsNullOrEmpty(selectedMic))
+        if (string.IsNullOrEmpty(activeMicDevice))
         {
             Debug.LogError("[AudioRecorder] No valid microphone device found!");
             onRecordingComplete?.Invoke(null, 0f, 0f);
             yield break;
         }
 
-        float turnStartTime = Time.time;
+        Debug.Log($"[AudioRecorder] Recording with microphone: '{activeMicDevice}'");
 
         int targetSampleRate = 16000;
-        int maxClipSeconds = 60;
-        AudioClip recordedClip = Microphone.Start(selectedMic, false, maxClipSeconds, targetSampleRate);
+        int maxClipSeconds = Mathf.CeilToInt(maxAllowedDuration);
+        AudioClip recordedClip = Microphone.Start(activeMicDevice, false, maxClipSeconds, targetSampleRate);
         if (recordedClip == null)
         {
             Debug.LogError("[AudioRecorder] The microphone could not start recording.");
@@ -37,32 +149,39 @@ public class AudioRecorder : MonoBehaviour
         }
 
         if (micVolumeMeter != null)
-            micVolumeMeter.EnableVolumeMeter(true, recordedClip, selectedMic);
+            micVolumeMeter.EnableVolumeMeter(true, recordedClip, activeMicDevice);
 
-        yield return new WaitForSeconds(0.2f);
+        // Wait until the microphone driver starts writing samples (up to 0.5s)
+        float initWait = 0f;
+        while (Microphone.GetPosition(activeMicDevice) <= 0 && initWait < 0.5f && !stopRequested)
+        {
+            initWait += Time.unscaledDeltaTime;
+            yield return null;
+        }
 
-        float speechStart = Time.time;
-        float silenceDuration = speechStart - turnStartTime;
+        float recordStartTime = Time.time;
+        float firstSpeechTime = -1f;
+        bool hasDetectedSpeech = false;
 
-        float dynamicSilenceTimer = 2.0f;
+        float silenceTimer = 0.0f;
         float totalRecordingTimer = 0.0f;
-        float maxAllowedDuration = 60.0f;
         float[] sampleBuffer = new float[128];
 
-        while (dynamicSilenceTimer > 0.0f && totalRecordingTimer < maxAllowedDuration && !stopRequested)
+        while (totalRecordingTimer < maxAllowedDuration && !stopRequested)
         {
             yield return new WaitForSeconds(0.1f);
 
-            // FIXED: Removed duplicate timer addition lines
             if (Time.timeScale > 0f)
             {
                 totalRecordingTimer += 0.1f;
                 onProgress?.Invoke(totalRecordingTimer, maxAllowedDuration);
             }
 
-            if (Microphone.IsRecording(selectedMic) && recordedClip != null)
+            bool heardVoiceThisTick = false;
+
+            if (Microphone.IsRecording(activeMicDevice) && recordedClip != null)
             {
-                int currentMicPos = Microphone.GetPosition(selectedMic);
+                int currentMicPos = Microphone.GetPosition(activeMicDevice);
                 if (currentMicPos >= 128)
                 {
                     int micPos = currentMicPos - 128;
@@ -73,31 +192,56 @@ public class AudioRecorder : MonoBehaviour
                         for (int i = 0; i < 128; i++) sum += Mathf.Abs(sampleBuffer[i]);
                         float averageLoudness = sum / 128.0f;
 
-                        if (averageLoudness > 0.003f) dynamicSilenceTimer = 2.0f;
-                        else dynamicSilenceTimer -= 0.1f;
+                        if (averageLoudness > loudnessThreshold)
+                        {
+                            heardVoiceThisTick = true;
+                            if (!hasDetectedSpeech)
+                            {
+                                hasDetectedSpeech = true;
+                                firstSpeechTime = Time.time;
+                            }
+                        }
                     }
-                    else dynamicSilenceTimer -= 0.1f;
                 }
-                else dynamicSilenceTimer -= 0.1f;
             }
-            else dynamicSilenceTimer -= 0.1f;
+
+            if (heardVoiceThisTick)
+                silenceTimer = 0.0f;
+            else
+                silenceTimer += 0.1f;
+
+            // Never cut off during the minimum grace window
+            if (totalRecordingTimer >= minRecordDuration)
+            {
+                float activeSilenceLimit = hasDetectedSpeech ? trailingSilenceTimeout : initialSilenceTimeout;
+                if (silenceTimer >= activeSilenceLimit)
+                {
+                    Debug.Log($"[AudioRecorder] Stopping recording (hasDetectedSpeech={hasDetectedSpeech}, silence={silenceTimer:F1}s, total={totalRecordingTimer:F1}s).");
+                    break;
+                }
+            }
         }
 
-        int lastMicPosition = Microphone.GetPosition(selectedMic);
-        Microphone.End(selectedMic);
+        int lastMicPosition = Microphone.GetPosition(activeMicDevice);
+        Microphone.End(activeMicDevice);
 
         if (micVolumeMeter != null)
             micVolumeMeter.EnableVolumeMeter(false, null, null);
 
-        float speechDuration = Time.time - speechStart;
+        float endTime = Time.time;
+        float initialSilenceDuration = hasDetectedSpeech
+            ? Mathf.Max(0f, firstSpeechTime - recordStartTime)
+            : (endTime - recordStartTime);
+        float speechDuration = hasDetectedSpeech
+            ? Mathf.Max(0f, endTime - firstSpeechTime)
+            : 0f;
 
         AudioClip trimmedClip = TrimAudioClip(recordedClip, lastMicPosition);
         byte[] wavBytes = SavWav.GetWavBytes(trimmedClip);
 
-        onRecordingComplete?.Invoke(wavBytes, speechDuration, silenceDuration);
+        onRecordingComplete?.Invoke(wavBytes, speechDuration, initialSilenceDuration);
     }
 
-    // Trims empty trailing silence from the allocated AudioClip
     private AudioClip TrimAudioClip(AudioClip originalClip, int lastPosition)
     {
         if (originalClip == null || lastPosition <= 0) return originalClip;
@@ -119,17 +263,14 @@ public class AudioRecorder : MonoBehaviour
     public void StopRecording()
     {
         stopRequested = true;
-        StopAllCoroutines(); // Stop RecordUserSpeechRoutine on this component
+        StopAllCoroutines();
 
-        // 1. Terminate the active microphone device stream
-        string selectedMic = Microphone.devices.Length > 0 ? Microphone.devices[0] : null;
-        if (!string.IsNullOrEmpty(selectedMic) && Microphone.IsRecording(selectedMic))
+        if (!string.IsNullOrEmpty(activeMicDevice) && Microphone.IsRecording(activeMicDevice))
         {
-            Microphone.End(selectedMic);
+            Microphone.End(activeMicDevice);
             Debug.Log("[AudioRecorder] Microphone capture forcibly stopped.");
         }
 
-        // 2. Turn off the UI volume meter if active
         if (micVolumeMeter != null)
         {
             micVolumeMeter.EnableVolumeMeter(false, null, null);

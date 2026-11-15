@@ -878,6 +878,7 @@ GameObject:
   m_Component:
   - component: {fileID: 9150249479564954943}
   - component: {fileID: 7217514538655570714}
+  - component: {fileID: 9001000000000000001}
   m_Layer: 0
   m_Name: Aim Pose
   m_TagString: Untagged
@@ -969,6 +970,32 @@ MonoBehaviour:
     m_Interactions: 
     m_SingletonActionBindings: []
     m_Flags: 0
+--- !u!114 &9001000000000000001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3731119764064029736}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9c4ccfb2bf8340519e910e821f90f625, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  rightHand: 0
+--- !u!114 &9001000000000000002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5780998334867579440}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9c4ccfb2bf8340519e910e821f90f625, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  rightHand: 1
 --- !u!1 &3892329699652493770
 GameObject:
   m_ObjectHideFlags: 0
@@ -1177,6 +1204,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8000110866998627907}
   - component: {fileID: 2034475846792841991}
+  - component: {fileID: 9001000000000000002}
   m_Layer: 0
   m_Name: Aim Pose
   m_TagString: Untagged

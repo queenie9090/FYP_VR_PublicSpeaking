@@ -5,7 +5,33 @@ using UnityEngine.XR.Management;
 
 public class ScenarioTransitionController : MonoBehaviour
 {
+    public enum EditorXRTestMode
+    {
+        AutoDetect,         // Use physical Quest headset if connected; automatically fall back to PC Simulator if not
+        PhysicalVRHeadset,  // Force physical Quest/OpenXR initialization
+        DesktopSimulator    // Force PC / XR Device Simulator mode (skip physical headset)
+    }
+
     [SerializeField] private string defaultDashboardScene = "DashboardScene";
+
+#if UNITY_EDITOR
+    [Header("Editor Testing Options")]
+    [Tooltip("AutoDetect = Use Quest headset if Link is connected, otherwise fall back to PC Simulator.\nPhysicalVRHeadset = Always initialize physical Quest.\nDesktopSimulator = Always skip headset and test on PC.")]
+    [SerializeField] private EditorXRTestMode editorTestMode = EditorXRTestMode.AutoDetect;
+
+    private void Awake()
+    {
+        // Sync simulator flag early so MainMenu and direct-scene launches share the exact same mode
+        if (editorTestMode == EditorXRTestMode.DesktopSimulator)
+        {
+            VRSceneLoader.SetEditorSimulatorMode(true);
+        }
+        else if (editorTestMode == EditorXRTestMode.PhysicalVRHeadset)
+        {
+            VRSceneLoader.SetEditorSimulatorMode(false);
+        }
+    }
+#endif
 
     public void InitializeXRForEditor(MonoBehaviour runner, System.Action onComplete)
     {
@@ -14,7 +40,6 @@ public class ScenarioTransitionController : MonoBehaviour
         {
             if (!XRGeneralSettings.Instance.Manager.isInitializationComplete)
             {
-                Debug.Log("[ScenarioTransitionController] Initializing XR for Editor play...");
                 runner.StartCoroutine(DebugInitializeXRRoutine(onComplete));
                 return;
             }
@@ -26,8 +51,39 @@ public class ScenarioTransitionController : MonoBehaviour
 #if UNITY_EDITOR
     private IEnumerator DebugInitializeXRRoutine(System.Action onComplete)
     {
-        Debug.Log("[ScenarioTransitionController] Running in Unity Editor / Simulator mode.");
-        yield return null;
+        // Option 1: Explicit Desktop / Simulator mode
+        if (editorTestMode == EditorXRTestMode.DesktopSimulator || VRSceneLoader.IsEditorSimulatorMode)
+        {
+            VRSceneLoader.SetEditorSimulatorMode(true);
+            Debug.Log("[ScenarioTransitionController] Desktop/Simulator mode active: skipping physical XR Loader.");
+            yield return null;
+            onComplete?.Invoke();
+            yield break;
+        }
+
+        // Option 2 & 3: Try initializing physical OpenXR headset (PhysicalVRHeadset or AutoDetect)
+        var manager = XRGeneralSettings.Instance.Manager;
+        Debug.Log($"[ScenarioTransitionController] Attempting OpenXR initialization ({editorTestMode})...");
+        yield return manager.InitializeLoader();
+
+        if (manager.activeLoader != null)
+        {
+            VRSceneLoader.SetEditorSimulatorMode(false);
+            manager.StartSubsystems();
+            VRSceneLoader.MarkVRSubsystemsStarted();
+            Debug.Log("[ScenarioTransitionController] Physical Quest/OpenXR initialized and subsystems started.");
+        }
+        else if (editorTestMode == EditorXRTestMode.AutoDetect)
+        {
+            // No headset connected -> seamlessly fall back to PC Simulator without throwing an error
+            VRSceneLoader.SetEditorSimulatorMode(true);
+            Debug.Log("[ScenarioTransitionController] No Quest headset detected; automatically fell back to Desktop/Simulator mode.");
+        }
+        else
+        {
+            Debug.LogError("[ScenarioTransitionController] PhysicalVRHeadset mode selected, but XR Loader failed to initialize. Check Meta Horizon Link.");
+        }
+
         onComplete?.Invoke();
     }
 
@@ -39,7 +95,7 @@ public class ScenarioTransitionController : MonoBehaviour
             {
                 XRGeneralSettings.Instance.Manager.StopSubsystems();
                 XRGeneralSettings.Instance.Manager.DeinitializeLoader();
-                Debug.Log("[ScenarioTransitionController] Editor Play Mode stopped. OpenXR cleanly deinitialized.");
+                Debug.Log("[ScenarioTransitionController] Editor Play Mode stopped. OpenXR deinitialized.");
             }
         }
     }
@@ -50,7 +106,6 @@ public class ScenarioTransitionController : MonoBehaviour
         string targetScene = defaultDashboardScene;
         string currentSceneName = SceneManager.GetActiveScene().name;
 
-        // Direct scene check prevents defaulting to menu when coming out of the Tutorial
         bool isExitingFromTutorial = UserSession.IsRunningTutorial ||
                                      currentSceneName == "TutorialScene" ||
                                      (activeConfig != null && activeConfig.scenario == "TutorialScene");
@@ -58,7 +113,6 @@ public class ScenarioTransitionController : MonoBehaviour
         if (isExitingFromTutorial)
         {
             UserSession.IsRunningTutorial = false;
-            // A standalone tutorial has no saved result to show on a dashboard.
             targetScene = "MainMenu";
 
             if (UserSession.SelectedScenarioConfig != null &&

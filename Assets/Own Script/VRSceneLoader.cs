@@ -5,79 +5,111 @@ using UnityEngine.XR.Management;
 
 public class VRSceneLoader : MonoBehaviour
 {
+    private static bool vrSubsystemsStarted;
+    public static void MarkVRSubsystemsStarted() => vrSubsystemsStarted = true;
+
 #if UNITY_EDITOR
     private static bool editorVrSimulatorMode;
+    public static bool IsEditorSimulatorMode => editorVrSimulatorMode;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetEditorSimulatorMode() => editorVrSimulatorMode = false;
 
     public static void SetEditorSimulatorMode(bool enabled) => editorVrSimulatorMode = enabled;
+
+    [UnityEditor.InitializeOnLoadMethod]
+    private static void RegisterPlayModeCleanup()
+    {
+        UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+        UnityEditor.EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+    }
+
+    private static void OnPlayModeStateChanged(UnityEditor.PlayModeStateChange state)
+    {
+        if (state == UnityEditor.PlayModeStateChange.ExitingPlayMode)
+        {
+            if (XRGeneralSettings.Instance != null && XRGeneralSettings.Instance.Manager != null)
+            {
+                var manager = XRGeneralSettings.Instance.Manager;
+                if (manager.isInitializationComplete)
+                {
+                    try { manager.StopSubsystems(); } catch { }
+                    try { manager.DeinitializeLoader(); } catch { }
+                }
+            }
+            vrSubsystemsStarted = false;
+        }
+    }
 #endif
+
     /// <summary>
-    /// Initializes OpenXR subsystems on demand and transitions to the target VR scene.
+    /// Initializes OpenXR subsystems on demand and loads the target VR scene immediately.
     /// </summary>
     public static IEnumerator EnableVROnDemandAndLoad(string targetSceneName)
     {
+        if (!Application.CanStreamedLevelBeLoaded(targetSceneName))
+        {
+            Debug.LogError($"[VR Loader] Scene '{targetSceneName}' is unavailable.");
+            yield break;
+        }
+
 #if UNITY_EDITOR
         if (editorVrSimulatorMode && (targetSceneName == "TutorialScene" || targetSceneName == "Interview"))
         {
-            Debug.Log($"[VR Loader] Editor VR Simulator Mode: loading '{targetSceneName}' without initializing a physical XR loader.");
             SceneManager.LoadScene(targetSceneName);
             yield break;
         }
 #endif
-        Debug.Log($"[VR Loader] Initializing XR Subsystems for scene: '{targetSceneName}'...");
-
-        // 1. Temporarily pause AudioListener to prevent audio pops during initialization
-        AudioListener.pause = true;
-
-        // 2. Initialize XR Manager loader if not already running
-        if (XRGeneralSettings.Instance != null && XRGeneralSettings.Instance.Manager != null)
+        var xrManager = XRGeneralSettings.Instance != null ? XRGeneralSettings.Instance.Manager : null;
+        if (xrManager == null)
         {
-            if (!XRGeneralSettings.Instance.Manager.isInitializationComplete)
-            {
-                yield return XRGeneralSettings.Instance.Manager.InitializeLoader();
-            }
-
-            if (XRGeneralSettings.Instance.Manager.activeLoader == null)
-            {
-                Debug.LogError("[VR Loader] Failed to initialize XR Loader! Check OpenXR settings.");
-                AudioListener.pause = false;
-                yield break;
-            }
-
-            // 3. Start XR rendering, tracking, and hand-tracking subsystems
-            Debug.Log("[VR Loader] Starting XR Subsystems...");
-            XRGeneralSettings.Instance.Manager.StartSubsystems();
+            Debug.LogError("[VR Loader] XR Manager is unavailable.");
+            yield break;
         }
 
-        // 4. Restore audio routing
-        AudioListener.pause = false;
+        if (!xrManager.isInitializationComplete)
+        {
+            yield return xrManager.InitializeLoader();
+        }
 
-        // 5. Load the target VR scene
-        Debug.Log($"[VR Loader] Loading scene: '{targetSceneName}'");
+        if (xrManager.activeLoader == null)
+        {
+            Debug.LogError("[VR Loader] Failed to initialize XR Loader! Check OpenXR settings.");
+            yield break;
+        }
+
+        if (!vrSubsystemsStarted)
+        {
+            xrManager.StartSubsystems();
+            vrSubsystemsStarted = true;
+        }
+
         SceneManager.LoadScene(targetSceneName);
     }
 
     /// <summary>
-    /// Deinitializes XR subsystems when returning to the 2D desktop Main Menu.
+    /// Deinitializes XR subsystems and returns immediately to the desktop menu scene.
     /// </summary>
     public static IEnumerator DisableVRAndReturnToMenu(string menuSceneName)
     {
+        if (!Application.CanStreamedLevelBeLoaded(menuSceneName))
+        {
+            Debug.LogError($"[VR Loader] Scene '{menuSceneName}' is unavailable.");
+            yield break;
+        }
+
         if (XRGeneralSettings.Instance != null && XRGeneralSettings.Instance.Manager != null)
         {
             var manager = XRGeneralSettings.Instance.Manager;
             if (manager.isInitializationComplete)
             {
-                manager.StopSubsystems();
-                manager.DeinitializeLoader();
+                try { manager.StopSubsystems(); } catch { }
+                try { manager.DeinitializeLoader(); } catch { }
             }
         }
 
-        yield return null;                                   // let XR finish shutting down
-        yield return new WaitForSecondsRealtime(0.25f);      // give the audio device time to switch
-        AudioSettings.Reset(AudioSettings.GetConfiguration());  // re-pick default output
-
+        vrSubsystemsStarted = false;
+        yield return null;
         SceneManager.LoadScene(menuSceneName);
     }
 }
