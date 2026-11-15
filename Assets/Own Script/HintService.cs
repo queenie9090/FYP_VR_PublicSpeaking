@@ -1,62 +1,85 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class HintService : MonoBehaviour
 {
     private OpenAIManager openAIManager;
+    private int hintRequestVersion;
 
     public void Initialize(OpenAIManager openAI)
     {
         openAIManager = openAI;
     }
 
+    public void CancelPendingHints()
+    {
+        hintRequestVersion++;
+    }
+
     /// <summary>
     /// Builds context prompt, sends OpenAI hint request, and updates HintUIController.
+    /// When isBackgroundPrefetch is true, caches the result silently without changing status bar text.
     /// </summary>
     public void TriggerHintActivation(
         bool isSessionActive,
         ScenarioConfig activeConfig,
         List<DialogueTurn> conversationHistory,
         HintUIController hintUI,
-        DialogueUIManager uiManager)
+        DialogueUIManager uiManager,
+        bool isBackgroundPrefetch = false)
     {
         if (!isSessionActive || openAIManager == null) return;
 
-        // 1. Show loading status on VR panel
+        int requestVersion = ++hintRequestVersion;
+
         if (hintUI != null)
         {
-            hintUI.ShowDirectMessage("Generating AI hint...");
+            hintUI.SetHintPrefetching(true);
+            if (!isBackgroundPrefetch)
+            {
+                hintUI.ShowDirectMessage("Generating AI hint...");
+            }
         }
 
-        // 2. Build context prompt from conversation history
         bool lastIsUser = conversationHistory.Count > 0 && conversationHistory[conversationHistory.Count - 1].speaker == "User";
         string lastUserScript = lastIsUser ? conversationHistory[conversationHistory.Count - 1].dialogue : "";
         string hintPrompt = PromptBuilder.BuildHintPrompt(activeConfig, conversationHistory, lastUserScript);
 
-        // 3. Send network API request to OpenAI
         StartCoroutine(openAIManager.SendHintRequest(
             hintPrompt,
             generatedHint => {
+                if (this == null || requestVersion != hintRequestVersion) return;
+
                 if (!string.IsNullOrEmpty(generatedHint))
                 {
-                    Debug.Log($"[AI Hint Received] {generatedHint}");
+                    Debug.Log($"[AI Hint {(isBackgroundPrefetch ? "Prefetched" : "Received")}] {generatedHint}");
 
                     if (hintUI != null)
                     {
                         hintUI.ShowDirectMessage(generatedHint, isFinalResult: true);
                     }
 
-                    if (uiManager != null) uiManager.SetStatus("Hint Generated");
+                    if (!isBackgroundPrefetch && uiManager != null)
+                    {
+                        uiManager.SetStatus("Hint Generated");
+                    }
                 }
                 else if (hintUI != null)
                 {
-                    hintUI.ShowDirectMessage("No hint available. Try again.");
+                    hintUI.SetHintPrefetching(false);
+                    if (!isBackgroundPrefetch)
+                        hintUI.ShowDirectMessage("No hint available. Try again.");
                 }
             },
             err => {
+                if (this == null || requestVersion != hintRequestVersion) return;
                 Debug.LogError($"[Hint Error] {err}");
-                if (hintUI != null) hintUI.ShowDirectMessage("Failed to generate hint.");
+                if (hintUI != null)
+                {
+                    hintUI.SetHintPrefetching(false);
+                    if (!isBackgroundPrefetch)
+                        hintUI.ShowDirectMessage("Failed to generate hint.");
+                }
             }
         ));
     }
