@@ -57,6 +57,35 @@ public class DialogueUIManager : MonoBehaviour
     }
 
     /// <summary>
+    /// Renders conversation history while displaying partialText for the latest turn
+    /// (used for word-by-word reveal synced to NPC voice playback).
+    /// </summary>
+    public void RenderDialogueWithPartialLatest(List<DialogueTurn> history, string partialText)
+    {
+        if (dialogueText == null || history == null || history.Count == 0) return;
+
+        string fullLog = "";
+        for (int i = 0; i < history.Count; i++)
+        {
+            var turn = history[i];
+            string speakerTag = turn.speaker == "User" ? "<b>You:</b>" : "<b>NPC:</b>";
+            string body = (i == history.Count - 1) ? partialText : turn.dialogue;
+            fullLog += $"{speakerTag} {body}\n\n";
+        }
+
+        dialogueText.text = fullLog;
+
+        int calculatedTurn = (history.Count / 2) + 1;
+        UpdateTurnDisplay(calculatedTurn);
+
+        if (dialogueScrollRect != null)
+        {
+            Canvas.ForceUpdateCanvases();
+            dialogueScrollRect.verticalNormalizedPosition = 0.0f;
+        }
+    }
+
+    /// <summary>
     /// Renders dialogue log and automatically computes current turn from conversation history.
     /// </summary>
     public void RenderDialogue(List<DialogueTurn> history)
