@@ -216,6 +216,12 @@ public class ArmTransitDetector : MonoBehaviour
         return s;
     }
 
+    public void CancelHandTransit(int handIndex)
+    {
+        var probe = handIndex == 0 ? leftProbeCol : handIndex == 1 ? rightProbeCol : null;
+        if (probe != null) hands.Remove(probe);
+    }
+
     private void Update()
     {
         if (followHeadset && headsetTransform != null && (restIsAuto || gestureIsAuto))
@@ -248,6 +254,7 @@ public class ArmTransitDetector : MonoBehaviour
     public void OnHandExitRestZone(Collider other)
     {
         if (!IsPlayerHand(other)) return;
+        if (gestureTracker != null && gestureTracker.IsHandSteering(GetHandIndex(other))) return;
         var s = Get(other);
 
         // Debounce boundary jitter
@@ -279,6 +286,7 @@ public class ArmTransitDetector : MonoBehaviour
     public void OnHandExitGestureZone(Collider other)
     {
         if (!IsPlayerHand(other)) return;
+        if (gestureTracker != null && gestureTracker.IsHandSteering(GetHandIndex(other))) return;
         var s = Get(other);
 
         if (countReturnTrip && Time.time - s.lastExitLockout >= boundaryDebounceTime)

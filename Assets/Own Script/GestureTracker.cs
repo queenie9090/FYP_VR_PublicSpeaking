@@ -75,6 +75,7 @@ public class GestureTracker : MonoBehaviour
 
     private readonly VelocityState leftState = new VelocityState();
     private readonly VelocityState rightState = new VelocityState();
+    private readonly bool[] steeringHands = new bool[2];
     private readonly float[] lastHandGestureTime = { -99f, -99f };
     private readonly List<GestureRecord> validExpressiveGestures = new List<GestureRecord>();
 
@@ -145,7 +146,7 @@ public class GestureTracker : MonoBehaviour
     // -------------------------------------------------------------
     private void TrackVelocityMotion(Transform source, VelocityState s, int handIndex)
     {
-        if (source == null || headset == null || !source.gameObject.activeInHierarchy || Time.time < suppressUntil)
+        if (steeringHands[handIndex] || source == null || headset == null || !source.gameObject.activeInHierarchy || Time.time < suppressUntil)
         {
             s.Reset();
             return;
@@ -212,7 +213,7 @@ public class GestureTracker : MonoBehaviour
     // -------------------------------------------------------------
     public void RegisterExpressiveArmTransit(float transitDuration, int handIndex = -1)
     {
-        if (!isTracking || Time.time < suppressUntil) return;
+        if (!isTracking || Time.time < suppressUntil || (handIndex >= 0 && handIndex < 2 && steeringHands[handIndex])) return;
 
         if (IsDuplicate(handIndex))
         {
@@ -265,6 +266,18 @@ public class GestureTracker : MonoBehaviour
     public void TriggerHaveAQuestionGesture() => ProcessGestureEvent("HaveAQuestion", 0.5f);
     public void TriggerThumbsDownGesture() => ProcessGestureEvent("ThumbsDown", 0.3f);
     public void TriggerUnprofessionalGesture() => ProcessUnprofessionalGesture("Middle Finger");
+    public void TriggerLeftUnprofessionalGesture() { if (!steeringHands[0]) ProcessUnprofessionalGesture("Middle Finger"); }
+    public void TriggerRightUnprofessionalGesture() { if (!steeringHands[1]) ProcessUnprofessionalGesture("Middle Finger"); }
+
+    public void SetHandSteering(int handIndex, bool active)
+    {
+        if (handIndex < 0 || handIndex > 1 || steeringHands[handIndex] == active) return;
+        steeringHands[handIndex] = active;
+        (handIndex == 0 ? leftState : rightState).Reset();
+        if (armTransitDetector != null) armTransitDetector.CancelHandTransit(handIndex);
+    }
+
+    public bool IsHandSteering(int handIndex) => handIndex >= 0 && handIndex < 2 && steeringHands[handIndex];
     public void TriggerPinchGesture() => ProcessGestureEvent("Pinch", 0.5f);
     public void TriggerPointPinchGesture() => ProcessGestureEvent("Point + Pinch", 0.5f);
     public void TriggerGrabGesture() => ProcessGestureEvent("Grab", 0.5f);

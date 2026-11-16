@@ -35,9 +35,14 @@ public class LocomotionApplier : MonoBehaviour
     [SerializeField] private GameObject leftHandTrackingObject;
     [SerializeField] private GameObject rightHandTrackingObject;
 
+    [Header("Hand Steering (rotation only)")]
+    [SerializeField] private HandSteeringSettings handSteering = new HandSteeringSettings();
+
     private void Awake()
     {
         FindMissingControllerManagers();
+        var steering = GetComponent<HandSteering>() ?? gameObject.AddComponent<HandSteering>();
+        steering.Initialize(xrOrigin, leftHandTrackingObject, rightHandTrackingObject, handSteering);
     }
 
     private void Start()
