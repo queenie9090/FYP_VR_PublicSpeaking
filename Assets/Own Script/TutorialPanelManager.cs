@@ -36,6 +36,9 @@ public class TutorialPanelManager : MonoBehaviour
     [Header("Grab Step Setup")]
     [SerializeField] private XRBaseInteractable[] grabTargets;
 
+    [Header("Hand Steering Step Setup")]
+    [SerializeField] private int handSteeringStepIndex = 4;
+
     private int currentHandStepIndex = 0;
     private bool[] completedSteps;
     private bool hintPanelOpenedInTutorial = false; // Tracks 2-stage gesture progress
@@ -280,6 +283,12 @@ public class TutorialPanelManager : MonoBehaviour
             {
                 TriggerStepSuccess();
             }
+            return;
+        }
+
+        if (currentHandStepIndex == handSteeringStepIndex && gestureType == "HandSteering")
+        {
+            TriggerStepSuccess();
         }
     }
 
