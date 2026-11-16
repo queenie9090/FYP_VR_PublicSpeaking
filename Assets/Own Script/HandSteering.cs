@@ -48,6 +48,8 @@ public class HandSteering : MonoBehaviour, ITunnelingVignetteProvider
     private float inputVelocity;
     private int owner = -1;
     private HandSteeringVisuals visuals;
+    private float accumulatedTurnDegrees;
+    private bool steeringGestureReported;
 
     public VignetteParameters vignetteParameters => effect;
 
@@ -85,7 +87,25 @@ public class HandSteering : MonoBehaviour, ITunnelingVignetteProvider
         else input = Mathf.SmoothDamp(input, target, ref inputVelocity, settings.inputSmoothing);
         float speed = input * Mathf.Max(0f, settings.maximumDegreesPerSecond);
         if (owner >= 0 && !Mathf.Approximately(speed, 0f))
-            origin.RotateAroundCameraUsingOriginUp(speed * Time.deltaTime);
+        {
+            float deltaDegrees = speed * Time.deltaTime;
+            origin.RotateAroundCameraUsingOriginUp(deltaDegrees);
+
+            if (!steeringGestureReported)
+            {
+                accumulatedTurnDegrees += Mathf.Abs(deltaDegrees);
+                if (accumulatedTurnDegrees >= 25f)
+                {
+                    steeringGestureReported = true;
+                    tracker?.ProcessGestureEvent("HandSteering", 0.5f);
+                }
+            }
+        }
+        else if (owner < 0)
+        {
+            accumulatedTurnDegrees = 0f;
+            steeringGestureReported = false;
+        }
         if (settings.showIndicator && visuals == null) visuals = new HandSteeringVisuals();
         if (visuals != null)
         {
@@ -124,6 +144,7 @@ public class HandSteering : MonoBehaviour, ITunnelingVignetteProvider
         if (vignette != null && vignetteQueued) vignette.EndTunnelingVignette(this);
         visuals?.Dispose(); visuals = null;
         vignetteQueued = false; vignetteAmount = input = inputVelocity = 0f; owner = -1;
+        accumulatedTurnDegrees = 0f; steeringGestureReported = false;
     }
 
     private void OnEnable() { detector?.Start(); }
@@ -271,12 +292,11 @@ internal sealed class HandSteeringDetector
     {
         if (state.priorityGesture && Time.unscaledTime - state.lastGestureUpdate < 0.25f) return true;
         foreach (var interactor in state.nearFar)
-            if (interactor != null && interactor.isActiveAndEnabled &&
-                (interactor.hasHover || interactor.hasSelection || interactor.TryGetCurrentUIRaycastResult(out _))) return true;
+            if (interactor != null && interactor.isActiveAndEnabled && interactor.hasSelection) return true;
         foreach (var interactor in state.interactors)
         {
             if (interactor == null || !interactor.isActiveAndEnabled) continue;
-            if (interactor.hasHover || interactor.hasSelection) return true;
+            if (interactor.hasSelection) return true;
             if (interactor is XRPokeInteractor poke && TrackedDeviceGraphicRaycaster.IsPokeInteractingWithUI(poke)) return true;
         }
         // The hand teleport ray is inactive outside teleport mode.
