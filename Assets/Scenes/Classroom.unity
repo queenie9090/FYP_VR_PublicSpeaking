@@ -26676,7 +26676,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6598815579406187037, guid: 18ddb545287c546e19cc77dc9fbb2189, type: 3}
       propertyPath: m_IsActive
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -26867,7 +26867,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 1164710557}
         m_TargetAssemblyTypeName: GestureTracker, Assembly-CSharp
-        m_MethodName: TriggerUnprofessionalGesture
+        m_MethodName: TriggerRightUnprofessionalGesture
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -26950,7 +26950,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 1164710557}
         m_TargetAssemblyTypeName: GestureTracker, Assembly-CSharp
-        m_MethodName: TriggerUnprofessionalGesture
+        m_MethodName: TriggerLeftUnprofessionalGesture
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
