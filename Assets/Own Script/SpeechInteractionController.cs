@@ -8,6 +8,8 @@ public class SpeechInteractionController : MonoBehaviour
     private int speechRequestVersion;
     private int transcriptionRequestVersion;
     private AudioSource activeSpeechSource;
+    private NPCEmotionController activeSpeechEmotion;
+    public bool IsPlayingSpeechFor(NPCEmotionController source) => source != null && activeSpeechEmotion == source && activeSpeechSource != null && activeSpeechSource.isPlaying;
     private Animator activeSpeechAnimator;
     private NPCBodyAnimation activeSpeechBody;
     private NPCEyeContactController activeSpeechEyes;
@@ -174,6 +176,7 @@ public class SpeechInteractionController : MonoBehaviour
         if (activeSpeechBody != null) activeSpeechBody.SetActivity(NPCBodyActivity.IDLE);
         if (activeSpeechEyes != null) activeSpeechEyes.SetActivity(NPCBodyActivity.IDLE);
         activeSpeechSource = null;
+        activeSpeechEmotion = null;
         activeSpeechAnimator = null;
         activeSpeechBody = null;
         activeSpeechEyes = null;
@@ -326,6 +329,7 @@ public class SpeechInteractionController : MonoBehaviour
             }
 
             activeSpeechSource = targetSource;
+            activeSpeechEmotion = emotionSource;
             activeSpeechAnimator = npcAnimator;
             activeSpeechBody = body;
             activeSpeechEyes = eyes;

@@ -315,6 +315,9 @@ public class InteractionManager : MonoBehaviour
     }
 
     public NPCEmotionController CurrentEmotionController => npcEmotionController;
+    public bool IsSessionActive => isSessionActive;
+    public bool IsPlayerCapturing => audioRecorder != null && audioRecorder.IsCapturing;
+    public bool IsNpcSpeechPlaying(NPCEmotionController source) => speechController != null && speechController.IsPlayingSpeechFor(source);
 
     private IEnumerator TrackSessionTimerRoutine()
     {

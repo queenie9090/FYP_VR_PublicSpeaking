@@ -18,24 +18,37 @@ public class HallNPCRealismScreen : MonoBehaviour
     [SerializeField] private MeshRenderer displaySurface;
     [SerializeField] private TMP_Text viewingLabel;
     [SerializeField] private TMP_Text[] previewLabels = new TMP_Text[2];
-    [SerializeField, Min(10f)] private float switchInterval = 20f;
+    [SerializeField] private NPCEmotionIndicatorUI tvEmotionBar;
+    [Header("Automatic camera direction")]
+    [SerializeField] private bool enableAutomaticDirection = true;
+    [SerializeField, Min(1f)] private float playerSwitchMinSeconds = 8f, playerSwitchMaxSeconds = 12f;
+    [SerializeField, Min(0.1f)] private float reactionMinSeconds = 4f, reactionMaxSeconds = 6f;
+    [SerializeField] private bool returnToJudgeWhenIdle;
+    [SerializeField, Min(0f)] private float idleReturnSeconds = 10f;
     [SerializeField, Range(256, 2048)] private int textureResolution = 1024;
 #if UNITY_EDITOR
     [SerializeField] private bool enableManualKeyboardTesting;
+    [Header("Editor-only direction simulation")]
+    [SerializeField] private bool enableStateSimulation, simulateSessionActive, simulatePlayerCapturing, simulateJudgeSpeaking;
 #endif
+    private enum DirectionState { Idle, PlayerSpeaking, JudgeSpeaking, AudienceReaction, ManualOverride }
+    private DirectionState directionState;
+    private InteractionManager interaction;
     private readonly string[] names = { "Judge", "Audience Member A", "Audience Member B" };
     private NPCEmotionController[] targets;
     private Camera[] closeUpCameras;
     private RenderTexture feed;
     private Material displayMaterial, originalDisplayMaterial;
     private int selected = -1;
-    private float nextSwitch;
+    private float stateDeadline;
     private bool manualMode, ready;
-    private bool wasSessionActive;
+    private bool wasJudgeSpeaking, reactionPending;
+    private int lastAudience = -1;
 
     private IEnumerator Start()
     {
         targets = new[] { judge, audienceA, audienceB };
+        interaction = GetComponent<InteractionManager>();
         closeUpCameras = new[] { judgeCamera, audienceACamera, audienceBCamera };
         DisableCloseUpCameras();
         if (tvRoot == null || displaySurface == null || displaySurface.sharedMaterial == null ||
@@ -80,6 +93,11 @@ public class HallNPCRealismScreen : MonoBehaviour
     {
         DisableCloseUpCameras();
         selected = index;
+        if (tvEmotionBar != null)
+        {
+            tvEmotionBar.gameObject.SetActive(index >= 0);
+            if (index >= 0) tvEmotionBar.SetEmotionSource(targets[index]);
+        }
         if (selected >= 0 && closeUpCameras[selected] != null)
         {
             closeUpCameras[selected].targetTexture = feed;
@@ -88,7 +106,6 @@ public class HallNPCRealismScreen : MonoBehaviour
         }
         else if (displayMaterial != null) displayMaterial.SetColor("_BaseColor", Color.black);
 
-        nextSwitch = Time.unscaledTime + Mathf.Max(10f, switchInterval);
         viewingLabel.text = index >= 0 ? "Currently Viewing: " + names[index] : "Currently Viewing: unavailable";
         int slot = 0;
         for (int i = 0; i < names.Length && slot < 2; i++)
@@ -105,7 +122,7 @@ public class HallNPCRealismScreen : MonoBehaviour
     {
         if (!ready) return;
 #if UNITY_EDITOR
-        if (!enableManualKeyboardTesting && manualMode) { manualMode = false; nextSwitch = Time.unscaledTime + Mathf.Max(10f, switchInterval); }
+        if (!enableManualKeyboardTesting && manualMode) manualMode = false;
         if (enableManualKeyboardTesting && Keyboard.current != null)
         {
             var keyboard = Keyboard.current;
@@ -115,19 +132,68 @@ public class HallNPCRealismScreen : MonoBehaviour
                 if (FindAvailable(requested) == requested) { manualMode = true; SelectTarget(requested); }
                 else Debug.LogWarning("[Hall Screen] Requested NPC unavailable: " + names[requested], this);
             }
-            else if (keyboard.f9Key.wasPressedThisFrame) { manualMode = false; nextSwitch = Time.unscaledTime + Mathf.Max(10f, switchInterval); Debug.Log("[Hall Screen] Automatic switching resumed.", this); }
+            else if (keyboard.f9Key.wasPressedThisFrame) { manualMode = false; Debug.Log("[Hall Screen] Automatic direction resumed.", this); }
         }
 #endif
-        bool sessionActive = NPCEmotionSessionManager.Instance != null && NPCEmotionSessionManager.Instance.IsCollectingBodyEvents;
-        if (sessionActive && !wasSessionActive) nextSwitch = Time.unscaledTime + Mathf.Max(10f, switchInterval);
-        wasSessionActive = sessionActive;
+        bool sessionActive = interaction != null && interaction.IsSessionActive;
+        bool playerCapturing = interaction != null && interaction.IsPlayerCapturing;
+        bool judgeSpeaking = interaction != null && interaction.IsNpcSpeechPlaying(judge);
+#if UNITY_EDITOR
+        if (enableStateSimulation) { sessionActive = simulateSessionActive; playerCapturing = simulatePlayerCapturing; judgeSpeaking = simulateJudgeSpeaking; }
+#endif
+        playerCapturing &= sessionActive; judgeSpeaking &= sessionActive;
+        if (!sessionActive) reactionPending = false;
+        else if (wasJudgeSpeaking && !judgeSpeaking) reactionPending = true;
+        wasJudgeSpeaking = judgeSpeaking;
         if (selected < 0 || closeUpCameras[selected] == null || !closeUpCameras[selected].gameObject.activeInHierarchy || targets[selected] == null || !targets[selected].isActiveAndEnabled || targets[selected].HeadMesh == null || !targets[selected].HeadMesh.gameObject.activeInHierarchy)
         {
             int available = FindAvailable(0);
             if (available != selected) SelectTarget(available);
         }
-        else if (!manualMode && sessionActive && Time.unscaledTime >= nextSwitch)
-            SelectTarget(FindAvailable((selected + 1) % targets.Length));
+        if (manualMode) { directionState = DirectionState.ManualOverride; return; }
+        if (!enableAutomaticDirection || !sessionActive) { directionState = DirectionState.Idle; return; }
+        if (judgeSpeaking)
+        {
+            reactionPending = false; directionState = DirectionState.JudgeSpeaking;
+            if (FindAvailable(0) == 0 && selected != 0) SelectTarget(0);
+            return;
+        }
+        if (reactionPending)
+        {
+            reactionPending = false;
+            int audience = PickAvailable(true, lastAudience);
+            if (audience >= 0)
+            {
+                lastAudience = audience; if (selected != audience) SelectTarget(audience);
+                directionState = DirectionState.AudienceReaction;
+                stateDeadline = Time.unscaledTime + RandomDuration(reactionMinSeconds, reactionMaxSeconds, 0.1f);
+                return;
+            }
+        }
+        if (directionState == DirectionState.AudienceReaction && Time.unscaledTime < stateDeadline) return;
+        DirectionState desired = playerCapturing ? DirectionState.PlayerSpeaking : DirectionState.Idle;
+        if (directionState != desired)
+        {
+            directionState = desired;
+            stateDeadline = Time.unscaledTime + (desired == DirectionState.PlayerSpeaking ? RandomDuration(playerSwitchMinSeconds, playerSwitchMaxSeconds, 1f) : Mathf.Max(0f, idleReturnSeconds));
+        }
+        if (Time.unscaledTime < stateDeadline) return;
+        if (desired == DirectionState.PlayerSpeaking)
+        {
+            int next = PickAvailable(false, selected);
+            if (next >= 0 && next != selected) SelectTarget(next);
+            stateDeadline = Time.unscaledTime + RandomDuration(playerSwitchMinSeconds, playerSwitchMaxSeconds, 1f);
+        }
+        else if (returnToJudgeWhenIdle && selected != 0 && FindAvailable(0) == 0) SelectTarget(0);
+    }
+
+    private static float RandomDuration(float min, float max, float floor) { min = Mathf.Max(floor, min); return Random.Range(min, Mathf.Max(min, max)); }
+    private int PickAvailable(bool audienceOnly, int previous)
+    {
+        int[] candidates = new int[3]; int count = 0;
+        for (int i = audienceOnly ? 1 : 0; i < 3; i++) if (i != previous && FindAvailable(i) == i) candidates[count++] = i;
+        if (count == 0 && previous >= (audienceOnly ? 1 : 0) && previous < 3 && FindAvailable(previous) == previous) candidates[count++] = previous;
+        return count == 0 ? -1 : candidates[Random.Range(0, count)];
     }
 
     private void DisableCloseUpCameras()

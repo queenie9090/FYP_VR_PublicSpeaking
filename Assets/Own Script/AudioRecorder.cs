@@ -32,6 +32,7 @@ public class AudioRecorder : MonoBehaviour
 
     private bool stopRequested = false;
     private string activeMicDevice = null;
+    public bool IsCapturing => !string.IsNullOrEmpty(activeMicDevice) && Microphone.IsRecording(activeMicDevice);
     private string userSelectedMic = null;
 
     private void OnEnable()
