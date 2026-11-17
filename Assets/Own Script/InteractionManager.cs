@@ -269,6 +269,7 @@ public class InteractionManager : MonoBehaviour
         sessionSaveFailed = false;
         sessionSaveOwner = null;
         conversationHistory.Clear();
+        if (uiManager != null) uiManager.RenderDialogue(conversationHistory);
 
         SetLocomotionEnabled(false);
         ArmTransitDetector transitDetector = FindObjectOfType<ArmTransitDetector>();
