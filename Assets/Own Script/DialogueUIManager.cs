@@ -11,14 +11,20 @@ public class DialogueUIManager : MonoBehaviour
 
     [SerializeField] private TMP_Text statusText;
     [SerializeField] private TMP_Text conversationTimerText;
-    [SerializeField] private TMP_Text dialogueText;
     [SerializeField] private ScrollRect dialogueScrollRect;
+
+    [Header("Chat Bubble Prefabs")]
+    [SerializeField] private Transform chatContentParent;
+    [SerializeField] private GameObject npcMessagePrefab;
+    [SerializeField] private GameObject userMessagePrefab;
 
     [Header("Turn Counter UI")]
     [SerializeField] private GameObject turnPanel;
     [SerializeField] private TMP_Text turnText;
 
     private int activeMaxTurns = 5;
+    private readonly List<GameObject> spawnedBubbles = new List<GameObject>();
+    private TMP_Text latestBubbleText;
 
     public void ShowUI()
     {
@@ -62,55 +68,90 @@ public class DialogueUIManager : MonoBehaviour
     /// </summary>
     public void RenderDialogueWithPartialLatest(List<DialogueTurn> history, string partialText)
     {
-        if (dialogueText == null || history == null || history.Count == 0) return;
+        if (chatContentParent == null || history == null || history.Count == 0) return;
 
-        string fullLog = "";
-        for (int i = 0; i < history.Count; i++)
+        while (spawnedBubbles.Count < history.Count)
         {
-            var turn = history[i];
-            string speakerTag = turn.speaker == "User" ? "<b>You:</b>" : "<b>NPC:</b>";
-            string body = (i == history.Count - 1) ? partialText : turn.dialogue;
-            fullLog += $"{speakerTag} {body}\n\n";
+            SpawnBubble(history[spawnedBubbles.Count]);
         }
 
-        dialogueText.text = fullLog;
+        if (latestBubbleText != null)
+        {
+            latestBubbleText.text = partialText;
+        }
 
         int calculatedTurn = (history.Count / 2) + 1;
         UpdateTurnDisplay(calculatedTurn);
+        ScrollToBottom();
+    }
 
-        if (dialogueScrollRect != null)
+    public void RenderDialogue(List<DialogueTurn> history)
+    {
+        if (chatContentParent == null) return;
+
+        if (history == null || history.Count == 0)
         {
-            Canvas.ForceUpdateCanvases();
-            dialogueScrollRect.verticalNormalizedPosition = 0.0f;
+            ClearChatBubbles();
+            return;
+        }
+
+        if (history.Count < spawnedBubbles.Count)
+        {
+            ClearChatBubbles();
+        }
+
+        for (int i = spawnedBubbles.Count; i < history.Count; i++)
+        {
+            SpawnBubble(history[i]);
+        }
+
+        int calculatedTurn = (history.Count / 2) + 1;
+        UpdateTurnDisplay(calculatedTurn);
+        ScrollToBottom();
+    }
+
+    private void SpawnBubble(DialogueTurn turn)
+    {
+        bool isUser = turn.speaker == "User";
+        GameObject prefab = isUser ? userMessagePrefab : npcMessagePrefab;
+        if (prefab == null) return;
+
+        GameObject bubbleObj = Instantiate(prefab, chatContentParent);
+        spawnedBubbles.Add(bubbleObj);
+
+        TMP_Text bodyText = FindChildText(bubbleObj.transform, "DialogueText");
+        if (bodyText != null)
+        {
+            bodyText.text = turn.dialogue;
+            latestBubbleText = bodyText;
         }
     }
 
-    /// <summary>
-    /// Renders dialogue log and automatically computes current turn from conversation history.
-    /// </summary>
-    public void RenderDialogue(List<DialogueTurn> history)
+    private TMP_Text FindChildText(Transform root, string childName)
     {
-        if (dialogueText == null) return;
-
-        string fullLog = "";
-        foreach (var turn in history)
+        foreach (var tmp in root.GetComponentsInChildren<TMP_Text>(true))
         {
-            string speakerTag = turn.speaker == "User" ? "<b>You:</b>" : "<b>NPC:</b>";
-            fullLog += $"{speakerTag} {turn.dialogue}\n\n";
+            if (tmp.name == childName) return tmp;
         }
+        return null;
+    }
 
-        dialogueText.text = fullLog;
-
-        // Compute current turn count from history (2 turns = 1 full conversation exchange)
-        if (history != null && history.Count > 0)
+    private void ClearChatBubbles()
+    {
+        foreach (var bubble in spawnedBubbles)
         {
-            int calculatedTurn = (history.Count / 2) + 1;
-            UpdateTurnDisplay(calculatedTurn);
+            if (bubble != null) Destroy(bubble);
         }
+        spawnedBubbles.Clear();
+        latestBubbleText = null;
+    }
 
+    private void ScrollToBottom()
+    {
         if (dialogueScrollRect != null)
         {
             Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(chatContentParent as RectTransform);
             dialogueScrollRect.verticalNormalizedPosition = 0.0f;
         }
     }
