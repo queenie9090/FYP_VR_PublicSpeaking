@@ -68,7 +68,10 @@ public class OpenAIManager : MonoBehaviour
         {
             var turn = history[i];
             string role = turn.speaker == "User" ? "user" : "assistant";
-            messages.Add(new { role = role, content = turn.dialogue });
+            string content = turn.dialogue;
+            if (role == "assistant" && !string.IsNullOrWhiteSpace(turn.speaker) && turn.speaker != "NPC")
+                content = $"[{turn.speaker}]: {content}";
+            messages.Add(new { role = role, content = content });
         }
 
         messages.Add(new { role = "user", content = currentTranscript });
@@ -106,33 +109,31 @@ public class OpenAIManager : MonoBehaviour
                     yield break;
                 }
 
-                if (response == null ||
-                    string.IsNullOrWhiteSpace(response.npc_response))
+                if (response == null)
+                {
+                    onError?.Invoke("NPC response is missing.");
+                    yield break;
+                }
+                if (response.npc_responses == null || response.npc_responses.Count == 0)
+                {
+                    response.npc_responses = new List<NPCTurnLine>();
+                    if (!string.IsNullOrWhiteSpace(response.npc_response))
+                        response.npc_responses.Add(new NPCTurnLine { dialogue = response.npc_response, emotion = response.emotion });
+                }
+                response.npc_responses.RemoveAll(line => line == null || string.IsNullOrWhiteSpace(line.dialogue));
+                if (response.npc_responses.Count == 0)
                 {
                     onError?.Invoke("NPC response is missing or empty.");
                     yield break;
                 }
-
-                if (string.IsNullOrWhiteSpace(response.emotion))
+                response.rawPrimaryEmotion = response.npc_responses[0].emotion;
+                foreach (var line in response.npc_responses)
                 {
-                    if (!preserveInvalidEmotion)
-                    {
-                        onError?.Invoke("NPC emotion is missing.");
-                        yield break;
-                    }
-                    response.emotion = "";
+                    line.emotion = string.IsNullOrWhiteSpace(line.emotion) ? "NEUTRAL" : line.emotion.Trim().ToUpperInvariant();
+                    if (!IsValidEmotion(line.emotion)) line.emotion = "NEUTRAL";
                 }
-
-                response.emotion = response.emotion.Trim().ToUpperInvariant();
-
-                if (!IsValidEmotion(response.emotion))
-                {
-                    Debug.LogWarning(
-                        "Unsupported NPC emotion: " + response.emotion
-                    );
-
-                    if (!preserveInvalidEmotion) response.emotion = "NEUTRAL";
-                }
+                response.emotion = response.npc_responses[0].emotion;
+                if (string.IsNullOrWhiteSpace(response.npc_response)) response.npc_response = response.npc_responses[0].dialogue;
 
                 // Return the validated response.
                 onSuccess?.Invoke(response);

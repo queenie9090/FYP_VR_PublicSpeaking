@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 public static class PromptBuilder
 {
-    public static string BuildSystemPrompt(ScenarioConfig config, int currentTurnCount, string previousEmotion = "NEUTRAL", bool hallAudienceReactions = false, string previousAudienceA = "NEUTRAL", string previousAudienceB = "NEUTRAL")
+    public static string BuildSystemPrompt(ScenarioConfig config, int currentTurnCount, string previousEmotion = "NEUTRAL", bool hallAudienceReactions = false, string previousAudienceA = "NEUTRAL", string previousAudienceB = "NEUTRAL", string multiNpcRoster = null)
     {
         string difficultyInstruction = config.difficulty switch
         {
@@ -99,6 +99,41 @@ TURN MANAGEMENT RULES
 - If the current interaction number is less than {config.maxTurnLimit}, set end_conversation to false.
 - If the current interaction number is greater than or equal to {config.maxTurnLimit}, set end_conversation to true.
 
+";
+        if (!string.IsNullOrWhiteSpace(multiNpcRoster))
+        {
+            prompt += $@"
+
+ACTIVE ROOM NPCS (Multi-NPC Override)
+{multiNpcRoster}
+
+MULTI-NPC DYNAMIC INTERACTION RULES
+- You control all characters listed in ACTIVE ROOM NPCS, but to avoid overwhelming the participant in VR, generate ONLY 1 or 2 entries in ""npc_responses"" per turn (NEVER 3 or more).
+- About 50% of the time, let only 1 NPC speak. About 50% of the time, let a 2nd NPC add a brief reaction.
+- Entry 1 (Primary Speaker): Responds directly to the participant in 1 to 2 concise sentences (under 25 words).
+- Entry 2 (Optional Secondary Speaker): A quick 1-sentence reaction (under 15 words) agreeing, disagreeing, or adding a short thought�do NOT ask a second unrelated question.
+- Every entry MUST use a ""speaker_name"" matching ACTIVE ROOM NPCS, with no name prefix inside ""dialogue"".
+- Assign one emotion (HAPPY, SAD, ANGRY, NERVOUS, THINKING, NEUTRAL) per speaking NPC based on their Previous Emotion and the conversation context.
+- NPC responses in npc_responses are executed in strict sequential order. Each subsequent entry must naturally follow, acknowledge, or react to the preceding NPC's dialogue where contextually appropriate. Entry 2 should feel like a continuation of Entry 1, rather than an unrelated or simultaneous response.
+
+OUTPUT FORMAT
+Return ONLY a valid JSON object matching this exact schema (no markdown, no extra text):
+{{
+  ""npc_responses"": [
+    {{
+      ""speaker_name"": ""string"",
+      ""dialogue"": ""string"",
+      ""emotion"": ""NEUTRAL""
+    }}
+  ],
+  ""is_relevant"": true,
+  ""turn_number"": {currentTurnCount + 1},
+  ""end_conversation"": false
+}}";
+            return prompt;
+        }
+
+        prompt += $@"
 OUTPUT FORMAT
 Return ONLY a valid JSON object matching:
 The JSON must contain exactly five fields.
@@ -114,6 +149,7 @@ The emotion field above is an example placeholder.
 Replace it with the most appropriate validated-category emotion.
 Ensure end_conversation follows the final-turn rule.
 ";
+
         if (!hallAudienceReactions) return prompt;
         prompt = prompt.Replace("- Do not generate multiple emotion labels.", "- The emotion field represents only the Judge.")
             .Replace("- Do not return emotion intensity, valence, arousal, or additional emotion fields.", "- Do not return emotion intensity, valence or arousal.")

@@ -15,6 +15,9 @@ public class HandSteeringSettings
     public bool enabled = true;
     [Min(0.001f)] public float pinchActivationDistance = 0.025f;
     [Min(0.001f)] public float pinchReleaseDistance = 0.04f;
+    [Header("Steering Gesture")]
+    [Tooltip("Assign the XRHandShape or XRHandPose asset (e.g., open index/ring/pinky with curled middle finger) required to allow hand steering.")]
+    public ScriptableObject steeringHandShapeOrPose;
     [Min(0f)] public float deadZone = 0.025f;
     [Tooltip("Normalized steering input per meter beyond the dead zone.")]
     [Min(0f)] public float sensitivity = 6f;
@@ -50,18 +53,22 @@ public class HandSteering : MonoBehaviour, ITunnelingVignetteProvider
     private HandSteeringVisuals visuals;
     private float accumulatedTurnDegrees;
     private bool steeringGestureReported;
+    private bool started;
 
     public VignetteParameters vignetteParameters => effect;
 
     public void Initialize(XROrigin xrOrigin, GameObject left, GameObject right, HandSteeringSettings configuration)
     {
+        detector?.Stop();
         origin = xrOrigin;
         settings = configuration;
         detector = new HandSteeringDetector(left, right, configuration);
+        if (started && isActiveAndEnabled) detector.Start();
     }
 
     private void Start()
     {
+        started = true;
         if (origin == null) origin = FindObjectOfType<XROrigin>();
         tracker = FindObjectOfType<GestureTracker>();
         vignette = FindObjectOfType<TunnelingVignetteController>(true);
@@ -148,6 +155,7 @@ public class HandSteering : MonoBehaviour, ITunnelingVignetteProvider
     }
 
     private void OnEnable() { detector?.Start(); }
+    private void OnDestroy() { detector?.Stop(); }
 }
 
 /// <summary>Reads hand joints and existing interaction state without moving the XR Origin.</summary>
@@ -166,6 +174,8 @@ internal sealed class HandSteeringDetector
         public XRBaseInteractor[] interactors;
         public bool priorityGesture;
         public float lastGestureUpdate = -1f;
+        public bool matchesSteeringPose;
+        public float lastSteeringPoseTime = -1f;
     }
 
     private readonly HandState[] hands = { new HandState(), new HandState() };
@@ -174,9 +184,8 @@ internal sealed class HandSteeringDetector
     private readonly List<XRHandTrackingEvents> events = new List<XRHandTrackingEvents>();
     private StaticHandGesture[] gestures;
     private bool listening;
+    private bool warnedMissingSteeringPose;
     private XRHandSubsystem currentSubsystem;
-    private readonly bool[] jointsUpdated = new bool[2];
-    private readonly float[] jointUpdateTime = { -1f, -1f };
 
     public HandSteeringDetector(GameObject left, GameObject right, HandSteeringSettings configuration)
     {
@@ -195,9 +204,8 @@ internal sealed class HandSteeringDetector
         if (listening) return;
         gestures = UnityEngine.Object.FindObjectsOfType<StaticHandGesture>(true);
         events.Clear();
-        foreach (var gesture in gestures)
+        foreach (var source in UnityEngine.Object.FindObjectsOfType<XRHandTrackingEvents>(true))
         {
-            var source = gesture.handTrackingEvents;
             if (source == null || events.Contains(source)) continue;
             events.Add(source);
             source.jointsUpdated.AddListener(OnJointsUpdated);
@@ -207,16 +215,25 @@ internal sealed class HandSteeringDetector
 
     public void Stop()
     {
-        if (currentSubsystem != null) currentSubsystem.updatedHands -= OnSubsystemUpdated;
         currentSubsystem = null;
         foreach (var source in events) if (source != null) source.jointsUpdated.RemoveListener(OnJointsUpdated);
         events.Clear(); listening = false;
-        foreach (var hand in hands) { hand.active = false; hand.input = 0f; hand.priorityGesture = false; }
+        foreach (var hand in hands) { Reset(hand); InvalidatePose(hand); hand.priorityGesture = false; }
     }
 
     private void OnJointsUpdated(XRHandJointsUpdatedEventArgs args)
     {
+        if (args.subsystem != currentSubsystem || currentSubsystem == null ||
+            (args.hand.handedness != Handedness.Left && args.hand.handedness != Handedness.Right)) return;
         int index = args.hand.handedness == Handedness.Left ? 0 : 1;
+        if (!args.hand.isTracked) { InvalidatePose(hands[index]); return; }
+        bool matchesPose = false;
+        if (settings.steeringHandShapeOrPose is XRHandShape steeringShape)
+            matchesPose = steeringShape.CheckConditions(args);
+        else if (settings.steeringHandShapeOrPose is XRHandPose steeringPose && steeringPose.relativeOrientation != null)
+            matchesPose = steeringPose.CheckConditions(args);
+        hands[index].matchesSteeringPose = matchesPose;
+        hands[index].lastSteeringPoseTime = Time.unscaledTime;
         bool priority = false;
         foreach (var gesture in gestures)
         {
@@ -243,35 +260,34 @@ internal sealed class HandSteeringDetector
         return space.TransformPoint(hands[index].wristTrackingPosition);
     }
 
-    private void OnSubsystemUpdated(XRHandSubsystem subsystem, XRHandSubsystem.UpdateSuccessFlags flags, XRHandSubsystem.UpdateType updateType)
-    {
-        if (updateType != XRHandSubsystem.UpdateType.Dynamic) return;
-        jointsUpdated[0] = (flags & XRHandSubsystem.UpdateSuccessFlags.LeftHandJoints) != 0;
-        jointsUpdated[1] = (flags & XRHandSubsystem.UpdateSuccessFlags.RightHandJoints) != 0;
-        jointUpdateTime[0] = jointUpdateTime[1] = Time.unscaledTime;
-    }
-
     public void Update(XROrigin origin)
     {
+        if (settings.steeringHandShapeOrPose == null && !warnedMissingSteeringPose)
+        {
+            Debug.LogWarning("[HandSteering] Assign the required XRHandShape or XRHandPose asset in the Inspector to enable steering.");
+            warnedMissingSteeringPose = true;
+        }
         subsystems.Clear();
         SubsystemManager.GetSubsystems(subsystems);
         XRHandSubsystem subsystem = null;
         foreach (var candidate in subsystems) if (candidate.running) { subsystem = candidate; break; }
         if (subsystem != currentSubsystem)
         {
-            if (currentSubsystem != null) currentSubsystem.updatedHands -= OnSubsystemUpdated;
             currentSubsystem = subsystem;
-            jointsUpdated[0] = jointsUpdated[1] = false;
-            if (currentSubsystem != null) currentSubsystem.updatedHands += OnSubsystemUpdated;
+            foreach (var hand in hands) { Reset(hand); InvalidatePose(hand); }
         }
         for (int i = 0; i < 2; i++)
         {
             var state = hands[i];
-            if (origin == null || subsystem == null || !jointsUpdated[i] || Time.unscaledTime - jointUpdateTime[i] > 0.25f ||
+            if (subsystem != null && !(i == 0 ? subsystem.leftHand : subsystem.rightHand).isTracked)
+            { Reset(state); InvalidatePose(state); continue; }
+            if (settings.steeringHandShapeOrPose == null || !state.matchesSteeringPose ||
+                state.lastSteeringPoseTime < 0f || Time.unscaledTime - state.lastSteeringPoseTime > 0.25f ||
+                origin == null || subsystem == null ||
                 state.root == null || !state.root.activeInHierarchy || Blocked(state))
             { Reset(state); continue; }
             var hand = i == 0 ? subsystem.leftHand : subsystem.rightHand;
-            if (!hand.isTracked || !hand.GetJoint(XRHandJointID.ThumbTip).TryGetPose(out var thumb) ||
+            if (!hand.GetJoint(XRHandJointID.ThumbTip).TryGetPose(out var thumb) ||
                 !hand.GetJoint(XRHandJointID.MiddleTip).TryGetPose(out var middle) ||
                 !hand.GetJoint(XRHandJointID.Wrist).TryGetPose(out var wrist))
             { Reset(state); continue; }
@@ -305,6 +321,7 @@ internal sealed class HandSteeringDetector
     }
 
     private static void Reset(HandState hand) { hand.active = false; hand.input = 0f; }
+    private static void InvalidatePose(HandState hand) { hand.matchesSteeringPose = false; hand.lastSteeringPoseTime = -1f; }
 }
 
 /// <summary>Small, collider-free line visuals; the hand marker and stationary anchor have separate positions.</summary>

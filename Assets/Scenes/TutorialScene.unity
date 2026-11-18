@@ -22208,6 +22208,7 @@ MonoBehaviour:
     enabled: 1
     pinchActivationDistance: 0.025
     pinchReleaseDistance: 0.04
+    steeringHandShapeOrPose: {fileID: 11400000, guid: 7516ca7e7877af64ea8ec134387a725a, type: 2}
     deadZone: 0.025
     sensitivity: 6
     maximumDegreesPerSecond: 60
@@ -27236,8 +27237,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0.90999794, y: -0.000015258789}
-  m_SizeDelta: {x: -1.82, y: 50.6}
+  m_AnchoredPosition: {x: -0.0000019073486, y: 0}
+  m_SizeDelta: {x: -0.0000029206276, y: 50.6}
   m_Pivot: {x: 0.5, y: 1}
 --- !u!1 &1142047159
 GameObject:
@@ -31160,7 +31161,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6598815579406187037, guid: 18ddb545287c546e19cc77dc9fbb2189, type: 3}
       propertyPath: m_IsActive
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -41145,8 +41146,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0.000011812749, y: -0.00028624764}
-  m_SizeDelta: {x: -2.87, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: -2.869988, y: 0}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &1866634680
 MonoBehaviour:
