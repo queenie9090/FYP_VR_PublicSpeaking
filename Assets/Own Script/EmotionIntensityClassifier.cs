@@ -68,6 +68,18 @@ public static class EmotionIntensityClassifier
         return Math.Max(1, Math.Min(100, score));
     }
 
+    // Hall audiences do not speak: score the participant context only and reject
+    // absent/invalid labels or silence instead of inventing a new reaction.
+    public static bool TryClassifyHallAudience(string rawEmotion, string participantText, out string emotion, out int intensity)
+    {
+        emotion = null;
+        intensity = 0;
+        if (!IsSupported(rawEmotion) || !HasConversationTrigger(participantText)) return false;
+        emotion = rawEmotion.Trim().ToUpperInvariant();
+        intensity = Classify(emotion, participantText, "");
+        return true;
+    }
+
     private static int ScoreText(string label, string input)
     {
         string text = Quoted.Replace((input ?? "").ToLowerInvariant().Replace('’', '\''), " ");
