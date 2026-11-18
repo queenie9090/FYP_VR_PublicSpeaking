@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using UnityEngine.SceneManagement;
+using System.Collections.Generic;
 
 public class SetupUIController : MonoBehaviour
 {
@@ -14,8 +15,13 @@ public class SetupUIController : MonoBehaviour
 
     [Header("Scenario UI Input Components")]
     [SerializeField] private TMP_Dropdown scenarioDropdown;      // Hall, Classroom, Interview, Normal Conversation
+    [SerializeField] private TMP_Dropdown topicDropdown;
     [SerializeField] private TMP_InputField activityInput;        // Topic / Activity name
     [SerializeField] private TMP_Dropdown difficultyDropdown;    // Easy, Medium, Hard
+    
+    [SerializeField] private Button toggleCustomTopicButton;           // <-- ADDED: Button beside field
+    [SerializeField] private TMP_Text toggleCustomTopicButtonText;
+
     [SerializeField] private TMP_InputField participantRoleInput;// e.g., Presenter, Student, Candidate
     [SerializeField] private TMP_InputField npcPersonaInput;      // e.g., Audience, Evaluator, Interviewer
     [SerializeField] private Toggle inputModeToggle;              // ON = Hands-Free, OFF = Controller
@@ -43,6 +49,16 @@ public class SetupUIController : MonoBehaviour
 
     private const string NeverShowTutorialKey = "Tutorial_NeverShowAgain";
 
+    private bool isCustomTopicMode = false;
+
+    private readonly Dictionary<string, List<string>> scenarioTopicPresets = new Dictionary<string, List<string>>
+    {
+        { "Hall", new List<string> { "Keynote Presentation", "Product Pitch", "Research Defense", "Quarterly Town Hall" } },
+        { "Interview", new List<string> { "Job Interview Evaluation", "Software Engineering Role", "Leadership & Behavioral", "University Admission" } },
+        { "Classroom", new List<string> { "Classroom Discussion", "Group Project Debate", "Literature Analysis", "Science Q&A" } },
+        { "Cafeteria", new List<string> { "Casual Catch-Up", "Weekend Plans & Hobbies", "Movies, Music & Games", "Travel & Food Recommendations" } }
+    };
+
     private void Awake()
     {
         // Guarantee game time and audio listener are active upon entering Main Menu
@@ -63,6 +79,18 @@ public class SetupUIController : MonoBehaviour
         {
             bool isHandTracking = (UserSession.InputMode == "Hands-Tracking");
             inputModeToggle.isOn = isHandTracking;
+        }
+
+        if (toggleCustomTopicButton != null)
+        {
+            toggleCustomTopicButton.onClick.AddListener(ToggleCustomTopicMode);
+        }
+        
+        SetCustomTopicMode(false); // Start in dropdown mode
+
+        if (topicDropdown != null)
+        {
+            topicDropdown.onValueChanged.AddListener(OnTopicDropdownChanged);
         }
 
         // 2. Add dropdown listener to auto-populate defaults and update scenario weights
@@ -94,6 +122,7 @@ public class SetupUIController : MonoBehaviour
             UserSession.SelectedScenarioConfig.scenario = selectedScenario;
         }
 
+        PopulateTopicDropdown(selectedScenario);
         // Auto-populate default topic/role presets
         switch (selectedScenario)
         {
@@ -104,10 +133,10 @@ public class SetupUIController : MonoBehaviour
                 SetPresetIfEmpty("Job Interview Evaluation", "Candidate", "Interviewer");
                 break;
             case "Classroom":
-                SetPresetIfEmpty("Classroom Discussion", "Student", "Student");
+                SetPresetIfEmpty("Classroom Discussion", "Lecturer", "Student");
                 break;
             case "Cafeteria":
-                SetPresetIfEmpty("Social Networking", "Participant", "Peer");
+                SetPresetIfEmpty("Weekend Plans & Hobbies", "Friend", "Close Friend");
                 break;
         }
 
@@ -134,15 +163,22 @@ public class SetupUIController : MonoBehaviour
     // Called when the user clicks "Confirm Scenario" / "Start Session"
     public void OnConfirmConfiguration()
     {
-        string currentTopic = activityInput != null && !string.IsNullOrEmpty(activityInput.text)
-            ? activityInput.text
-            : "General Presentation";
+        string currentTopic = "General Presentation";
+        if (isCustomTopicMode)
+        {
+            if (activityInput != null && !string.IsNullOrWhiteSpace(activityInput.text))
+                currentTopic = activityInput.text.Trim();
+        }
+        else if (topicDropdown != null && topicDropdown.options.Count > 0)
+        {
+            currentTopic = topicDropdown.options[topicDropdown.value].text;
+        }
 
         // Package setup selections into UserSession
         UserSession.SelectedScenarioConfig = new ScenarioConfig
         {
             scenario = scenarioDropdown != null ? scenarioDropdown.options[scenarioDropdown.value].text : "Classroom",
-            topic = activityInput != null && !string.IsNullOrEmpty(activityInput.text) ? activityInput.text : "General Presentation",
+            topic = currentTopic,
             difficulty = difficultyDropdown != null ? difficultyDropdown.options[difficultyDropdown.value].text : "Medium",
             participantRole = participantRoleInput != null && !string.IsNullOrEmpty(participantRoleInput.text) ? participantRoleInput.text : "Student",
             persona = npcPersonaInput != null && !string.IsNullOrEmpty(npcPersonaInput.text) ? npcPersonaInput.text : "Evaluator",
@@ -224,6 +260,70 @@ public class SetupUIController : MonoBehaviour
         PlayerPrefs.Save();
         if (dontShowTutorialAgainToggle != null) dontShowTutorialAgainToggle.isOn = false;
         Debug.Log("[SetupUIController] Tutorial preference reset.");
+    }
+
+    private void PopulateTopicDropdown(string scenario)
+    {
+        if (topicDropdown == null) return;
+
+        topicDropdown.ClearOptions();
+        if (scenarioTopicPresets.TryGetValue(scenario, out List<string> topics))
+        {
+            topicDropdown.AddOptions(topics);
+        }
+        else
+        {
+            topicDropdown.AddOptions(new List<string> { "General Presentation" });
+        }
+
+        topicDropdown.value = 0;
+        topicDropdown.RefreshShownValue();
+        OnTopicDropdownChanged(0);
+    }
+
+    // <-- ADDED: Called when user clicks the "Custom" / "Presets" button
+    public void ToggleCustomTopicMode()
+    {
+        SetCustomTopicMode(!isCustomTopicMode);
+    }
+
+    // <-- ADDED: Swaps visibility between topicDropdown and activityInput
+    private void SetCustomTopicMode(bool enableCustom)
+    {
+        isCustomTopicMode = enableCustom;
+
+        if (topicDropdown != null)
+            topicDropdown.gameObject.SetActive(!isCustomTopicMode);
+
+        if (activityInput != null)
+        {
+            activityInput.gameObject.SetActive(isCustomTopicMode);
+            if (isCustomTopicMode)
+            {
+                activityInput.text = "";
+                activityInput.Select();
+                activityInput.ActivateInputField();
+            }
+        }
+
+        if (toggleCustomTopicButtonText != null)
+        {
+            toggleCustomTopicButtonText.text = isCustomTopicMode ? "Presets" : "Custom";
+        }
+    }
+
+    private void OnTopicDropdownChanged(int index)
+    {
+        if (topicDropdown != null && activityInput != null && topicDropdown.options.Count > 0)
+        {
+            activityInput.text = topicDropdown.options[index].text;
+        }
+    }
+
+    private void SetRoles(string defaultRole, string defaultPersona)
+    {
+        if (participantRoleInput != null) participantRoleInput.text = defaultRole;
+        if (npcPersonaInput != null) npcPersonaInput.text = defaultPersona;
     }
 
 }

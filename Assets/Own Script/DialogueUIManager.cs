@@ -80,7 +80,7 @@ public class DialogueUIManager : MonoBehaviour
             latestBubbleText.text = partialText;
         }
 
-        int calculatedTurn = (history.Count / 2) + 1;
+        int calculatedTurn = CurrentTurn(history);
         UpdateTurnDisplay(calculatedTurn);
         ScrollToBottom();
     }
@@ -105,9 +105,21 @@ public class DialogueUIManager : MonoBehaviour
             SpawnBubble(history[i]);
         }
 
-        int calculatedTurn = (history.Count / 2) + 1;
+        int calculatedTurn = CurrentTurn(history);
         UpdateTurnDisplay(calculatedTurn);
         ScrollToBottom();
+    }
+
+    private int CurrentTurn(List<DialogueTurn> history)
+    {
+        int users = 0, explicitTurn = 0;
+        foreach (var entry in history)
+        {
+            if (entry == null) continue;
+            if (entry.speaker == "User") users++;
+            explicitTurn = Mathf.Max(explicitTurn, entry.turnNumber);
+        }
+        return Mathf.Max(1, Mathf.Max(users, explicitTurn));
     }
 
     private void SpawnBubble(DialogueTurn turn)
@@ -118,6 +130,9 @@ public class DialogueUIManager : MonoBehaviour
 
         GameObject bubbleObj = Instantiate(prefab, chatContentParent);
         spawnedBubbles.Add(bubbleObj);
+
+        TMP_Text speakerText = FindChildText(bubbleObj.transform, "SpeakerNameText");
+        if (speakerText != null) speakerText.text = isUser ? "" : turn.speaker;
 
         TMP_Text bodyText = FindChildText(bubbleObj.transform, "DialogueText");
         if (bodyText != null)

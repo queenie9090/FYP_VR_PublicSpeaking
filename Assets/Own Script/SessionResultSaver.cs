@@ -128,32 +128,36 @@ public class SessionResultSaver : MonoBehaviour
         int totalWordsSpoken = 0;
         List<DialogueTurnRecord> turnRecords = new List<DialogueTurnRecord>();
 
-        var pairs = new List<(DialogueTurn user, DialogueTurn npc)>();
-        DialogueTurn pendingUser = null;
+        // User entries delimit legacy turns; explicit numbers also cover silent turns.
+        var groups = new SortedDictionary<int, (DialogueTurn user, List<DialogueTurn> npc)>();
+        int sequence = 0;
         foreach (var entry in conversationHistory)
         {
-            if (entry.speaker == "User") pendingUser = entry;
-            else if (entry.speaker == "NPC")
-            {
-                pairs.Add((pendingUser, entry));
-                pendingUser = null;
-            }
+            if (entry == null) continue;
+            if (entry.turnNumber > 0) sequence = entry.turnNumber;
+            else if (entry.speaker == "User") sequence++;
+            else if (sequence == 0) sequence = 1;
+            if (!groups.ContainsKey(sequence)) groups.Add(sequence, (null, new List<DialogueTurn>()));
+            var group = groups[sequence];
+            if (entry.speaker == "User") group.user = entry;
+            else group.npc.Add(entry);
+            groups[sequence] = group;
         }
-        if (pendingUser != null) pairs.Add((pendingUser, null));
-        for (int i = 0; i < pairs.Count; i++)
+        foreach (var pair in groups)
         {
-            string userText = pairs[i].user?.dialogue ?? "";
-            string aiText = pairs[i].npc?.dialogue ?? "";
-            int turnFillers = pairs[i].user?.fillerWordCount ?? 0;
-            float userDurationSec = pairs[i].user?.speechDuration ?? 0f;
-            float turnSilenceSec = pairs[i].user?.silenceDuration ?? 0f;
-
+            var user = pair.Value.user;
+            var npc = pair.Value.npc;
+            string userText = user?.dialogue ?? "";
+            string aiText = npc.Count == 1 ? npc[0].dialogue :
+                string.Join("\n", npc.ConvertAll(line => $"[{line.speaker}]: {line.dialogue}"));
+            int turnFillers = user?.fillerWordCount ?? 0;
+            float userDurationSec = user?.speechDuration ?? 0f;
+            float turnSilenceSec = user?.silenceDuration ?? 0f;
             var (wordCount, turnWpm) = MetricsCalculator.CalculateSpeakingRate(userText, userDurationSec);
             totalWordsSpoken += wordCount;
-
             turnRecords.Add(new DialogueTurnRecord
             {
-                turn_sequence = i + 1,
+                turn_sequence = pair.Key,
                 user_transcript = userText,
                 ai_response_text = aiText,
                 filler_word_count = turnFillers,

@@ -102,6 +102,11 @@ public class InteractionManager : MonoBehaviour
             tutorialManager.InitializeForInputMode(mode);
         }
 
+        if (eyeContactTracker != null && roomNPCs != null)
+        {
+            eyeContactTracker.SetTargetNPCs(roomNPCs);
+        }
+
         if (roomNPCs != null && roomNPCs.Count > 0)
         {
             SelectActiveNPC(roomNPCs[0]);
@@ -348,10 +353,11 @@ public class InteractionManager : MonoBehaviour
 
             if (!isSessionActive) yield break;
 
-            int nextTurnNumber = conversationHistory.Count(t => t.speaker == "NPC") + 1;
+            int nextTurnNumber = NextTurnNumber();
 
             string userTranscript = "";
             float speechDuration = 0f, silenceDuration = 0f;
+            int historyCountBeforeCapture = conversationHistory.Count;
             bool captureDone = false;
             bool fatalError = false;
 
@@ -374,6 +380,8 @@ public class InteractionManager : MonoBehaviour
 
             if (!isSessionActive || fatalError || !captureDone) yield break;
 
+            if (conversationHistory.Count > historyCountBeforeCapture && conversationHistory[conversationHistory.Count - 1].speaker == "User")
+                conversationHistory[conversationHistory.Count - 1].turnNumber = nextTurnNumber;
             sessionTimer.RecordTurnDurations(speechDuration, silenceDuration);
             yield return ProcessLLMTurnRoutine(userTranscript);
         }
@@ -388,7 +396,7 @@ public class InteractionManager : MonoBehaviour
 
         uiManager.SetStatus("NPC Thinking...");
         //int turnCounter = (conversationHistory.Count / 2) + 1;
-        int turnCounter = conversationHistory.Count(t => t.speaker == "NPC");
+        int turnCounter = NextTurnNumber() - 1;
         int expectedTurnNumber = turnCounter + 1;
         SetNPCBodyActivity(NPCBodyActivity.THINKING, expectedTurnNumber);
 
@@ -403,8 +411,9 @@ public class InteractionManager : MonoBehaviour
         {
             LLMResponse candidate = null;
             bool llmDone = false;
+            string multiNpcRoster = hallAudienceReactions ? null : BuildMultiNpcRoster();
             string prompt = PromptBuilder.BuildSystemPrompt(activeConfig, turnCounter, previousEmotion,
-                hallAudienceReactions, SafeAudienceEmotion(hallAudienceA), SafeAudienceEmotion(hallAudienceB));
+                hallAudienceReactions, SafeAudienceEmotion(hallAudienceA), SafeAudienceEmotion(hallAudienceB), multiNpcRoster);
             if (attempt > 0)
                 prompt += "\nReassess the emotion using the participant's actual context. Return one valid JSON response with a supported emotion.";
             StartCoroutine(openAIManager.SendChatRequest(prompt, conversationHistory, formattedTranscript,
@@ -423,8 +432,8 @@ public class InteractionManager : MonoBehaviour
                 break;
             }
             response = candidate;
-            if (!EmotionIntensityClassifier.NeedsReassessment(candidate.emotion, fallbackEmotion, userTranscript)) break;
-            Debug.LogWarning(EmotionIntensityClassifier.IsSupported(candidate.emotion)
+            if (!EmotionIntensityClassifier.NeedsReassessment(candidate.rawPrimaryEmotion, fallbackEmotion, userTranscript)) break;
+            Debug.LogWarning(EmotionIntensityClassifier.IsSupported(candidate.rawPrimaryEmotion)
                 ? "[Emotion Validation] Reassessing an emotion change without participant input."
                 : "[Emotion Validation] Reassessing an unsupported emotion label.");
             if (attempt == 1)
@@ -434,7 +443,7 @@ public class InteractionManager : MonoBehaviour
             }
         }
         if (!isSessionActive) yield break;   // session was closed while waiting for the LLM
-        if (response == null || string.IsNullOrEmpty(response.npc_response))
+        if (response == null || response.npc_responses == null || response.npc_responses.Count == 0)
         {
             Debug.LogWarning("[ProcessLLMTurnRoutine] LLM returned null or empty response.");
             uiManager.SetStatus("NPC didn't hear that. Listening...");
@@ -456,84 +465,46 @@ public class InteractionManager : MonoBehaviour
             response.turn_number = expectedTurnNumber;
         }
 
-        // AI emotion has already been checked by OpenAIManager.
-        // Save it for emotion continuity in the next turn.
-        string validatedEmotion = response.emotion;
-        bool judgeBecameHappy = hallScreen != null && npcEmotionController == hallScreen.Judge &&
-            validatedEmotion == "HAPPY" && previousEmotion != "HAPPY";
-        previousEmotion = validatedEmotion;
-
-        int emotionIntensity = EmotionIntensityClassifier.Classify(
-            validatedEmotion, userTranscript, response.npc_response);
-
-        if (NPCEmotionSessionManager.Instance != null)
+        // The first line retains the existing turn-level reassessment and Hall behaviour.
+        response.npc_responses[0].emotion = response.emotion;
+        NPCPersona primaryNPC = currentActiveNPC;
+        bool firstLine = true;
+        foreach (var line in response.npc_responses)
         {
-            string npcName = currentActiveNPC != null
-                ? currentActiveNPC.name
+            if (!isSessionActive) yield break;
+            if (line == null || string.IsNullOrWhiteSpace(line.dialogue)) continue;
+            NPCPersona speaker = ResolveSpeaker(line.speaker_name, primaryNPC);
+            if (speaker != null && speaker != currentActiveNPC) SelectActiveNPC(speaker);
+            string speakerName = speaker != null
+                ? (!string.IsNullOrWhiteSpace(speaker.characterName) ? speaker.characterName : speaker.name)
                 : "NPC";
+            string validatedEmotion = line.emotion;
+            if (!EmotionIntensityClassifier.IsSupported(validatedEmotion)) validatedEmotion = "NEUTRAL";
+            bool judgeBecameHappy = firstLine && hallScreen != null && npcEmotionController == hallScreen.Judge &&
+                validatedEmotion == "HAPPY" && previousEmotion != "HAPPY";
+            if (firstLine) previousEmotion = validatedEmotion;
+            int emotionIntensity = EmotionIntensityClassifier.Classify(validatedEmotion, userTranscript, line.dialogue);
+            NPCEmotionSessionManager.Instance?.RecordEmotion(expectedTurnNumber, speakerName, validatedEmotion, emotionIntensity);
+            if (npcEmotionController != null) npcEmotionController.SetEmotion(validatedEmotion, emotionIntensity);
 
-            NPCEmotionSessionManager.Instance.RecordEmotion(
-                expectedTurnNumber,
-                npcName,
-                validatedEmotion,
-                emotionIntensity
-            );
-        }
-        else
-        {
-            Debug.LogWarning(
-                "NPCEmotionSessionManager not found."
-            );
-        }
-
-        if (npcEmotionController != null)
-        {
-            npcEmotionController.SetEmotion(
-                validatedEmotion,
-                emotionIntensity
-            );
-
-            Debug.Log(
-                $"[NPC Emotion] Turn {expectedTurnNumber}: " +
-                $"{validatedEmotion}, Intensity: {emotionIntensity}"
-            );
-        }
-        else
-        {
-            Debug.LogWarning(
-                "NPCEmotionController is not assigned."
-            );
-        }
-
-        // Audience labels are optional for compatibility. Never manufacture a reaction
-        // when the provider omits a label or the participant supplied no context.
-        if (hallAudienceReactions)
-        {
-            ApplyHallAudienceEmotion(hallAudienceA, response.audience_a_emotion, userTranscript);
-            ApplyHallAudienceEmotion(hallAudienceB, response.audience_b_emotion, userTranscript);
-            if (judgeBecameHappy) GetComponent<HallAudienceCelebration>()?.OnJudgeHappy();
-        }
-
-        conversationHistory.Add(new DialogueTurn { speaker = "NPC", dialogue = response.npc_response });
-        uiManager.RenderDialogueWithPartialLatest(conversationHistory, "");
-
-        if (hintUIController != null)
-        {
-            // Starts prefetching the hint in the background BEFORE/WHILE the NPC speaks!
-            hintUIController.OnNewTurnStarted();
-        }
-
-        uiManager.SetStatus("Generating NPC speech...");
-        yield return StartCoroutine(speechController.PlayNPCAudioRoutine(
-            response.npc_response,
-            currentActiveNPC,
-            fallbackNpcAudioSource,
-            expectedTurnNumber,
-            onPartialTextUpdated: partial => {
-                if (uiManager != null)
-                    uiManager.RenderDialogueWithPartialLatest(conversationHistory, partial);
+            if (firstLine && hallAudienceReactions)
+            {
+                ApplyHallAudienceEmotion(hallAudienceA, response.audience_a_emotion, userTranscript);
+                ApplyHallAudienceEmotion(hallAudienceB, response.audience_b_emotion, userTranscript);
+                if (judgeBecameHappy) GetComponent<HallAudienceCelebration>()?.OnJudgeHappy();
             }
-        ));
+            bool startHint = firstLine;
+            firstLine = false;
+            conversationHistory.Add(new DialogueTurn { speaker = speakerName, dialogue = line.dialogue, turnNumber = expectedTurnNumber });
+            uiManager.RenderDialogueWithPartialLatest(conversationHistory, "");
+            if (startHint && hintUIController != null) hintUIController.OnNewTurnStarted();
+            uiManager.SetStatus("Generating NPC speech...");
+            yield return StartCoroutine(speechController.PlayNPCAudioRoutine(
+                line.dialogue, speaker, fallbackNpcAudioSource, expectedTurnNumber,
+                onPartialTextUpdated: partial => {
+                    if (uiManager != null) uiManager.RenderDialogueWithPartialLatest(conversationHistory, partial);
+                }));
+        }
 
         if (!isSessionActive) yield break;   // closed during NPC audio (CloseSession already saved)
 
@@ -864,7 +835,7 @@ public class InteractionManager : MonoBehaviour
         if (targetEmotion == null)
             Debug.LogWarning("[InteractionManager] Selected NPC has no emotion controller.", targetNPC);
 
-        if (eyeContactTracker != null)
+        if (eyeContactTracker != null && (roomNPCs == null || roomNPCs.Count <= 1))
         {
             if (targetNPC.facialCollider != null)
                 eyeContactTracker.SetTargetFacialCollider(targetNPC.facialCollider);
@@ -876,7 +847,6 @@ public class InteractionManager : MonoBehaviour
         {
             currentNPCIndex = roomNPCs.IndexOf(targetNPC);
         }
-
     }
 
     public void SelectNextNPC()
@@ -884,6 +854,42 @@ public class InteractionManager : MonoBehaviour
         if (roomNPCs == null || roomNPCs.Count <= 1) return;
         currentNPCIndex = (currentNPCIndex + 1) % roomNPCs.Count;
         SelectActiveNPC(roomNPCs[currentNPCIndex]);
+    }
+
+    private int NextTurnNumber()
+    {
+        int completed = 0;
+        foreach (var turn in conversationHistory)
+            if (turn != null && turn.speaker != "User")
+                completed = Math.Max(completed, turn.turnNumber > 0 ? turn.turnNumber : completed + 1);
+        return completed + 1;
+    }
+
+    private NPCPersona ResolveSpeaker(string name, NPCPersona fallback)
+    {
+        if (!string.IsNullOrWhiteSpace(name) && roomNPCs != null)
+            foreach (var npc in roomNPCs)
+                if (npc != null && (string.Equals(npc.characterName, name.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(npc.name, name.Trim(), StringComparison.OrdinalIgnoreCase))) return npc;
+        return fallback;
+    }
+
+    private string BuildMultiNpcRoster()
+    {
+        if (roomNPCs == null || roomNPCs.Count <= 1) return null;
+
+        var lines = new List<string>();
+        int index = 1;
+        foreach (var npc in roomNPCs)
+        {
+            if (npc == null) continue;
+            string npcName = !string.IsNullOrWhiteSpace(npc.characterName) ? npc.characterName : npc.name;
+            var emotionCtrl = npc.GetComponentInParent<NPCEmotionController>() ?? npc.GetComponentInChildren<NPCEmotionController>();
+            string prevEmo = SafeAudienceEmotion(emotionCtrl); // Reuses your existing safe emotion helper!
+            lines.Add($"{index++}. Name: {npcName} | Role: {activeConfig.persona} | Previous Emotion: {prevEmo}");
+        }
+
+        return lines.Count > 1 ? string.Join("\n", lines) : null;
     }
 
     private void SetNPCBodyActivity(NPCBodyActivity activity, int turnNumber = 0)
