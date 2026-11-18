@@ -104,7 +104,7 @@ public class SetupUIController : MonoBehaviour
                 SetPresetIfEmpty("Job Interview Evaluation", "Candidate", "Interviewer");
                 break;
             case "Classroom":
-                SetPresetIfEmpty("Lecture QA Session", "Student", "Teacher");
+                SetPresetIfEmpty("Classroom Discussion", "Student", "Student");
                 break;
             case "Cafeteria":
                 SetPresetIfEmpty("Social Networking", "Participant", "Peer");

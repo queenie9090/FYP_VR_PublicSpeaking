@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 public static class PromptBuilder
 {
-    public static string BuildSystemPrompt(ScenarioConfig config, int currentTurnCount, string previousEmotion = "NEUTRAL")
+    public static string BuildSystemPrompt(ScenarioConfig config, int currentTurnCount, string previousEmotion = "NEUTRAL", bool hallAudienceReactions = false, string previousAudienceA = "NEUTRAL", string previousAudienceB = "NEUTRAL")
     {
         string difficultyInstruction = config.difficulty switch
         {
@@ -11,7 +11,7 @@ public static class PromptBuilder
             _ => "Use moderately challenging questions and provide limited guidance."
         };
 
-        return $@"
+        string prompt = $@"
 You are an AI character participating in a VR communication training simulation.
 
 SESSION CONFIGURATION 
@@ -113,6 +113,18 @@ Do not include markdown, explanations, or additional properties.
 The emotion field above is an example placeholder.
 Replace it with the most appropriate validated-category emotion.
 Ensure end_conversation follows the final-turn rule.
+";
+        if (!hallAudienceReactions) return prompt;
+        prompt = prompt.Replace("- Do not generate multiple emotion labels.", "- The emotion field represents only the Judge.")
+            .Replace("- Do not return emotion intensity, valence, arousal, or additional emotion fields.", "- Do not return emotion intensity, valence or arousal.")
+            .Replace("The JSON must contain exactly five fields.", "The JSON must contain exactly seven fields.")
+            .Replace("  \"emotion\": \"NEUTRAL\",", "  \"emotion\": \"NEUTRAL\",\n  \"audience_a_emotion\": \"NEUTRAL\",\n  \"audience_b_emotion\": \"NEUTRAL\",");
+        return prompt + $@"
+HALL AUDIENCE REACTIONS
+- audience_a_emotion and audience_b_emotion are independent emotional reactions of Audience A and Audience B to the participant's actual message and the conversation context, not new dialogue.
+- Each label must be exactly HAPPY, SAD, ANGRY, NERVOUS, THINKING, or NEUTRAL. Use NEUTRAL when there is insufficient evidence; do not infer speech quality, attention, or personal facts.
+- Consider continuity: previous Audience A emotion is {previousAudienceA}; previous Audience B emotion is {previousAudienceB}. Avoid unsupported abrupt changes. Do not force their labels to match the Judge or each other.
+- Do not return intensity for any NPC. The two audience fields are required in this Hall response only.
 ";
     }
 

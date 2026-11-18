@@ -11,6 +11,9 @@ public class HallNPCRealismScreen : MonoBehaviour
     [SerializeField] private NPCEmotionController judge;
     [SerializeField] private NPCEmotionController audienceA;
     [SerializeField] private NPCEmotionController audienceB;
+    public NPCEmotionController Judge => judge;
+    public NPCEmotionController AudienceA => audienceA;
+    public NPCEmotionController AudienceB => audienceB;
     [SerializeField] private Camera judgeCamera;
     [SerializeField] private Camera audienceACamera;
     [SerializeField] private Camera audienceBCamera;
