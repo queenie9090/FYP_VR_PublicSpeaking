@@ -211,6 +211,8 @@ public class InteractionManager : MonoBehaviour
     public void OnUserConfirmedStart()
     {
         if (!isActiveAndEnabled || isSessionActive || isSavingSession || sessionSaveFailed) return;
+        if (initiationCoroutine != null) return;
+        if (SceneManager.GetActiveScene().name == "Hall") GetComponent<HallAudienceCelebration>()?.OnSessionStarted();
         Debug.Log("[InteractionManager] OnUserConfirmedStart called");
         if (startSessionButton != null)
             startSessionButton.interactable = false;
@@ -391,13 +393,18 @@ public class InteractionManager : MonoBehaviour
         SetNPCBodyActivity(NPCBodyActivity.THINKING, expectedTurnNumber);
 
         LLMResponse response = null;
+        bool hallAudienceReactions = SceneManager.GetActiveScene().name == "Hall";
+        HallNPCRealismScreen hallScreen = hallAudienceReactions ? GetComponent<HallNPCRealismScreen>() : null;
+        NPCEmotionController hallAudienceA = hallScreen != null ? hallScreen.AudienceA : null;
+        NPCEmotionController hallAudienceB = hallScreen != null ? hallScreen.AudienceB : null;
         string fallbackEmotion = EmotionIntensityClassifier.IsSupported(previousEmotion)
             ? previousEmotion.Trim().ToUpperInvariant() : "NEUTRAL";
         for (int attempt = 0; attempt < 2; attempt++)
         {
             LLMResponse candidate = null;
             bool llmDone = false;
-            string prompt = PromptBuilder.BuildSystemPrompt(activeConfig, turnCounter, previousEmotion);
+            string prompt = PromptBuilder.BuildSystemPrompt(activeConfig, turnCounter, previousEmotion,
+                hallAudienceReactions, SafeAudienceEmotion(hallAudienceA), SafeAudienceEmotion(hallAudienceB));
             if (attempt > 0)
                 prompt += "\nReassess the emotion using the participant's actual context. Return one valid JSON response with a supported emotion.";
             StartCoroutine(openAIManager.SendChatRequest(prompt, conversationHistory, formattedTranscript,
@@ -452,6 +459,8 @@ public class InteractionManager : MonoBehaviour
         // AI emotion has already been checked by OpenAIManager.
         // Save it for emotion continuity in the next turn.
         string validatedEmotion = response.emotion;
+        bool judgeBecameHappy = hallScreen != null && npcEmotionController == hallScreen.Judge &&
+            validatedEmotion == "HAPPY" && previousEmotion != "HAPPY";
         previousEmotion = validatedEmotion;
 
         int emotionIntensity = EmotionIntensityClassifier.Classify(
@@ -496,6 +505,15 @@ public class InteractionManager : MonoBehaviour
             );
         }
 
+        // Audience labels are optional for compatibility. Never manufacture a reaction
+        // when the provider omits a label or the participant supplied no context.
+        if (hallAudienceReactions)
+        {
+            ApplyHallAudienceEmotion(hallAudienceA, response.audience_a_emotion, userTranscript);
+            ApplyHallAudienceEmotion(hallAudienceB, response.audience_b_emotion, userTranscript);
+            if (judgeBecameHappy) GetComponent<HallAudienceCelebration>()?.OnJudgeHappy();
+        }
+
         conversationHistory.Add(new DialogueTurn { speaker = "NPC", dialogue = response.npc_response });
         uiManager.RenderDialogueWithPartialLatest(conversationHistory, "");
 
@@ -522,6 +540,7 @@ public class InteractionManager : MonoBehaviour
         bool isFinalTurn = activeConfig != null && expectedTurnNumber >= activeConfig.maxTurnLimit;
         if (isFinalTurn || response.end_conversation)
         {
+            if (hallAudienceReactions) GetComponent<HallAudienceCelebration>()?.OnSessionCompleted();
             isSessionActive = false;
             StopMetricCollection();
             CalculateAndSaveResults();
@@ -623,6 +642,8 @@ public class InteractionManager : MonoBehaviour
             Debug.LogWarning("[InteractionManager] CloseSession ignored: Session save already in progress.");
             return;
         }
+
+        if (SceneManager.GetActiveScene().name == "Hall") GetComponent<HallAudienceCelebration>()?.StopReactions();
 
         SetNPCBodyActivity(NPCBodyActivity.IDLE);
         if (speechController != null) speechController.CancelPendingSpeech();
@@ -807,6 +828,24 @@ public class InteractionManager : MonoBehaviour
         isSessionActive = false;
 
         yield return transitionController.ExecuteSceneTransitionRoutine(activeConfig, uiManager);
+    }
+
+    private static string SafeAudienceEmotion(NPCEmotionController audience)
+    {
+        return audience != null && EmotionIntensityClassifier.IsSupported(audience.currentEmotion)
+            ? audience.currentEmotion.Trim().ToUpperInvariant() : "NEUTRAL";
+    }
+
+    private void ApplyHallAudienceEmotion(NPCEmotionController audience, string rawEmotion, string participantText)
+    {
+        if (audience == null || !audience.isActiveAndEnabled || audience == npcEmotionController)
+            return;
+        if (!EmotionIntensityClassifier.TryClassifyHallAudience(rawEmotion, participantText, out string emotion, out int intensity))
+        {
+            Debug.Log("[Hall Emotion] Missing/invalid label or no participant context; audience state retained.");
+            return;
+        }
+        audience.SetEmotion(emotion, intensity);
     }
 
     public void SelectActiveNPC(NPCPersona targetNPC)
