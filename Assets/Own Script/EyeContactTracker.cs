@@ -1,5 +1,7 @@
 using System.Collections;
 using UnityEngine;
+using System.Collections.Generic;
+
 
 public class EyeContactTracker : MonoBehaviour
 {
@@ -22,6 +24,32 @@ public class EyeContactTracker : MonoBehaviour
     private int hitSamples = 0;
     private bool isTracking = false;
     private Coroutine trackingCoroutine;
+
+    private readonly List<NPCPersona> targetNPCs = new List<NPCPersona>();
+
+    public void SetTargetNPCs(IEnumerable<NPCPersona> npcs)
+    {
+        HideAllIcons();
+        targetNPCs.Clear();
+        if (npcs == null) return;
+        foreach (var npc in npcs)
+        {
+            if (npc != null && !targetNPCs.Contains(npc))
+                targetNPCs.Add(npc);
+        }
+    }
+
+    private void HideAllIcons()
+    {
+        if (activeEyeContactIcon != null)
+            activeEyeContactIcon.SetActive(false);
+
+        foreach (var npc in targetNPCs)
+        {
+            if (npc != null && npc.eyeContactIcon != null)
+                npc.eyeContactIcon.SetActive(false);
+        }
+    }
 
     // Call when starting a VR session
     public void StartTracking()
@@ -50,10 +78,7 @@ public class EyeContactTracker : MonoBehaviour
             trackingCoroutine = null;
         }
 
-        if (activeEyeContactIcon != null)
-        {
-            activeEyeContactIcon.SetActive(false);
-        }
+        HideAllIcons();
 
         Debug.Log($"[EyeContactTracker] Sampling stopped. Total: {totalSamples}, Hits: {hitSamples}");
     }
@@ -64,32 +89,50 @@ public class EyeContactTracker : MonoBehaviour
         while (isTracking)
         {
             bool isLookingAtNPC = false;
+            NPCPersona lookedAtNPC = null;
 
-            if (headsetTransform != null && avatarFacialCollider != null)
+            if (headsetTransform != null && (targetNPCs.Count > 0 || avatarFacialCollider != null))
             {
                 Ray gazeRay = new Ray(headsetTransform.position, headsetTransform.forward);
-
-                // DEBUG: red line = gaze ray (visible in Scene view with Gizmos on)
                 Debug.DrawRay(gazeRay.origin, gazeRay.direction * maxDistance, Color.red, samplingInterval);
 
                 if (Physics.Raycast(gazeRay, out RaycastHit hitInfo, maxDistance))
                 {
-                    isLookingAtNPC = hitInfo.collider == avatarFacialCollider;
-
-                    // DEBUG: what did the ray actually hit?
-                    Debug.Log($"[EyeContact] Hit '{hitInfo.collider.name}' | target = '{avatarFacialCollider.name}' | match = {isLookingAtNPC}");
+                    Debug.Log($"[GazeDebug] targetCount={targetNPCs.Count} | hit={hitInfo.collider.name} | dist={hitInfo.distance:F2}m");
+                    if (targetNPCs.Count > 0)
+                    {
+                        foreach (var npc in targetNPCs)
+                        {
+                            if (npc != null && npc.facialCollider != null && hitInfo.collider == npc.facialCollider)
+                            {
+                                isLookingAtNPC = true;
+                                lookedAtNPC = npc;
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        isLookingAtNPC = hitInfo.collider == avatarFacialCollider;
+                    }
 
                     if (isLookingAtNPC) hitSamples++;
-                }
-                else
-                {
-                    Debug.Log("[EyeContact] Ray hit nothing");
                 }
 
                 totalSamples++;
             }
 
-            if (activeEyeContactIcon != null && activeEyeContactIcon.activeSelf != isLookingAtNPC)
+            if (targetNPCs.Count > 0)
+            {
+                foreach (var npc in targetNPCs)
+                {
+                    if (npc == null || npc.eyeContactIcon == null) continue;
+                    bool shouldShow = npc == lookedAtNPC;
+                    if (npc.eyeContactIcon.activeSelf != shouldShow)
+                        npc.eyeContactIcon.SetActive(shouldShow);
+                }
+            }
+            else if (activeEyeContactIcon != null && activeEyeContactIcon.activeSelf != isLookingAtNPC)
             {
                 activeEyeContactIcon.SetActive(isLookingAtNPC);
             }
