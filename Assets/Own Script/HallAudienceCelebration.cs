@@ -1,17 +1,17 @@
 using System.Collections;
 using UnityEngine;
 
-// Hall-only event reactions. Both animators keep their existing seated base layer.
+// Hall-only event reactions. All three animators keep their existing seated base layer.
 public sealed class HallAudienceCelebration : MonoBehaviour
 {
-    [SerializeField] private Animator audienceA, audienceB;
+    [SerializeField] private Animator judge, audienceA, audienceB;
     [SerializeField] private AnimationClip clapClip, cheerClip;
     [SerializeField] private AudioClip applauseSound, cheerSound;
     [SerializeField, Range(0f, 1f)] private float soundVolume = 0.7f;
     [SerializeField] private string layerName = "HallCelebration";
     [SerializeField, Range(0.05f, 1f)] private float blendSeconds = 0.3f;
     [SerializeField, Range(0f, 1f)] private float layerWeight = 1f;
-    private Coroutine activeA, activeB;
+    private Coroutine activeJudge, activeA, activeB;
     private Coroutine soundRoutine;
     private AudioSource applauseSource, cheerSource;
     [System.Serializable]
@@ -22,13 +22,14 @@ public sealed class HallAudienceCelebration : MonoBehaviour
         [Range(0.10f, 0.35f)] public float openSpacing = 0.22f;
         public Vector3 leftPalmTrim, rightPalmTrim;
     }
-    [SerializeField] private ClapPose poseA = new ClapPose(), poseB = new ClapPose();
+    [SerializeField] private ClapPose poseJudge = new ClapPose(), poseA = new ClapPose(), poseB = new ClapPose();
     [SerializeField, Range(1.5f, 2.5f)] private float clapsPerSecond = 2f;
-    private bool clapA, clapB;
+    private bool clapJudge, clapA, clapB;
     private float clapStart;
 
     private void LateUpdate()
     {
+        if (clapJudge) ApplyClap(judge, poseJudge);
         if (clapA) ApplyClap(audienceA, poseA);
         if (clapB) ApplyClap(audienceB, poseB);
     }
@@ -92,6 +93,7 @@ public sealed class HallAudienceCelebration : MonoBehaviour
     }
 
 #if UNITY_EDITOR
+    public void PreviewAudienceClap() { PlayCelebration(false, false); }
     public void PreviewSingleClap(bool leftAudience)
     {
         StopReactions();
@@ -106,23 +108,28 @@ public sealed class HallAudienceCelebration : MonoBehaviour
     }
 #endif
 
-    public void OnSessionStarted() { PlayBoth(false); }
-    public void OnSessionCompleted() { PlayBoth(false); }
-    public void OnJudgeHappy() { PlayBoth(true); }
+    public void OnSessionStarted() { PlayCelebration(true, false); }
+    public void OnSessionCompleted() { PlayCelebration(true, false); }
+    public void OnJudgeHappy() { PlayCelebration(false, true); }
 
     public void StopReactions()
     {
-        clapA = clapB = false;
+        clapJudge = clapA = clapB = false;
+        if (activeJudge != null) StopCoroutine(activeJudge);
         if (activeA != null) StopCoroutine(activeA);
         if (activeB != null) StopCoroutine(activeB);
-        activeA = activeB = null;
+        activeJudge = activeA = activeB = null;
         StopSounds();
-        ResetLayer(audienceA); ResetLayer(audienceB);
+        ResetLayer(judge); ResetLayer(audienceA); ResetLayer(audienceB);
     }
     private void OnDisable() { StopReactions(); }
-    private void PlayBoth(bool cheerForB)
+    private void PlayCelebration(bool includeJudge, bool cheerForB)
     {
         if (!isActiveAndEnabled) return;
+        if (activeJudge != null) StopCoroutine(activeJudge);
+        clapJudge = includeJudge && CanPlay(judge, clapClip, "Clap");
+        if (clapJudge) activeJudge = StartCoroutine(Play(judge, clapClip, "Clap"));
+        else ResetLayer(judge);
         clapStart = Time.time;
         clapA = true;
         clapB = !cheerForB;
@@ -131,7 +138,7 @@ public sealed class HallAudienceCelebration : MonoBehaviour
         StopSounds();
         activeA = StartCoroutine(Play(audienceA, clapClip, "Clap"));
         activeB = StartCoroutine(Play(audienceB, cheerForB ? cheerClip : clapClip, cheerForB ? "Cheer" : "Clap"));
-        bool clapPlaying = CanPlay(audienceA, clapClip, "Clap") ||
+        bool clapPlaying = clapJudge || CanPlay(audienceA, clapClip, "Clap") ||
             (!cheerForB && CanPlay(audienceB, clapClip, "Clap"));
         bool cheerPlaying = cheerForB && CanPlay(audienceB, cheerClip, "Cheer");
         if (clapPlaying || cheerPlaying)
@@ -200,6 +207,7 @@ public sealed class HallAudienceCelebration : MonoBehaviour
         elapsed = 0;
         while (elapsed < blend) { elapsed += Time.deltaTime; animator.SetLayerWeight(layer, Mathf.Lerp(layerWeight, 0, Mathf.Clamp01(elapsed / blend))); yield return null; }
         animator.SetLayerWeight(layer, 0);
+        if (animator == judge) clapJudge = false;
         if (animator == audienceA) clapA = false;
         if (animator == audienceB) clapB = false;
     }

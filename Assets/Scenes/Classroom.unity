@@ -2926,6 +2926,18 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: -6597378289169086553, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -6564648121316110832, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -4406410392740908068, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: -1116551521090907254, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
       propertyPath: m_LocalRotation.x
       value: 0.019876359
@@ -2933,6 +2945,14 @@ PrefabInstance:
     - target: {fileID: -1116551521090907254, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
       propertyPath: m_LocalRotation.z
       value: -0.02030688
+      objectReference: {fileID: 0}
+    - target: {fileID: -426233289730682237, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -272698260703527454, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -272698260703527454, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
       propertyPath: 'm_BlendShapeWeights.Array.data[50]'
@@ -2954,61 +2974,13 @@ PrefabInstance:
       propertyPath: 'm_BlendShapeWeights.Array.data[54]'
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 9051005867030159785, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
-      propertyPath: m_UpdateWhenOffscreen
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: -272698260703527454, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
-      propertyPath: m_UpdateWhenOffscreen
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: -6597378289169086553, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
-      propertyPath: m_UpdateWhenOffscreen
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 7634479467738841525, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
-      propertyPath: m_UpdateWhenOffscreen
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 8443775884153234311, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
-      propertyPath: m_UpdateWhenOffscreen
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: -6564648121316110832, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
-      propertyPath: m_UpdateWhenOffscreen
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4019127160748264547, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
-      propertyPath: m_UpdateWhenOffscreen
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 3960327684871861303, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
-      propertyPath: m_UpdateWhenOffscreen
-      value: 1
+    - target: {fileID: 919132149155446097, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_Name
+      value: Business girl
       objectReference: {fileID: 0}
     - target: {fileID: 2662736185879942338, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
       propertyPath: m_UpdateWhenOffscreen
       value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 7271197678238513495, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
-      propertyPath: m_UpdateWhenOffscreen
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: -426233289730682237, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
-      propertyPath: m_UpdateWhenOffscreen
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 6880847369931432063, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
-      propertyPath: m_UpdateWhenOffscreen
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: -4406410392740908068, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
-      propertyPath: m_UpdateWhenOffscreen
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 919132149155446097, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
-      propertyPath: m_Name
-      value: Business girl
       objectReference: {fileID: 0}
     - target: {fileID: 3261469352476761151, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
       propertyPath: m_LocalRotation.w
@@ -3017,6 +2989,14 @@ PrefabInstance:
     - target: {fileID: 3261469352476761151, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
       propertyPath: m_LocalRotation.y
       value: 0.11254579
+      objectReference: {fileID: 0}
+    - target: {fileID: 3960327684871861303, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4019127160748264547, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5197118176682910397, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
       propertyPath: 'm_BlendShapeWeights.Array.data[16]'
@@ -3078,6 +3058,22 @@ PrefabInstance:
       propertyPath: m_ApplyRootMotion
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 6880847369931432063, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7271197678238513495, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7634479467738841525, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8443775884153234311, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 8443775884153234311, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
       propertyPath: 'm_BlendShapeWeights.Array.data[7]'
       value: 0
@@ -3085,6 +3081,10 @@ PrefabInstance:
     - target: {fileID: 8443775884153234311, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
       propertyPath: 'm_BlendShapeWeights.Array.data[29]'
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 9051005867030159785, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -50852,14 +50852,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c0eec4bafb7421b47ad003be1deb04d0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NPCFaceZoom
-  boneFramedNpcs:
-  - {fileID: 206417140}
-  - {fileID: 683457355}
   interactionManager: {fileID: 2015014612}
   panelDistance: 1.3
   faceDistance: 1
   framingHeightOffset: -0.025
   fieldOfView: 32
+  boneFramedNpcs:
+  - {fileID: 206417140}
+  - {fileID: 683457355}
 --- !u!114 &1954755471
 MonoBehaviour:
   m_ObjectHideFlags: 0
