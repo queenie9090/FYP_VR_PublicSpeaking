@@ -216,7 +216,6 @@ public class InteractionManager : MonoBehaviour
     {
         if (!isActiveAndEnabled || isSessionActive || isSavingSession || sessionSaveFailed) return;
         if (initiationCoroutine != null) return;
-        if (SceneManager.GetActiveScene().name == "Hall") GetComponent<HallAudienceCelebration>()?.OnSessionStarted();
         Debug.Log("[InteractionManager] OnUserConfirmedStart called");
         if (startSessionButton != null)
             startSessionButton.interactable = false;
@@ -280,6 +279,7 @@ public class InteractionManager : MonoBehaviour
 
         if (IsClassroomPair) SelectActiveNPC(roomNPCs[0]);
         isSessionActive = true;
+        if (gameObject.scene.name == "Hall") GetComponent<HallAudienceCelebration>()?.OnSessionStarted();
         sessionSaveFailed = false;
         sessionSaveOwner = null;
         conversationHistory.Clear();
