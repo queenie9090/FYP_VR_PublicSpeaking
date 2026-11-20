@@ -7723,7 +7723,7 @@ MonoBehaviour:
   npcPersonaInput: {fileID: 1770195601}
   inputModeToggle: {fileID: 2019157699}
   dontShowTutorialAgainToggle: {fileID: 1862631168}
-  editorVrSimulatorMode: 0
+  editorVrSimulatorMode: 1
 --- !u!4 &362763786
 Transform:
   m_ObjectHideFlags: 0
@@ -37524,7 +37524,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 1}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -224.90894, y: -58.66992}
+  m_AnchoredPosition: {x: -224.90918, y: -58.66992}
   m_SizeDelta: {x: 449.81787, y: 117.339966}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2052200535
