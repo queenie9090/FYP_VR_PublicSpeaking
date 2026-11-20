@@ -100,6 +100,13 @@ public class NPCEmotionIndicatorUI : MonoBehaviour
         if (levelText != null)
             levelText.text = levelName;
 
+        ApplyMoodBars(moodBars, emotion, intensity);
+    }
+
+    public static void ApplyMoodBars(Image[] bars, string emotion, int intensity)
+    {
+        if (bars == null) return;
+        int level = Mathf.CeilToInt(intensity / 20f);
         Color moodColor = emotion switch
         {
             "HAPPY" => new Color(1f, 0.8f, 0.3f),
@@ -109,12 +116,12 @@ public class NPCEmotionIndicatorUI : MonoBehaviour
             "THINKING" => new Color(0.65f, 0.55f, 1f),
             _ => Color.white
         };
-        for (int i = 0; i < moodBars.Length; i++)
+        for (int i = 0; i < bars.Length; i++)
         {
-            if (moodBars[i] == null)
+            if (bars[i] == null)
                 continue;
 
-            moodBars[i].color = i < level
+            bars[i].color = i < level
                 ? Color.Lerp(Color.white, moodColor, 0.4f + 0.6f * intensity / 100f)
                 : new Color(0.35f, 0.35f, 0.35f, 1f);
         }

@@ -19,6 +19,16 @@ public class EmotionDisplayBinding
 
 public class EmotionDashboardUIController : MonoBehaviour
 {
+    [SerializeField] private TMP_Text dashboardTitle;
+    [SerializeField] private TMP_Text timelineTitle;
+    [SerializeField] private TMP_Text distributionTitle;
+    [SerializeField] private TMP_Text behaviourTitle;
+    private TMP_Dropdown breakdown, timelinePage;
+    private List<NPCEmotionRecord> sessionHistory, visibleHistory;
+    private List<string> npcNames;
+    private const int PageSize = 5;
+    private Vector2 titleOffsetMax;
+
     [Header("Final Emotion Panel")]
     [SerializeField] private Image finalEmotionIcon;
     [SerializeField] private TMP_Text finalEmotionLabel;
@@ -46,15 +56,6 @@ public class EmotionDashboardUIController : MonoBehaviour
     [SerializeField] private TMP_Text lipSyncSummaryText;
     [SerializeField] private SupabaseManager supabaseManager;
 
-    [Header("Bar Colors")]
-    [SerializeField]
-    private Color activeBarColor =
-        new Color(0.643f, 0.549f, 1f, 1f);
-
-    [SerializeField]
-    private Color inactiveBarColor =
-        new Color(0.337f, 0.380f, 0.494f, 1f);
-
     private readonly string[] emotionOrder =
     {
         "HAPPY",
@@ -70,6 +71,11 @@ public class EmotionDashboardUIController : MonoBehaviour
 
     private void Start()
     {
+        titleOffsetMax = dashboardTitle.rectTransform.offsetMax;
+        breakdown = CreateSelector(dashboardTitle, "NPC Breakdown", 340, 0);
+        breakdown.onValueChanged.AddListener(SelectNpc);
+        timelinePage = CreateSelector(timelineTitle, "Timeline Page", 170, timelineTitle.rectTransform.anchoredPosition.y);
+        timelinePage.onValueChanged.AddListener(ShowPage);
         EnsureLegendSwatches();
         ConfigureSummaryText();
         RefreshDashboard();
@@ -123,9 +129,7 @@ public class EmotionDashboardUIController : MonoBehaviour
                     });
                 }
             }
-            UpdateFinalEmotion(savedHistory.LastOrDefault());
-            UpdateTimeline(savedHistory);
-            UpdateDistribution(savedHistory, savedHistory.Count);
+            LoadBreakdown(savedHistory, selectedSession.scenario_type);
             if (sessionTotalTurnsText != null)
                 sessionTotalTurnsText.text = selectedSession.dialogue_turn != null
                     ? selectedSession.dialogue_turn.Count(t => t != null).ToString() : "Not Available";
@@ -152,9 +156,7 @@ public class EmotionDashboardUIController : MonoBehaviour
 
         int total = manager.TotalEmotionTurns;
 
-        UpdateFinalEmotion(manager.GetFinalEmotion());
-        UpdateTimeline(history);
-        UpdateDistribution(history, total);
+        LoadBreakdown(history, manager.SessionSceneName);
 
         if (sessionTotalTurnsText != null)
             sessionTotalTurnsText.text = "Not Available";
@@ -166,13 +168,105 @@ public class EmotionDashboardUIController : MonoBehaviour
 
     private void ShowEmptyDashboard()
     {
-        UpdateFinalEmotion(null);
-
-        UpdateTimeline(new List<NPCEmotionRecord>());
-        UpdateDistribution(new List<NPCEmotionRecord>(), 0);
+        LoadBreakdown(Array.Empty<NPCEmotionRecord>());
 
         if (sessionTotalTurnsText != null)
             sessionTotalTurnsText.text = "Not Available";
+    }
+
+    private TMP_Dropdown CreateSelector(TMP_Text title, string objectName, float width, float y)
+    {
+        var root = TMP_DefaultControls.CreateDropdown(new TMP_DefaultControls.Resources());
+        root.name = objectName;
+        var rect = (RectTransform)root.transform;
+        rect.SetParent(title.transform.parent, false);
+        rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1, .5f);
+        rect.anchoredPosition = new Vector2(-12, y);
+        rect.sizeDelta = new Vector2(width, 48);
+        var menu = root.GetComponent<TMP_Dropdown>();
+        menu.image.color = new Color32(38, 76, 112, 255);
+        // Keep the control readable without depending on Unity's optional default sprites.
+        var arrow = rect.Find("Arrow").GetComponent<Image>();
+        arrow.enabled = false;
+        var arrowText = new GameObject("Expand", typeof(RectTransform), typeof(TextMeshProUGUI))
+            .GetComponent<TextMeshProUGUI>();
+        arrowText.rectTransform.SetParent(arrow.transform, false);
+        arrowText.rectTransform.sizeDelta = new Vector2(24, 28);
+        arrowText.text = ">";
+        arrowText.rectTransform.localRotation = Quaternion.Euler(0, 0, -90);
+        arrowText.fontSize = 18;
+        arrowText.alignment = TextAlignmentOptions.Center;
+        arrowText.raycastTarget = false;
+        menu.captionText.font = menu.itemText.font = title.font;
+        menu.captionText.fontSize = menu.itemText.fontSize = 23;
+        menu.captionText.color = Color.white;
+        menu.itemText.color = new Color32(25, 41, 60, 255);
+        menu.captionText.richText = menu.itemText.richText = false;
+        var caption = menu.captionText;
+        caption.rectTransform.offsetMin = new Vector2(12, 0);
+        caption.rectTransform.offsetMax = new Vector2(-32, 0);
+        caption.alignment = TextAlignmentOptions.MidlineLeft;
+        caption.textWrappingMode = TextWrappingModes.NoWrap;
+        caption.overflowMode = TextOverflowModes.Overflow;
+        caption.raycastTarget = false;
+        menu.itemText.overflowMode = TextOverflowModes.Ellipsis;
+        var item = (RectTransform)menu.itemText.transform.parent;
+        item.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 44);
+        ((RectTransform)item.parent).SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 44);
+        menu.template.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 200);
+        return menu;
+    }
+
+    private bool hallBreakdown;
+
+    private string NpcName(NPCEmotionRecord record)
+    {
+        string name = record.npcName?.Trim() ?? "";
+        return hallBreakdown && string.Equals(name, "Tutor", StringComparison.OrdinalIgnoreCase) ? "Judge" : name;
+    }
+
+    private void LoadBreakdown(IEnumerable<NPCEmotionRecord> records, string scene = null)
+    {
+        sessionHistory = records.Where(r => r != null && emotionOrder.Contains(r.emotion))
+            .OrderBy(r => r.turnNumber).ToList();
+        bool hall = string.Equals(scene?.Trim(), "Hall", StringComparison.OrdinalIgnoreCase);
+        string[] roster = hall ? new[] { "Judge", "Audience Member A", "Audience Member B" } :
+            string.Equals(scene?.Trim(), "Classroom", StringComparison.OrdinalIgnoreCase)
+                ? new[] { "Student A", "Student B" } : Array.Empty<string>();
+        // Earlier Hall sessions saved the Judge under the prefab persona name.
+        hallBreakdown = hall;
+        npcNames = roster.Concat(sessionHistory.Select(NpcName)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        breakdown.ClearOptions();
+        breakdown.AddOptions(npcNames.Count == 0 ? new List<string> { "No NPC data" } :
+            npcNames.Select(n => n.Length == 0 ? "Unidentified NPC" : n).ToList());
+        breakdown.SetValueWithoutNotify(0);
+        breakdown.RefreshShownValue();
+        breakdown.interactable = npcNames.Count > 1;
+        dashboardTitle.rectTransform.offsetMax = titleOffsetMax - new Vector2(350, 0);
+        SelectNpc(0);
+    }
+
+    private void SelectNpc(int selection)
+    {
+        visibleHistory = npcNames.Count == 0 ? new List<NPCEmotionRecord>() :
+            sessionHistory.Where(r => string.Equals(NpcName(r), npcNames[selection],
+                StringComparison.OrdinalIgnoreCase)).ToList();
+        timelineTitle.text = "Emotion Timeline (NPC)";
+        distributionTitle.text = "Emotion Distribution (NPC)";
+        behaviourTitle.text = "Session Behaviour";
+        UpdateFinalEmotion(visibleHistory.LastOrDefault());
+        UpdateDistribution(visibleHistory, visibleHistory.Count);
+        int pages = (visibleHistory.Count + PageSize - 1) / PageSize;
+        timelinePage.ClearOptions();
+        timelinePage.AddOptions(Enumerable.Range(1, pages).Select(i => $"Page {i} / {pages}").ToList());
+        timelinePage.SetValueWithoutNotify(0);
+        timelinePage.gameObject.SetActive(pages > 1);
+        ShowPage(0);
+    }
+
+    private void ShowPage(int page)
+    {
+        UpdateTimeline(visibleHistory.Skip(page * PageSize).Take(PageSize).ToList());
     }
 
     private void UpdateFinalEmotion(NPCEmotionRecord record)
@@ -183,7 +277,7 @@ public class EmotionDashboardUIController : MonoBehaviour
                 finalEmotionLabel.text = "NO DATA";
 
             if (intensityText != null)
-                intensityText.text = "Intensity --";
+                intensityText.text = "Intensity: --";
 
             if (finalEmotionIcon != null)
             {
@@ -191,7 +285,7 @@ public class EmotionDashboardUIController : MonoBehaviour
                 finalEmotionIcon.enabled = false;
             }
 
-            UpdateIntensityBars(0);
+            NPCEmotionIndicatorUI.ApplyMoodBars(intensityBars, "NEUTRAL", 0);
             return;
         }
 
@@ -203,7 +297,7 @@ public class EmotionDashboardUIController : MonoBehaviour
             finalEmotionLabel.text = emotion;
 
         if (intensityText != null)
-            intensityText.text = $"Intensity {intensity}%";
+            intensityText.text = $"Intensity: {intensity}%";
 
         EmotionDisplayBinding binding = FindBinding(emotion);
 
@@ -216,31 +310,7 @@ public class EmotionDashboardUIController : MonoBehaviour
                 finalEmotionIcon.sprite != null;
         }
 
-        UpdateIntensityBars(intensity);
-    }
-
-    private void UpdateIntensityBars(int intensity)
-    {
-        if (intensityBars == null)
-            return;
-
-        int activeCount = Mathf.CeilToInt(
-            Mathf.Clamp(intensity, 0, 100) / 20f
-        );
-
-        if (intensity <= 0)
-            activeCount = 0;
-
-        for (int i = 0; i < intensityBars.Length; i++)
-        {
-            if (intensityBars[i] == null)
-                continue;
-
-            intensityBars[i].color =
-                i < activeCount
-                    ? activeBarColor
-                    : inactiveBarColor;
-        }
+        NPCEmotionIndicatorUI.ApplyMoodBars(intensityBars, emotion, intensity);
     }
 
     private void UpdateTimeline(
@@ -254,7 +324,9 @@ public class EmotionDashboardUIController : MonoBehaviour
         for (int i = timelineItemsContainer.childCount - 1;
              i >= 0; i--)
         {
-            Destroy(timelineItemsContainer.GetChild(i).gameObject);
+            var previous = timelineItemsContainer.GetChild(i).gameObject;
+            previous.SetActive(false);
+            Destroy(previous);
         }
 
         foreach (NPCEmotionRecord record in history)

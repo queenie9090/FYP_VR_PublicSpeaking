@@ -6952,6 +6952,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7ab3f08008e2e334d9893c05e200dd5b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EmotionDashboardUIController
+  dashboardTitle: {fileID: 189041473}
+  timelineTitle: {fileID: 786937880}
+  distributionTitle: {fileID: 664868306}
+  behaviourTitle: {fileID: 331525019}
   finalEmotionIcon: {fileID: 803686841}
   finalEmotionLabel: {fileID: 631473551}
   intensityText: {fileID: 1799637959}
@@ -7006,8 +7010,6 @@ MonoBehaviour:
   voiceSummaryText: {fileID: 2081710441}
   lipSyncSummaryText: {fileID: 1896173034}
   supabaseManager: {fileID: 0}
-  activeBarColor: {r: 0.643, g: 0.549, b: 1, a: 1}
-  inactiveBarColor: {r: 0.337, g: 0.38, b: 0.494, a: 1}
 --- !u!1 &1071398744
 GameObject:
   m_ObjectHideFlags: 0

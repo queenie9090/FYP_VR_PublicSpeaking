@@ -10355,6 +10355,8 @@ MonoBehaviour:
   countdownTimerText: {fileID: 689511066}
   preSessionCountdownSeconds: 5
   emotionPanel: {fileID: 0}
+  npcEmotionPanels:
+  - {fileID: 1289260495}
   viewNPCFaceButton: {fileID: 1292598824}
   startSessionButton: {fileID: 1436914699}
   exitButton: {fileID: 1835285182}

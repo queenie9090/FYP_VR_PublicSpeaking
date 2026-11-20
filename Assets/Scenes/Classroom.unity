@@ -2447,7 +2447,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 1077789985}
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &144836517
 MonoBehaviour:
@@ -2953,6 +2953,58 @@ PrefabInstance:
     - target: {fileID: -272698260703527454, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
       propertyPath: 'm_BlendShapeWeights.Array.data[54]'
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 9051005867030159785, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -272698260703527454, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -6597378289169086553, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7634479467738841525, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8443775884153234311, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -6564648121316110832, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4019127160748264547, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3960327684871861303, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2662736185879942338, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7271197678238513495, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -426233289730682237, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6880847369931432063, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -4406410392740908068, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
       propertyPath: m_Name
@@ -28577,7 +28629,6 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 2015014621}
-  - {fileID: 144836516}
   - {fileID: 637704118}
   - {fileID: 1214369368}
   - {fileID: 750511350}
@@ -50801,9 +50852,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c0eec4bafb7421b47ad003be1deb04d0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NPCFaceZoom
+  boneFramedNpcs:
+  - {fileID: 206417140}
+  - {fileID: 683457355}
   interactionManager: {fileID: 2015014612}
   panelDistance: 1.3
-  faceDistance: 0.81
+  faceDistance: 1
+  framingHeightOffset: -0.025
   fieldOfView: 32
 --- !u!114 &1954755471
 MonoBehaviour:
@@ -56252,6 +56307,9 @@ MonoBehaviour:
   countdownTimerText: {fileID: 427021174}
   preSessionCountdownSeconds: 5
   emotionPanel: {fileID: 0}
+  npcEmotionPanels:
+  - {fileID: 2098425608}
+  - {fileID: 54153463}
   viewNPCFaceButton: {fileID: 1954755469}
   startSessionButton: {fileID: 1233286860}
   exitButton: {fileID: 1876117697}
@@ -57895,6 +57953,7 @@ RectTransform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
+  - {fileID: 144836516}
   - {fileID: 1981133501}
   - {fileID: 342354582}
   - {fileID: 1569935548}

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -9,12 +10,61 @@ public class NPCFaceZoom : MonoBehaviour
     [SerializeField] private InteractionManager interactionManager;
     [SerializeField, Min(0.3f)] private float panelDistance = 1.3f;
     [SerializeField, Min(0.1f)] private float faceDistance = 0.65f;
+    [Tooltip("Vertical offset in metres for the portrait camera and its framing centre.")]
+    [SerializeField] private float framingHeightOffset;
     [SerializeField, Range(15f, 60f)] private float fieldOfView = 32f;
+    [Tooltip("NPCs framed from their own animated eye or head bones.")]
+    [SerializeField] private List<NPCEmotionController> boneFramedNpcs = new();
+    private Transform focusHead, leftEye, rightEye;
     private GameObject panel;
     private Camera faceCamera;
     private RenderTexture feed;
     private Camera playerCamera;
     private RawImage screen;
+    private NPCEmotionController viewedNpc;
+    private readonly List<(NPCEmotionController npc, string label)> choices = new();
+    private readonly List<Button> choiceButtons = new();
+
+    private void AddChoice(NPCEmotionController npc, string label)
+    {
+        if (npc == null || npc.HeadMesh == null || choices.Exists(choice => choice.npc == npc)) return;
+        choices.Add((npc, string.IsNullOrWhiteSpace(label) ? npc.name : label));
+    }
+
+    private void CollectChoices()
+    {
+        var hall = interactionManager.GetComponent<HallNPCRealismScreen>();
+        if (hall != null)
+        {
+            AddChoice(hall.Judge, "Judge");
+            AddChoice(hall.AudienceA, "Audience A");
+            AddChoice(hall.AudienceB, "Audience B");
+        }
+        foreach (var persona in interactionManager.RoomNPCs)
+        {
+            if (persona == null) continue;
+            AddChoice(persona.GetComponentInParent<NPCEmotionController>() ??
+                persona.GetComponentInChildren<NPCEmotionController>(), persona.characterName);
+        }
+    }
+
+    private void ViewNpc(NPCEmotionController npc)
+    {
+        viewedNpc = npc;
+        focusHead = leftEye = rightEye = null;
+        if (npc != null && boneFramedNpcs.Contains(npc))
+        {
+            var rig = npc.GetComponentInParent<Animator>() ?? npc.GetComponentInChildren<Animator>();
+            if (rig != null && rig.isHuman)
+            {
+                focusHead = rig.GetBoneTransform(HumanBodyBones.Head);
+                leftEye = rig.GetBoneTransform(HumanBodyBones.LeftEye);
+                rightEye = rig.GetBoneTransform(HumanBodyBones.RightEye);
+            }
+        }
+        for (int i = 0; i < choiceButtons.Count; i++)
+            choiceButtons[i].interactable = choices[i].npc != viewedNpc;
+    }
 
     public void OpenFaceZoom()
     {
@@ -32,7 +82,12 @@ public class NPCFaceZoom : MonoBehaviour
             Debug.LogError("[NPC Face Zoom] Main camera or conversation NPC head mesh is missing.", this);
             return;
         }
-        if (panel == null) CreateViewer();
+        if (panel == null)
+        {
+            CollectChoices();
+            CreateViewer();
+        }
+        ViewNpc(interactionManager.CurrentEmotionController);
         Vector3 forward = Vector3.ProjectOnPlane(playerCamera.transform.forward, Vector3.up).normalized;
         if (forward.sqrMagnitude < 0.01f) forward = playerCamera.transform.forward;
         panel.transform.SetPositionAndRotation(
@@ -84,6 +139,30 @@ public class NPCFaceZoom : MonoBehaviour
         screen = display.gameObject.AddComponent<RawImage>();
         screen.texture = feed;
         screen.raycastTarget = false;
+        if (choices.Count > 1)
+        {
+            display.sizeDelta = new Vector2(666, 666);
+            display.anchoredPosition = Vector2.zero;
+            float width = 760f / choices.Count;
+            for (int i = 0; i < choices.Count; i++)
+            {
+                var (npc, caption) = choices[i];
+                var tab = MakeRect(caption, panel.transform, new Vector2(width - 8f, 78f),
+                    new Vector2(-380f + (i + .5f) * width, 386f));
+                var image = tab.gameObject.AddComponent<Image>();
+                image.color = new Color(.16f, .35f, .54f);
+                var select = tab.gameObject.AddComponent<Button>();
+                select.targetGraphic = image;
+                select.onClick.AddListener(() => ViewNpc(npc));
+                choiceButtons.Add(select);
+                var text = MakeRect("Label", tab, tab.sizeDelta, Vector2.zero)
+                    .gameObject.AddComponent<TextMeshProUGUI>();
+                text.text = caption;
+                text.fontSize = 32;
+                text.alignment = TextAlignmentOptions.Center;
+                text.raycastTarget = false;
+            }
+        }
         var exit = MakeRect("Exit NPC Face", panel.transform, new Vector2(520, 80), new Vector2(0, -380));
         var buttonImage = exit.gameObject.AddComponent<Image>();
         buttonImage.color = Color.white;
@@ -124,7 +203,7 @@ public class NPCFaceZoom : MonoBehaviour
 
     private void UpdateFaceCamera()
     {
-        var controller = interactionManager != null ? interactionManager.CurrentEmotionController : null;
+        var controller = viewedNpc;
         var head = controller != null ? controller.HeadMesh : null;
         if (head == null || !head.gameObject.activeInHierarchy)
         {
@@ -134,8 +213,21 @@ public class NPCFaceZoom : MonoBehaviour
         }
         screen.enabled = true;
         Vector3 target = head.bounds.center;
+        if (focusHead != null)
+            target = leftEye != null && rightEye != null
+                ? (leftEye.position + rightEye.position) * .5f - Vector3.up * .025f
+                : focusHead.position + Vector3.up * .085f;
+        target += Vector3.up * framingHeightOffset;
         Vector3 towardPlayer = Vector3.ProjectOnPlane(
             playerCamera.transform.position - target, Vector3.up).normalized;
+        if (focusHead != null)
+        {
+            // Frame this portrait from the student's front even when the player stands to one side.
+            Vector3 front = leftEye != null && rightEye != null
+                ? Vector3.Cross(rightEye.position - leftEye.position, Vector3.up)
+                : controller.transform.forward;
+            if (front.sqrMagnitude > .000001f) towardPlayer = front.normalized;
+        }
         if (towardPlayer.sqrMagnitude < 0.01f) towardPlayer = controller.transform.forward;
         faceCamera.transform.position = target + towardPlayer * faceDistance;
         faceCamera.transform.LookAt(target, Vector3.up);
