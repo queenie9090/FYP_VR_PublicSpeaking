@@ -2710,7 +2710,7 @@ PrefabInstance:
     - target: {fileID: 5161946668030584482, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: m_Controller
       value: 
-      objectReference: {fileID: 9100000, guid: 8007e40bbb8af7049940d307d3bd56bd, type: 2}
+      objectReference: {fileID: 9100000, guid: 1d22d14bc3e8d7a4185ddc80685acd41, type: 2}
     - target: {fileID: 6363568872230010451, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: eyeContactIcon
       value: 
@@ -2731,6 +2731,11 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 152829443}
   m_SourcePrefab: {fileID: 100100000, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+--- !u!95 &152829447 stripped
+Animator:
+  m_CorrespondingSourceObject: {fileID: 5161946668030584482, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+  m_PrefabInstance: {fileID: 152829440}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &152829441 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 3062439172958945798, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
@@ -17333,6 +17338,10 @@ MonoBehaviour:
   countdownTimerText: {fileID: 319905952}
   preSessionCountdownSeconds: 5
   emotionPanel: {fileID: 0}
+  npcEmotionPanels:
+  - {fileID: 1371613514}
+  - {fileID: 1823591755}
+  - {fileID: 1630951634}
   viewNPCFaceButton: {fileID: 1294220540}
   startSessionButton: {fileID: 1015937766}
   exitButton: {fileID: 2052937291}
@@ -17530,6 +17539,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 77a1d0e16cd84f529f87179392ce8bc1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HallAudienceCelebration
+  judge: {fileID: 152829447}
   audienceA: {fileID: 191303362}
   audienceB: {fileID: 1741854372}
   clapClip: {fileID: -203655887218126122, guid: cf5f4fb66d6ff254cbce6640bf5e9f48, type: 3}
@@ -20734,6 +20744,58 @@ PrefabInstance:
     - target: {fileID: -272698260703527454, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
       propertyPath: 'm_BlendShapeWeights.Array.data[54]'
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 9051005867030159785, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -272698260703527454, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -6597378289169086553, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7634479467738841525, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8443775884153234311, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -6564648121316110832, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4019127160748264547, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3960327684871861303, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2662736185879942338, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7271197678238513495, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -426233289730682237, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6880847369931432063, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -4406410392740908068, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
+      propertyPath: m_UpdateWhenOffscreen
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 1e18232ae778ad54ba0aa556d70ca151, type: 3}
       propertyPath: m_Name
@@ -28040,7 +28102,6 @@ Transform:
   m_Children:
   - {fileID: 898075102}
   - {fileID: 1358311243}
-  - {fileID: 1208120946}
   - {fileID: 955261377}
   - {fileID: 2010320342}
   - {fileID: 239500056}
@@ -28364,7 +28425,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 1189137950}
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1208120947
 MonoBehaviour:
@@ -29790,6 +29851,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c0eec4bafb7421b47ad003be1deb04d0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NPCFaceZoom
+  boneFramedNpcs:
+  - {fileID: 191303359}
+  - {fileID: 1741854369}
   interactionManager: {fileID: 898075093}
   panelDistance: 1.3
   faceDistance: 0.81
@@ -60334,6 +60398,7 @@ CanvasRenderer:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
+  - {fileID: 1208120946}
   - {fileID: 2049576471}
   - {fileID: 342354582}
   - {fileID: 1571062112}

@@ -51,6 +51,8 @@ public class InteractionManager : MonoBehaviour
     [SerializeField] private TMP_Text countdownTimerText;
     [SerializeField] private float preSessionCountdownSeconds = 5f;
     [SerializeField] private GameObject emotionPanel;
+    [Tooltip("Overhead indicators with a fixed NPC source, shown during the session.")]
+    [SerializeField] private GameObject[] npcEmotionPanels = System.Array.Empty<GameObject>();
     [SerializeField] private GameObject viewNPCFaceButton;
     [SerializeField] private Button startSessionButton;
     [SerializeField] private Button exitButton;
@@ -201,10 +203,7 @@ public class InteractionManager : MonoBehaviour
             countdownTimerPanel.SetActive(false);
         }
 
-        if (emotionPanel != null)
-        {
-            emotionPanel.SetActive(false);
-        }
+        SetEmotionPanelsVisible(false);
 
         if (viewNPCFaceButton != null)
         {
@@ -217,7 +216,6 @@ public class InteractionManager : MonoBehaviour
     {
         if (!isActiveAndEnabled || isSessionActive || isSavingSession || sessionSaveFailed) return;
         if (initiationCoroutine != null) return;
-        if (SceneManager.GetActiveScene().name == "Hall") GetComponent<HallAudienceCelebration>()?.OnSessionStarted();
         Debug.Log("[InteractionManager] OnUserConfirmedStart called");
         if (startSessionButton != null)
             startSessionButton.interactable = false;
@@ -267,12 +265,21 @@ public class InteractionManager : MonoBehaviour
         StartCommunicationSession();
     }
 
+    private void SetEmotionPanelsVisible(bool visible)
+    {
+        if (emotionPanel != null) emotionPanel.SetActive(visible);
+        foreach (var panel in npcEmotionPanels)
+            if (panel != null) panel.SetActive(visible);
+    }
+
     private void StartCommunicationSession()
     {
         UserSession.LastSessionEndedBeforeStart = false;
         UserSession.LastSessionAbortReason = "";
 
+        if (IsClassroomPair) SelectActiveNPC(roomNPCs[0]);
         isSessionActive = true;
+        if (gameObject.scene.name == "Hall") GetComponent<HallAudienceCelebration>()?.OnSessionStarted();
         sessionSaveFailed = false;
         sessionSaveOwner = null;
         conversationHistory.Clear();
@@ -298,7 +305,7 @@ public class InteractionManager : MonoBehaviour
             hintUIController.SetDialogueState(true, "Press Y/B or raise your index finger to request a dialogue hint.");
         }
 
-        if (emotionPanel != null) emotionPanel.SetActive(true);
+        SetEmotionPanelsVisible(true);
         sessionTimer.ResetTimer();
         totalFillerWordsDetected = 0;
         if (viewNPCFaceButton != null) viewNPCFaceButton.SetActive(true);
@@ -322,6 +329,7 @@ public class InteractionManager : MonoBehaviour
         activeSpeechLoopCoroutine = StartCoroutine(HandsFreeSpeechInteractionLoop());
     }
 
+    public IReadOnlyList<NPCPersona> RoomNPCs => roomNPCs;
     public NPCEmotionController CurrentEmotionController => npcEmotionController;
     public bool IsSessionActive => isSessionActive;
     public bool IsPlayerCapturing => audioRecorder != null && audioRecorder.IsCapturing;
@@ -414,6 +422,8 @@ public class InteractionManager : MonoBehaviour
             string multiNpcRoster = hallAudienceReactions ? null : BuildMultiNpcRoster();
             string prompt = PromptBuilder.BuildSystemPrompt(activeConfig, turnCounter, previousEmotion,
                 hallAudienceReactions, SafeAudienceEmotion(hallAudienceA), SafeAudienceEmotion(hallAudienceB), multiNpcRoster);
+            if (IsClassroomPair)
+                prompt += "\nEither student may speak first. Use each responding student's exact roster name once.";
             if (attempt > 0)
                 prompt += "\nReassess the emotion using the participant's actual context. Return one valid JSON response with a supported emotion.";
             StartCoroutine(openAIManager.SendChatRequest(prompt, conversationHistory, formattedTranscript,
@@ -430,6 +440,17 @@ public class InteractionManager : MonoBehaviour
                     continue;
                 }
                 break;
+            }
+            if (IsClassroomPair)
+            {
+                if (!HasValidClassroomSpeakers(candidate.npc_responses))
+                {
+                    response = null;
+                    Debug.LogWarning("[Classroom] Expected one or two distinct students from the room roster.");
+                    continue;
+                }
+                var firstSpeaker = ResolveSpeaker(candidate.npc_responses[0].speaker_name, currentActiveNPC);
+                fallbackEmotion = SafeAudienceEmotion(EmotionSource(firstSpeaker));
             }
             response = candidate;
             if (!EmotionIntensityClassifier.NeedsReassessment(candidate.rawPrimaryEmotion, fallbackEmotion, userTranscript)) break;
@@ -484,13 +505,22 @@ public class InteractionManager : MonoBehaviour
                 validatedEmotion == "HAPPY" && previousEmotion != "HAPPY";
             if (firstLine) previousEmotion = validatedEmotion;
             int emotionIntensity = EmotionIntensityClassifier.Classify(validatedEmotion, userTranscript, line.dialogue);
-            NPCEmotionSessionManager.Instance?.RecordEmotion(expectedTurnNumber, speakerName, validatedEmotion, emotionIntensity);
             if (npcEmotionController != null) npcEmotionController.SetEmotion(validatedEmotion, emotionIntensity);
+            if (IsClassroomPair)
+                RecordClassroomEmotions(expectedTurnNumber, speaker, response.npc_responses.Count == 1);
+            else if (hallScreen == null || npcEmotionController != hallScreen.Judge)
+                NPCEmotionSessionManager.Instance?.RecordEmotion(expectedTurnNumber, speakerName, validatedEmotion, emotionIntensity);
 
             if (firstLine && hallAudienceReactions)
             {
                 ApplyHallAudienceEmotion(hallAudienceA, response.audience_a_emotion, userTranscript);
                 ApplyHallAudienceEmotion(hallAudienceB, response.audience_b_emotion, userTranscript);
+                if (hallScreen != null)
+                {
+                    RecordHallEmotion(expectedTurnNumber, "Judge", hallScreen.Judge);
+                    RecordHallEmotion(expectedTurnNumber, "Audience Member A", hallAudienceA);
+                    RecordHallEmotion(expectedTurnNumber, "Audience Member B", hallAudienceB);
+                }
                 if (judgeBecameHappy) GetComponent<HallAudienceCelebration>()?.OnJudgeHappy();
             }
             bool startHint = firstLine;
@@ -659,7 +689,7 @@ public class InteractionManager : MonoBehaviour
 
         StopMetricCollection();
 
-        if (emotionPanel != null) emotionPanel.SetActive(false);
+        SetEmotionPanelsVisible(false);
         if (startConfigPanel != null) startConfigPanel.SetActive(false);
 
         // Save results only if session is active AND at least one dialogue turn occurred
@@ -724,10 +754,7 @@ public class InteractionManager : MonoBehaviour
             audioRecorder.StopRecording();
         }
 
-        if (emotionPanel != null)
-        {
-            emotionPanel.SetActive(false);
-        }
+        SetEmotionPanelsVisible(false);
 
         if (viewNPCFaceButton != null)
         {
@@ -807,6 +834,12 @@ public class InteractionManager : MonoBehaviour
             ? audience.currentEmotion.Trim().ToUpperInvariant() : "NEUTRAL";
     }
 
+    private static void RecordHallEmotion(int turn, string name, NPCEmotionController source)
+    {
+        if (source != null && source.isActiveAndEnabled)
+            NPCEmotionSessionManager.Instance?.RecordEmotion(turn, name, source.currentEmotion, source.emotionIntensity);
+    }
+
     private void ApplyHallAudienceEmotion(NPCEmotionController audience, string rawEmotion, string participantText)
     {
         if (audience == null || !audience.isActiveAndEnabled || audience == npcEmotionController)
@@ -846,6 +879,38 @@ public class InteractionManager : MonoBehaviour
         if (roomNPCs.Contains(targetNPC))
         {
             currentNPCIndex = roomNPCs.IndexOf(targetNPC);
+        }
+    }
+
+    private bool IsClassroomPair => gameObject.scene.name == "Classroom" && roomNPCs != null &&
+        roomNPCs.Count == 2 && roomNPCs[0] != null && roomNPCs[1] != null;
+
+    private bool HasValidClassroomSpeakers(List<NPCTurnLine> lines)
+    {
+        if (lines == null || lines.Count < 1 || lines.Count > 2) return false;
+        var seen = new HashSet<NPCPersona>();
+        foreach (var line in lines)
+        {
+            if (line == null) return false;
+            var fallback = lines.Count == 1 && string.IsNullOrWhiteSpace(line.speaker_name) ? currentActiveNPC : null;
+            var speaker = ResolveSpeaker(line.speaker_name, fallback);
+            if (speaker == null || !seen.Add(speaker)) return false;
+        }
+        return true;
+    }
+
+    private static NPCEmotionController EmotionSource(NPCPersona npc) =>
+        npc.GetComponentInParent<NPCEmotionController>() ?? npc.GetComponentInChildren<NPCEmotionController>();
+
+    private void RecordClassroomEmotions(int turn, NPCPersona speaker, bool includeListener)
+    {
+        foreach (var npc in roomNPCs)
+        {
+            if (npc != speaker && !includeListener) continue;
+            var source = EmotionSource(npc);
+            if (source == null) continue;
+            NPCEmotionSessionManager.Instance?.RecordEmotion(turn, npc.characterName,
+                source.currentEmotion, source.emotionIntensity, npc == speaker ? null : "Listening");
         }
     }
 

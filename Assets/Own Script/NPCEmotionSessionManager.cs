@@ -96,8 +96,11 @@ public class NPCEmotionSessionManager : MonoBehaviour
         DontDestroyOnLoad(gameObject);
     }
 
+    public string SessionSceneName { get; private set; }
+
     public void StartNewSession()
     {
+        SessionSceneName = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
         emotionHistory.Clear();
         bodyEvents.Clear();
         realismEvents.Clear();

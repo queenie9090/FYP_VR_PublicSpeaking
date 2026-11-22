@@ -52,7 +52,7 @@ public sealed class HallAudienceCelebrationInspector : Editor
         a.runtimeAnimatorController = overrideA; b.runtimeAnimatorController = overrideB;
         data.FindProperty("clapClip").objectReferenceValue = candidate;
         data.ApplyModifiedPropertiesWithoutUndo();
-        reaction.OnSessionStarted();
+        reaction.PreviewAudienceClap();
         previewEnd = EditorApplication.timeSinceStartup + candidate.length + 0.5;
         EditorApplication.update += UpdatePreview;
     }
@@ -65,7 +65,7 @@ public sealed class HallAudienceCelebrationInspector : Editor
         EditorGUILayout.HelpBox("Play Mode preview only. These buttons do not start a session, voice or recording.", MessageType.Info);
         using (new EditorGUI.DisabledScope(!Application.isPlaying || (interaction != null && interaction.IsSessionActive)))
         {
-            if (GUILayout.Button("Preview: Both Clap")) { RestorePreview(); reaction.OnSessionStarted(); }
+            if (GUILayout.Button("Preview: Judge + Both Audiences Clap")) { RestorePreview(); reaction.OnSessionStarted(); }
             if (GUILayout.Button("Preview: A Clap Only")) { RestorePreview(); reaction.PreviewSingleClap(true); }
             if (GUILayout.Button("Preview: B Clap Only")) { RestorePreview(); reaction.PreviewSingleClap(false); }
             if (GUILayout.Button("Preview: Slow Clap")) PreviewAlternative("Assets/Own Animation Clip/Sitting_SlowClap.fbx");
