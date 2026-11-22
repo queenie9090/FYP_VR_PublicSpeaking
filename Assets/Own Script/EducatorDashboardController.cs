@@ -201,20 +201,11 @@ public class EducatorDashboardController : MonoBehaviour
 
     private void OnExportCsvClicked()
     {
-        if (allCohortSessions == null || allCohortSessions.Count == 0) return;
-
-        System.Text.StringBuilder sb = new System.Text.StringBuilder();
-        sb.AppendLine("ParticipantID,Date,Scenario,DurationSeconds,OverallScore,EyeContactPct,WPM,FillerWords");
-
-        foreach (var s in allCohortSessions)
+        if (currentlyInspectedSession != null)
         {
-            var m = (s.performance_metric != null && s.performance_metric.Count > 0) ? s.performance_metric[0] : null;
-            sb.AppendLine($"\"{s.user_id}\",\"{s.start_time}\",\"{s.scenario_type}\",{s.duration_seconds:F1},{(m != null ? m.overall_score : 0)},{(m != null ? m.eye_contact_pct : 0)},{(m != null ? m.average_wpm : 0)},{(m != null ? m.filler_word_count : 0)}");
+            string path = DataExporter.ExportToCSV(currentlyInspectedSession);
+            Debug.Log($"[EducatorDashboard] CSV exported: {path}");
         }
-
-        string path = System.IO.Path.Combine(Application.persistentDataPath, $"CohortDataset_{System.DateTime.Now:yyyyMMdd}.csv");
-        System.IO.File.WriteAllText(path, sb.ToString());
-        Debug.Log($"[EducatorDashboard] CSV exported: {path}");
     }
 
     private void OnExportJsonClicked()
