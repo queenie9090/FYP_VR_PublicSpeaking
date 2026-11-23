@@ -76,7 +76,7 @@ GameObject:
   - component: {fileID: 6974977424951017973}
   - component: {fileID: 6012753965334760299}
   m_Layer: 0
-  m_Name: ProfileTxt
+  m_Name: SpeakerNameText
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

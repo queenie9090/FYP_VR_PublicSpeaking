@@ -183,7 +183,7 @@ public class DataExporter : MonoBehaviour
     private static string EscapeHtml(string text)
         => string.IsNullOrEmpty(text) ? "" : WebUtility.HtmlEncode(text);
 
-    private static string ResolveSavePath(string defaultFileName, string extension, bool promptUserForPath)
+    public static string ResolveSavePath(string defaultFileName, string extension, bool promptUserForPath = true)
     {
         if (!promptUserForPath)
             return Path.Combine(Application.persistentDataPath, defaultFileName);

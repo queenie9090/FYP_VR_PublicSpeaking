@@ -548,7 +548,11 @@ public class InteractionManager : MonoBehaviour
             yield break;
         }
 
-        SelectNextNPC();
+        if (!IsClassroomPair)
+        {
+            SelectNextNPC();
+        }
+
         uiManager.SetStatus("Recording...");
     }
 
@@ -670,12 +674,7 @@ public class InteractionManager : MonoBehaviour
             currentActiveNPC.npcAudioSource.Stop();
             Animator anim = currentActiveNPC.GetComponent<Animator>();
             if (anim != null) anim.SetBool("IsTalking", false);
-        }
-        
-        if (sessionCompletedClip != null && sfxAudioSource != null)
-        {
-            sfxAudioSource.PlayOneShot(sessionCompletedClip);
-        }
+        }       
 
         if (fallbackNpcAudioSource != null)
         {
@@ -731,6 +730,12 @@ public class InteractionManager : MonoBehaviour
     {
         isSessionActive = false;
         isSavingSession = false;
+
+        if (sessionCompletedClip != null && sfxAudioSource != null)
+        {
+            sfxAudioSource.PlayOneShot(sessionCompletedClip);
+        }
+
         if (SceneManager.GetActiveScene().name == "TutorialScene")
             NPCEmotionSessionManager.Instance?.FinishBodyEventCollection();
 

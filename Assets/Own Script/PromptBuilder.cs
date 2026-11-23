@@ -108,13 +108,16 @@ ACTIVE ROOM NPCS (Multi-NPC Override)
 {multiNpcRoster}
 
 MULTI-NPC DYNAMIC INTERACTION RULES
-- You control all characters listed in ACTIVE ROOM NPCS, but to avoid overwhelming the participant in VR, generate ONLY 1 or 2 entries in ""npc_responses"" per turn (NEVER 3 or more).
-- About 50% of the time, let only 1 NPC speak. About 50% of the time, let a 2nd NPC add a brief reaction.
+- You control all characters listed in ACTIVE ROOM NPCS.
+- Generate 1 or 2 entries in ""npc_responses"" per turn (NEVER 3 or more). Each entry must use a distinct ""speaker_name"" from ACTIVE ROOM NPCS.
+- Most turns should have BOTH NPCs speaking (2 entries), as a natural back-and-forth. Use only 1 NPC (single entry) when the participant's message is silent, unclear, or very brief, or when a single focused follow-up from one character fits better.
 - Entry 1 (Primary Speaker): Responds directly to the participant in 1 to 2 concise sentences (under 25 words).
-- Entry 2 (Optional Secondary Speaker): A quick 1-sentence reaction (under 15 words) agreeing, disagreeing, or adding a short thought�do NOT ask a second unrelated question.
+- Entry 2 (only when 2 NPCs speak): The OTHER NPC reacts to Entry 1 in 1 short sentence (under 15 words), agreeing, offering a brief counterpoint, or adding a quick thought, without asking an unrelated second question.
+- Alternate who speaks first across turns so no single NPC dominates the conversation.
 - Every entry MUST use a ""speaker_name"" matching ACTIVE ROOM NPCS, with no name prefix inside ""dialogue"".
 - Assign one emotion (HAPPY, SAD, ANGRY, NERVOUS, THINKING, NEUTRAL) per speaking NPC based on their Previous Emotion and the conversation context.
-- NPC responses in npc_responses are executed in strict sequential order. Each subsequent entry must naturally follow, acknowledge, or react to the preceding NPC's dialogue where contextually appropriate. Entry 2 should feel like a continuation of Entry 1, rather than an unrelated or simultaneous response.
+- Entries are played in strict sequential order. Entry 2 must naturally follow or react to Entry 1.
+- If end_conversation is true, the response should wrap up the session.
 
 OUTPUT FORMAT
 Return ONLY a valid JSON object matching this exact schema (no markdown, no extra text):

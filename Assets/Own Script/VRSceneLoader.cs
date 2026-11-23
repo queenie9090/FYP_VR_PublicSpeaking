@@ -54,7 +54,8 @@ public class VRSceneLoader : MonoBehaviour
         }
 
 #if UNITY_EDITOR
-        if (editorVrSimulatorMode && (targetSceneName == "TutorialScene" || targetSceneName == "Interview"))
+        // If Simulator Mode is active, bypass physical OpenXR initialization for ALL VR scenarios
+        if (editorVrSimulatorMode)
         {
             SceneManager.LoadScene(targetSceneName);
             yield break;
