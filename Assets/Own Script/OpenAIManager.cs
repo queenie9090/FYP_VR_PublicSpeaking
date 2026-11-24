@@ -145,43 +145,59 @@ public class OpenAIManager : MonoBehaviour
 
     public IEnumerator SendHintRequest(string hintPrompt, Action<string> onSuccess, Action<string> onError = null)
     {
-        var messages = new List<object>
-        {
-            new { role = "system", content = hintPrompt }
-        };
-
         var requestBody = new
         {
             model = "gpt-6-luna",
             response_format = new { type = "json_object" },
-            messages = messages
+            messages = new List<object> { new { role = "system", content = hintPrompt } }
         };
 
         string jsonPayload = Newtonsoft.Json.JsonConvert.SerializeObject(requestBody);
+        Debug.Log($"[Hint Request] payload length: {jsonPayload.Length}\n{jsonPayload}");
 
-        using (UnityWebRequest www = new UnityWebRequest(ChatUrl, "POST"))
+        const int maxAttempts = 3;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonPayload);
-            www.uploadHandler = new UploadHandlerRaw(bodyRaw);
-            www.downloadHandler = new DownloadHandlerBuffer();
-            www.SetRequestHeader("Content-Type", "application/json");
-            www.SetRequestHeader("Authorization", "Bearer " + ApiKey);
-
-            yield return www.SendWebRequest();
-
-            if (www.result == UnityWebRequest.Result.Success)
+            using (UnityWebRequest www = new UnityWebRequest(ChatUrl, "POST"))
             {
-                string rawJson = www.downloadHandler.text;
-                var chatRes = Newtonsoft.Json.JsonConvert.DeserializeObject<ChatCompletionResponse>(rawJson);
-                string contentJson = chatRes.choices[0].message.content;
-                Debug.Log("[AI Response JSON] " + contentJson); //Debug
+                www.timeout = 45;
+                www.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(jsonPayload));
+                www.downloadHandler = new DownloadHandlerBuffer();
+                www.SetRequestHeader("Content-Type", "application/json");
+                www.SetRequestHeader("Authorization", "Bearer " + ApiKey);
 
-                HintResponse res = Newtonsoft.Json.JsonConvert.DeserializeObject<HintResponse>(contentJson);
-                onSuccess?.Invoke(res.hint);
-            }
-            else
-            {
-                onError?.Invoke(www.error);
+                yield return www.SendWebRequest();
+
+                if (www.result == UnityWebRequest.Result.Success)
+                {
+                    string hint = null;
+                    string parseError = null;
+                    try
+                    {
+                        var chatRes = Newtonsoft.Json.JsonConvert.DeserializeObject<ChatCompletionResponse>(www.downloadHandler.text);
+                        var res = Newtonsoft.Json.JsonConvert.DeserializeObject<HintResponse>(chatRes.choices[0].message.content);
+                        hint = res?.hint;
+                    }
+                    catch (Exception e) { parseError = "Hint parse failed: " + e.Message; }
+
+                    if (parseError != null) onError?.Invoke(parseError);
+                    else onSuccess?.Invoke(hint);
+                    yield break;
+                }
+
+                long code = www.responseCode;
+                string body = www.downloadHandler?.text;
+                Debug.LogError($"[Hint HTTP {code}] attempt {attempt}/{maxAttempts} | {www.error} | body: {body} | request-id: {www.GetResponseHeader("x-request-id")}");
+
+                bool retryable = code >= 500 || code == 429;
+                if (retryable && attempt < maxAttempts)
+                {
+                    yield return new WaitForSeconds(1.5f * attempt);
+                    continue;
+                }
+
+                onError?.Invoke($"{www.error} | {body}");
+                yield break;
             }
         }
     }

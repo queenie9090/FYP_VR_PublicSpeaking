@@ -5369,7 +5369,7 @@ Transform:
   m_GameObject: {fileID: 387551057}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.449, y: 0.092, z: 2.996}
+  m_LocalPosition: {x: 0.449, y: 0.2, z: 2.996}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -16786,6 +16786,17 @@ Transform:
   m_Children: []
   m_Father: {fileID: 605775821}
   m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
+--- !u!114 &986722495 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6468442521412095314, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 459990352}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 459990363}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 82bc72d2ecc8add47b2fe00d40318500, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1007682929
 GameObject:
   m_ObjectHideFlags: 0
@@ -21402,7 +21413,7 @@ AudioSource:
   m_GameObject: {fileID: 1239742811}
   m_Enabled: 1
   serializedVersion: 4
-  OutputAudioMixerGroup: {fileID: 0}
+  OutputAudioMixerGroup: {fileID: -2001876578388498249, guid: 2255f0e67069a364a86a1eea828018ae, type: 2}
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 0}
   m_PlayOnAwake: 1
@@ -21414,10 +21425,10 @@ AudioSource:
   SpatializePostEffects: 0
   Priority: 128
   DopplerLevel: 1
-  MinDistance: 1
-  MaxDistance: 500
+  MinDistance: 20
+  MaxDistance: 30
   Pan2D: 0
-  rolloffMode: 0
+  rolloffMode: 1
   BypassEffects: 0
   BypassListenerEffects: 0
   BypassReverbZones: 0
@@ -21450,7 +21461,7 @@ AudioSource:
     m_Curve:
     - serializedVersion: 3
       time: 0
-      value: 0
+      value: 1
       inSlope: 0
       outSlope: 0
       tangentMode: 0
@@ -24164,6 +24175,7 @@ MonoBehaviour:
   xrOrigin: {fileID: 459990362}
   standingCameraYOffset: 1.36
   seatedYOffset: 0.25
+  inputModalityManager: {fileID: 986722495}
   leftControllerObject: {fileID: 459990373}
   rightControllerObject: {fileID: 459990371}
   leftHandTrackingObject: {fileID: 459990376}

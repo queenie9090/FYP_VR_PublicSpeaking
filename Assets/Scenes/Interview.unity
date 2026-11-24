@@ -3293,6 +3293,10 @@ PrefabInstance:
       propertyPath: m_Layer
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 596642119737022924, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: OutputAudioMixerGroup
+      value: 
+      objectReference: {fileID: -2001876578388498249, guid: 2255f0e67069a364a86a1eea828018ae, type: 2}
     - target: {fileID: 647621704293205819, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: m_Layer
       value: 0
@@ -6619,6 +6623,7 @@ MonoBehaviour:
   xrOrigin: {fileID: 151186622}
   standingCameraYOffset: 1.36
   seatedYOffset: 0.25
+  inputModalityManager: {fileID: 1422639942}
   leftControllerObject: {fileID: 151186621}
   rightControllerObject: {fileID: 151186620}
   leftHandTrackingObject: {fileID: 151186619}
@@ -16588,6 +16593,17 @@ Canvas:
   m_SortingLayerID: 0
   m_SortingOrder: 0
   m_TargetDisplay: 0
+--- !u!114 &1422639942 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6468442521412095314, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 151186601}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 151186617}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 82bc72d2ecc8add47b2fe00d40318500, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1426566442
 GameObject:
   m_ObjectHideFlags: 0

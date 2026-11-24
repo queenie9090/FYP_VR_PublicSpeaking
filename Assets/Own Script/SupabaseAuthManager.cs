@@ -58,6 +58,53 @@ public class SupabaseAuthManager : MonoBehaviour
         }
         Instance = this;
         DontDestroyOnLoad(gameObject);
+
+        SetupInputFieldEnterListeners();
+    }
+
+    private void OnDestroy()
+    {
+        if (loginEmailInput != null) loginEmailInput.onSubmit.RemoveAllListeners();
+        if (loginPasswordInput != null) loginPasswordInput.onSubmit.RemoveAllListeners();
+        if (signUpEmailInput != null) signUpEmailInput.onSubmit.RemoveAllListeners();
+        if (signUpPasswordInput != null) signUpPasswordInput.onSubmit.RemoveAllListeners();
+    }
+
+    private void SetupInputFieldEnterListeners()
+    {
+        // Login panel: pressing Enter in email moves to password (or logs in if password isn't empty); pressing Enter in password logs in
+        if (loginEmailInput != null)
+        {
+            loginEmailInput.onSubmit.AddListener(_ =>
+            {
+                if (loginPasswordInput != null && string.IsNullOrEmpty(loginPasswordInput.text))
+                    loginPasswordInput.ActivateInputField();
+                else
+                    Login();
+            });
+        }
+
+        if (loginPasswordInput != null)
+        {
+            loginPasswordInput.onSubmit.AddListener(_ => Login());
+        }
+
+        // Sign Up panel: pressing Enter in email moves to password (or signs up if password isn't empty); pressing Enter in password signs up
+        if (signUpEmailInput != null)
+        {
+            signUpEmailInput.onSubmit.AddListener(_ =>
+            {
+                if (signUpPasswordInput != null && string.IsNullOrEmpty(signUpPasswordInput.text))
+                    signUpPasswordInput.ActivateInputField();
+                else
+                    SignUp();
+            });
+        }
+
+        if (signUpPasswordInput != null)
+        {
+            signUpPasswordInput.onSubmit.AddListener(_ => SignUp());
+        }
     }
 
     private async void Start()
