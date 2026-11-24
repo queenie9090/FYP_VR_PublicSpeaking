@@ -13,6 +13,7 @@ public class AudioAndVoiceSettingsManager : MonoBehaviour
     [SerializeField] private Slider masterVolumeSlider;
     [SerializeField] private Slider sfxVolumeSlider;
     [SerializeField] private Slider bgmVolumeSlider;
+    [SerializeField] private Slider npcVoiceVolumeSlider;
     [SerializeField] private TMP_Dropdown microphoneDropdown;
 
     [Header("Live Mic Visualizer")]
@@ -24,6 +25,7 @@ public class AudioAndVoiceSettingsManager : MonoBehaviour
     private const string KEY_MASTER_VOL = "Settings_MasterVol";
     private const string KEY_SFX_VOL = "Settings_SfxVol";
     private const string KEY_BGM_VOL = "Settings_BgmVol";
+    private const string KEY_NPC_VOL = "Settings_NpcVoiceVol";
     private const string KEY_MIC_NAME = "Settings_SelectedMic";
     private const string KEY_MIC_SENS = "Settings_MicSensitivity";
 
@@ -161,6 +163,13 @@ public class AudioAndVoiceSettingsManager : MonoBehaviour
         liveInputMeterFill.fillAmount = Mathf.Lerp(liveInputMeterFill.fillAmount, targetFill, Time.deltaTime * 15f);
     }
 
+    private void SetNpcVoiceVolume(float value)
+    {
+        PlayerPrefs.SetFloat(KEY_NPC_VOL, value);
+        if (mainAudioMixer != null)
+            mainAudioMixer.SetFloat("NpcVoiceVol", Mathf.Log10(Mathf.Max(0.0001f, value)) * 20);
+    }
+
     private void RegisterListeners()
     {
         if (masterVolumeSlider != null)
@@ -171,6 +180,10 @@ public class AudioAndVoiceSettingsManager : MonoBehaviour
 
         if (bgmVolumeSlider != null)
             bgmVolumeSlider.onValueChanged.AddListener(SetBgmVolume);
+
+        // Inside RegisterListeners():
+        if (npcVoiceVolumeSlider != null)
+            npcVoiceVolumeSlider.onValueChanged.AddListener(SetNpcVoiceVolume);
 
         if (microphoneDropdown != null)
             microphoneDropdown.onValueChanged.AddListener((index) =>
@@ -222,7 +235,10 @@ public class AudioAndVoiceSettingsManager : MonoBehaviour
         float sfx = PlayerPrefs.GetFloat(KEY_SFX_VOL, 0.8f);
         float bgm = PlayerPrefs.GetFloat(KEY_BGM_VOL, 0.8f);
         float sens = PlayerPrefs.GetFloat(KEY_MIC_SENS, 1.0f);
-
+        float npcVoice = PlayerPrefs.GetFloat(KEY_NPC_VOL, 0.8f);
+        
+        if (npcVoiceVolumeSlider != null) npcVoiceVolumeSlider.value = npcVoice;
+        SetNpcVoiceVolume(npcVoice);
         if (masterVolumeSlider != null) masterVolumeSlider.value = master;
         if (sfxVolumeSlider != null) sfxVolumeSlider.value = sfx;
         if (bgmVolumeSlider != null) bgmVolumeSlider.value = bgm;

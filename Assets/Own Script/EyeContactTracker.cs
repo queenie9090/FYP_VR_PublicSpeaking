@@ -23,7 +23,7 @@ public class EyeContactTracker : MonoBehaviour
     private int totalSamples = 0;
     private int hitSamples = 0;
     private bool isTracking = false;
-    private Coroutine trackingCoroutine;
+    private Coroutine trackingCoroutine;    
 
     private readonly List<NPCPersona> targetNPCs = new List<NPCPersona>();
 
@@ -98,7 +98,7 @@ public class EyeContactTracker : MonoBehaviour
 
                 if (Physics.Raycast(gazeRay, out RaycastHit hitInfo, maxDistance))
                 {
-                    Debug.Log($"[GazeDebug] targetCount={targetNPCs.Count} | hit={hitInfo.collider.name} | dist={hitInfo.distance:F2}m");
+                    //Debug.Log($"[GazeDebug] targetCount={targetNPCs.Count} | hit={hitInfo.collider.name} | dist={hitInfo.distance:F2}m");
                     if (targetNPCs.Count > 0)
                     {
                         foreach (var npc in targetNPCs)

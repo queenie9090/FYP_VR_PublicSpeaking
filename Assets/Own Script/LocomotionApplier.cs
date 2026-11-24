@@ -2,6 +2,7 @@ using UnityEngine;
 using Unity.XR.CoreUtils;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
+using UnityEngine.XR.Interaction.Toolkit.Inputs;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Samples.StarterAssets;
 
@@ -27,6 +28,9 @@ public class LocomotionApplier : MonoBehaviour
     [SerializeField] private float seatedYOffset = 0.25f; // Extra height boost when seated
 
     [Header("Input Mode Interactor Hierarchy (Controllers vs. Hands)")]
+    [Tooltip("Auto-found on XR Origin if left empty. Disabled during Hand Tracking so active controllers don't override hands.")]
+    [SerializeField] private XRInputModalityManager inputModalityManager;
+
     [Tooltip("Assign the Left & Right Controller GameObjects under XR Origin")]
     [SerializeField] private GameObject leftControllerObject;
     [SerializeField] private GameObject rightControllerObject;
@@ -40,6 +44,9 @@ public class LocomotionApplier : MonoBehaviour
 
     private void Awake()
     {
+        if (inputModalityManager == null)
+            inputModalityManager = FindObjectOfType<XRInputModalityManager>(true);
+
         FindMissingControllerManagers();
         var steering = GetComponent<HandSteering>() ?? gameObject.AddComponent<HandSteering>();
         steering.Initialize(xrOrigin, leftHandTrackingObject, rightHandTrackingObject, handSteering);
@@ -126,16 +133,36 @@ public class LocomotionApplier : MonoBehaviour
         b.enabled = on;
     }
 
+    private void LateUpdate()
+    {
+        // Guard against XRInputModalityManager or external scripts re-enabling controllers while Hand Tracking is selected
+        if (IsHandTrackingSelected())
+        {
+            if (leftControllerObject != null && leftControllerObject.activeSelf) leftControllerObject.SetActive(false);
+            if (rightControllerObject != null && rightControllerObject.activeSelf) rightControllerObject.SetActive(false);
+            if (leftHandTrackingObject != null && !leftHandTrackingObject.activeSelf) leftHandTrackingObject.SetActive(true);
+            if (rightHandTrackingObject != null && !rightHandTrackingObject.activeSelf) rightHandTrackingObject.SetActive(true);
+        }
+    }
+
+    private bool IsHandTrackingSelected()
+    {
+        string currentMode = UserSession.InputMode;
+        return !string.IsNullOrEmpty(currentMode) &&
+               (currentMode.Contains("Hand") || currentMode.Contains("Hands"));
+    }
+
     /// <summary>
     /// Reads UserSession.InputMode and enables Controllers or Hand Tracking interactors accordingly.
     /// </summary>
     public void ApplyInputModePreference()
     {
-        string currentMode = UserSession.InputMode;
-        bool isHandTracking = !string.IsNullOrEmpty(currentMode) &&
-                              (currentMode.Contains("Hand") || currentMode.Contains("Hands"));
+        bool isHandTracking = IsHandTrackingSelected(); 
 
         Debug.Log($"[LocomotionApplier] Setting 3D Interactors to: {(isHandTracking ? "Hand Tracking" : "Controllers")}");
+
+        if (inputModalityManager != null)
+            inputModalityManager.enabled = !isHandTracking;
 
         // Toggle Controller GameObjects
         if (leftControllerObject != null) leftControllerObject.SetActive(!isHandTracking);
