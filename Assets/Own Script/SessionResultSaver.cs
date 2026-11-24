@@ -188,11 +188,30 @@ public class SessionResultSaver : MonoBehaviour
         string summaryText = $"Gestures: {totalExpressiveGestures} Hits ({gpm:F1} GPM) | Inappropriate: {unprofessionalCount}";
         Debug.Log($"[SessionResultSaver] Gesture Summary: {summaryText}");
 
-        string summaryPrompt = $"You are an expert VR speech coach. Respond ONLY with a valid JSON object using this exact schema: {{\"npc_response\": \"<your 2-3 sentence constructive feedback summary here>\", \"emotion\": \"NEUTRAL\"}}. " +
-                               $"Provide a concise 2-3 sentence constructive feedback summary with actionable suggestions for improvement based on this participant's performance in a '{currentScenario}' simulation: " +
-                               $"Overall Score: {overallScore:F0}%, Speech Clarity: {clarityScore:F0}%, Speaking Rate: {overallWpm:F0} WPM, " +
-                               $"Filler Words Used: {totalFillerWordsDetected}, Eye Contact: {eyeContactPct:F0}%, Expressive Gestures: {totalExpressiveGestures} ({gpm:F1} GPM), " +
-                               $"Hints Requested: {totalHintsUsed}, Unprofessional Gestures Flagged: {unprofessionalCount}.";
+        string topicContext = (activeConfig != null && !string.IsNullOrWhiteSpace(activeConfig.topic))
+            ? activeConfig.topic
+            : "General";
+
+        var transcriptLines = new List<string>();
+        foreach (var turn in conversationHistory)
+        {
+            if (turn == null || string.IsNullOrWhiteSpace(turn.dialogue)) continue;
+            transcriptLines.Add($"{turn.speaker}: {turn.dialogue}");
+        }
+        string fullTranscript = transcriptLines.Count > 0
+            ? string.Join("\n", transcriptLines)
+            : "(No dialogue recorded)";
+
+        string summaryPrompt = 
+            $"You are an expert VR speech and communication coach. Respond ONLY with a valid JSON object using this exact schema: " +
+            $"{{\"npc_response\": \"<your 3-4 sentence constructive feedback summary here>\", \"emotion\": \"NEUTRAL\"}}. " +
+            $"Evaluate BOTH the participant's delivery metrics AND the actual content/tone of their dialogue in a '{currentScenario}' simulation (Topic: '{topicContext}'). " +
+            $"Metrics -> Overall Score: {overallScore:F0}%, Speech Clarity: {clarityScore:F0}%, Speaking Rate: {overallWpm:F0} WPM, " +
+            $"Filler Words Used: {totalFillerWordsDetected}, Eye Contact: {eyeContactPct:F0}%, Expressive Gestures: {totalExpressiveGestures} ({gpm:F1} GPM), " +
+            $"Hints Requested: {totalHintsUsed}, Unprofessional Gestures Flagged: {unprofessionalCount}. " +
+            $"CRITICAL CONTENT CHECK: Read the dialogue transcript carefully. If the participant used profanity, swearing, abusive language, disrespectful tone, or went completely off-topic, " +
+            $"explicitly call out that unprofessional language/behavior in your summary and explain how it negatively impacts real-world communication, even if their WPM or eye contact scores were high. " +
+            $"Provide a concise 2-3 sentence summary with actionable improvement advice.";
 
         // Default summary is used if OpenAI is missing, fails, or times out
         string aiSummary = $"Your overall performance scored {overallScore:F0}%.";
@@ -200,10 +219,10 @@ public class SessionResultSaver : MonoBehaviour
         if (openAIManager != null)
         {
             bool aiSummaryDone = false;
-
             NPCEmotionSessionManager.EnsureInstance().StartCoroutine(openAIManager.SendChatRequest(
-                summaryPrompt, conversationHistory, "Generate Summary",
-                res =>
+                 summaryPrompt, null, $"Full Session Transcript:\n{fullTranscript}\n\nGenerate the 2-3 sentence evaluation summary.",
+
+                 res =>
                 {
                     if (res != null && !string.IsNullOrEmpty(res.npc_response))
                         aiSummary = res.npc_response;
