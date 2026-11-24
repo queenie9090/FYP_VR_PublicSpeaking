@@ -22202,6 +22202,7 @@ MonoBehaviour:
   xrOrigin: {fileID: 1795247226}
   standingCameraYOffset: 1.36
   seatedYOffset: 0.25
+  inputModalityManager: {fileID: 1435783553}
   leftControllerObject: {fileID: 1795247230}
   rightControllerObject: {fileID: 1795247229}
   leftHandTrackingObject: {fileID: 1795247228}
@@ -23638,6 +23639,10 @@ PrefabInstance:
       propertyPath: m_Layer
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 596642119737022924, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: OutputAudioMixerGroup
+      value: 
+      objectReference: {fileID: -2001876578388498249, guid: 2255f0e67069a364a86a1eea828018ae, type: 2}
     - target: {fileID: 647621704293205819, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: m_Layer
       value: 0
@@ -31164,7 +31169,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6598815579406187037, guid: 18ddb545287c546e19cc77dc9fbb2189, type: 3}
       propertyPath: m_IsActive
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -33504,6 +33509,17 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1432210816}
   m_CullTransparentMesh: 1
+--- !u!114 &1435783553 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6468442521412095314, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 1795247225}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 666338219}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 82bc72d2ecc8add47b2fe00d40318500, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1441184511
 GameObject:
   m_ObjectHideFlags: 0
