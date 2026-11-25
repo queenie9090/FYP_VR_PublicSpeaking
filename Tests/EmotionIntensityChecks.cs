@@ -23,6 +23,25 @@ class EmotionIntensityChecks
         Check(EmotionIntensityClassifier.Classify("angry", null, "furious") ==
             EmotionIntensityClassifier.Classify("ANGRY", null, "furious"), "case insensitive");
         Check(EmotionIntensityClassifier.Classify("INVALID", "", "") == 0, "unsupported label");
+        Check(EmotionIntensityClassifier.Classify("ANGRY", "You are incompetent.", "That was disrespectful.", true) == 83, "Businessman personal insult and boundary");
+        Check(EmotionIntensityClassifier.Classify("ANGRY", "You are incompetent.", "I am furious.", true) == 100, "Businessman justified maximum");
+        Check(EmotionIntensityClassifier.Classify("SAD", "My father died.", "That is painful.", true) == 83, "Businessman loss and sympathetic response");
+        Check(EmotionIntensityClassifier.Classify("ANGRY", "This tool is useless.", "I disagree.", true) == 20, "ordinary disagreement");
+        Check(EmotionIntensityClassifier.Classify("ANGRY", "You are not incompetent.", "It wasn't disrespectful.", true) == 20, "negated cues");
+        Check(EmotionIntensityClassifier.Classify("ANGRY", "You are incompetent.", "That was disrespectful.") == 20, "other NPCs retain original scoring");
+        foreach (var sample in new[] {
+            ("HAPPY", "We succeeded.", "I am impressed.", "I am thrilled."),
+            ("NERVOUS", "The deadline is tomorrow.", "I feel apprehensive.", "I am panicking."),
+            ("THINKING", "Compare the alternatives.", "I am weighing the options.", "I am pondering the options.")
+        })
+        {
+            var (label, context, reply, strongReply) = sample;
+            Check(EmotionIntensityClassifier.Classify(label, context, reply, true) == 83, label + " contextual Businessman reaction");
+            Check(EmotionIntensityClassifier.Classify(label, context, strongReply, true) == 100, label + " strong Businessman reaction");
+            Check(EmotionIntensityClassifier.Classify(label, context, reply) == 20, label + " default profile");
+            Check(EmotionIntensityClassifier.Classify(label, "", "", true) == 20, label + " no evidence");
+        }
+        Check(EmotionIntensityClassifier.Classify("NEUTRAL", "urgent", "thrilled", true) == 0, "sensitive neutral stays zero");
         Check(!EmotionIntensityClassifier.HasConversationTrigger(null), "no trigger on silence");
         Check(!EmotionIntensityClassifier.HasConversationTrigger("um... uh"), "filler is not context");
         Check(EmotionIntensityClassifier.HasConversationTrigger("yes"), "short response is context");

@@ -334,6 +334,7 @@ public class InteractionManager : MonoBehaviour
     public bool IsSessionActive => isSessionActive;
     public bool IsPlayerCapturing => audioRecorder != null && audioRecorder.IsCapturing;
     public bool IsNpcSpeechPlaying(NPCEmotionController source) => speechController != null && speechController.IsPlayingSpeechFor(source);
+    public bool IsAnyNpcSpeechPlaying => speechController != null && speechController.IsSpeechPlaying;
 
     private IEnumerator TrackSessionTimerRoutine()
     {
@@ -422,6 +423,8 @@ public class InteractionManager : MonoBehaviour
             string multiNpcRoster = hallAudienceReactions ? null : BuildMultiNpcRoster();
             string prompt = PromptBuilder.BuildSystemPrompt(activeConfig, turnCounter, previousEmotion,
                 hallAudienceReactions, SafeAudienceEmotion(hallAudienceA), SafeAudienceEmotion(hallAudienceB), multiNpcRoster);
+            if (npcEmotionController != null && npcEmotionController.SensitiveEmotionReactions && multiNpcRoster == null)
+                prompt += "\nA professional can show happiness at a success, sadness at a loss, anger at a personal insult, nervousness under pressure, or thoughtfulness when weighing alternatives, even while speaking calmly. Respond naturally to the context; routine disagreement alone is insufficient.";
             if (IsClassroomPair)
                 prompt += "\nEither student may speak first. Use each responding student's exact roster name once.";
             if (attempt > 0)
@@ -504,7 +507,8 @@ public class InteractionManager : MonoBehaviour
             bool judgeBecameHappy = firstLine && hallScreen != null && npcEmotionController == hallScreen.Judge &&
                 validatedEmotion == "HAPPY" && previousEmotion != "HAPPY";
             if (firstLine) previousEmotion = validatedEmotion;
-            int emotionIntensity = EmotionIntensityClassifier.Classify(validatedEmotion, userTranscript, line.dialogue);
+            int emotionIntensity = EmotionIntensityClassifier.Classify(validatedEmotion, userTranscript, line.dialogue,
+                npcEmotionController != null && npcEmotionController.SensitiveEmotionReactions);
             if (npcEmotionController != null) npcEmotionController.SetEmotion(validatedEmotion, emotionIntensity);
             if (IsClassroomPair)
                 RecordClassroomEmotions(expectedTurnNumber, speaker, response.npc_responses.Count == 1);

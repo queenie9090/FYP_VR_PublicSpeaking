@@ -21,6 +21,22 @@ public static class EmotionIntensityClassifier
         { "NERVOUS", new[] { "nervous", "worried", "anxious", "uneasy" } },
         { "THINKING", new[] { "thinking", "considering", "wondering", "unsure" } }
     };
+    private static readonly string[] BoundaryCues = { "unacceptable", "insulting", "offensive", "disrespectful", "hostile" };
+    private static readonly string[] LossCues = { "hurt", "painful", "saddened", "upsetting" };
+    private static readonly string[] HostilityCues = { "pathetic", "worthless", "idiot", "useless", "incompetent" };
+    private static readonly string[] BereavementCues = { "died", "bereavement", "funeral", "grief" };
+    // Dialogue and participant cues are separate so a topic alone cannot supply both weights.
+    private static readonly Dictionary<string, (string[] reply, string[] context)> SensitiveCues = new()
+    {
+        { "SAD", (LossCues, BereavementCues) },
+        { "ANGRY", (BoundaryCues, HostilityCues) },
+        { "HAPPY", (new[] { "impressed", "proud", "excellent", "fantastic" },
+                    new[] { "succeeded", "promoted", "congratulations", "achieved" }) },
+        { "NERVOUS", (new[] { "apprehensive", "unsettled", "tense", "overwhelmed" },
+                      new[] { "deadline", "urgent", "unprepared", "risk" }) },
+        { "THINKING", (new[] { "weighing", "comparing", "evaluating", "examining" },
+                       new[] { "tradeoff", "alternatives", "tradeoffs", "dilemma", "compare" }) }
+    };
     private static readonly string[] Amplifiers = { "very", "extremely", "deeply", "really", "incredibly" };
     private static readonly string[] Softeners = { "slightly", "somewhat", "little", "mildly", "bit" };
     private static readonly string[] Negations = { "not", "never", "no", "neither", "hardly", "isn't", "wasn't", "don't", "didn't", "cannot", "can't" };
@@ -57,14 +73,15 @@ public static class EmotionIntensityClassifier
         return current != previous && !HasConversationTrigger(participantText);
     }
 
-    public static int Classify(string emotion, string participantText, string npcText)
+    public static int Classify(string emotion, string participantText, string npcText, bool sensitive = false)
     {
         string label = (emotion ?? "").Trim().ToUpperInvariant();
         if (label == "NEUTRAL" || !StrongCues.ContainsKey(label)) return 0;
-        int npcStrength = ScoreText(label, npcText);
-        int participantStrength = ScoreText(label, participantText);
+        var (replyCues, contextCues) = sensitive ? SensitiveCues[label] : default;
+        int npcStrength = ScoreText(label, npcText, replyCues, sensitive);
+        int participantStrength = ScoreText(label, participantText, contextCues, sensitive);
         // The NPC's own expression carries more weight than the participant's context.
-        int score = 20 + npcStrength + participantStrength / 2;
+        int score = 20 + npcStrength + (sensitive ? participantStrength * 3 / 4 : participantStrength / 2);
         return Math.Max(1, Math.Min(100, score));
     }
 
@@ -80,7 +97,7 @@ public static class EmotionIntensityClassifier
         return true;
     }
 
-    private static int ScoreText(string label, string input)
+    private static int ScoreText(string label, string input, string[] extraCues, bool sensitive)
     {
         string text = Quoted.Replace((input ?? "").ToLowerInvariant().Replace('’', '\''), " ");
         var matches = Words.Matches(text);
@@ -91,7 +108,17 @@ public static class EmotionIntensityClassifier
         {
             bool strong = Array.IndexOf(StrongCues[label], tokens[i]) >= 0;
             bool mild = Array.IndexOf(MildCues[label], tokens[i]) >= 0;
-            if (!strong && !mild) continue;
+            bool contextual = extraCues != null && Array.IndexOf(extraCues, tokens[i]) >= 0;
+            if (contextual && extraCues == HostilityCues)
+            {
+                // Only count a personal insult addressed to the listener.
+                int j = i - 1;
+                while (j >= 0 && (tokens[j] == "a" || tokens[j] == "an" || tokens[j] == "so" ||
+                    Array.IndexOf(Amplifiers, tokens[j]) >= 0)) j--;
+                contextual = j >= 0 && (tokens[j] == "you're" || tokens[j] == "you" ||
+                    (tokens[j] == "are" && j > 0 && tokens[j - 1] == "you"));
+            }
+            if (!strong && !mild && !contextual) continue;
             bool negated = false;
             bool otherSubject = false;
             int modifier = 0;
@@ -106,7 +133,7 @@ public static class EmotionIntensityClassifier
                 if (Array.IndexOf(Softeners, word) >= 0) modifier -= 8;
             }
             if (negated || otherSubject) continue;
-            int value = (strong ? 40 : 18) + modifier;
+            int value = (strong ? (sensitive ? 55 : 40) : contextual ? 36 : sensitive ? 28 : 18) + modifier;
             if (i + 1 < tokens.Count && tokens[i + 1] == "!") value += 3;
             best = Math.Max(best, value);
         }

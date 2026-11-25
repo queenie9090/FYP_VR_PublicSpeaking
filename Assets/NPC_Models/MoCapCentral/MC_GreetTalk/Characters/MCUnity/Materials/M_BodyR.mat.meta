@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: e9d5b8a5b05ce3b438fd4730b33b1bbf
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 288923
+  packageName: MC Greet & Talk - Believable 3D Animations by MoCap Central
+  packageVersion: 1.0.0
+  assetPath: Assets/MoCapCentral/MC_GreetTalk/Characters/MCUnity/Materials/M_BodyR.mat
+  uploadId: 673901

@@ -2,7 +2,7 @@ using System.Collections;
 using UnityEngine;
 
 // Hall-only event reactions. All three animators keep their existing seated base layer.
-public sealed class HallAudienceCelebration : MonoBehaviour
+public sealed partial class HallAudienceCelebration : MonoBehaviour
 {
     [SerializeField] private Animator judge, audienceA, audienceB;
     [SerializeField] private AnimationClip clapClip, cheerClip;
@@ -14,6 +14,8 @@ public sealed class HallAudienceCelebration : MonoBehaviour
     private Coroutine activeJudge, activeA, activeB;
     private Coroutine soundRoutine;
     private AudioSource applauseSource, cheerSource;
+    public bool IsCelebrationAudible => (applauseSource && applauseSource.isPlaying && applauseSource.volume > 0f)
+        || (cheerSource && cheerSource.isPlaying && cheerSource.volume > 0f);
     [System.Serializable]
     private class ClapPose
     {
@@ -29,6 +31,7 @@ public sealed class HallAudienceCelebration : MonoBehaviour
 
     private void LateUpdate()
     {
+        UpdateAudiencePoses();
         if (clapJudge) ApplyClap(judge, poseJudge);
         if (clapA) ApplyClap(audienceA, poseA);
         if (clapB) ApplyClap(audienceB, poseB);
@@ -79,6 +82,12 @@ public sealed class HallAudienceCelebration : MonoBehaviour
         Quaternion turn = desiredFrame * Quaternion.Euler(trim) * Quaternion.Inverse(Quaternion.LookRotation(knuckles, normal));
         Quaternion wristRotation = Quaternion.Slerp(hand.rotation, turn * hand.rotation, weight);
         Vector3 wrist = Vector3.Lerp(hand.position, palmTarget - turn * (0.65f * knuckles), weight);
+        PoseWrist(upper, elbow, hand, wrist, wristRotation, body, left);
+    }
+
+    internal static void PoseWrist(Transform upper, Transform elbow, Transform hand, Vector3 wrist,
+        Quaternion wristRotation, Transform body, bool left)
+    {
         Vector3 axis = (wrist - upper.position).normalized;
         float a = Vector3.Distance(upper.position, elbow.position), b = Vector3.Distance(elbow.position, hand.position);
         if (a < 0.001f || b < 0.001f || axis.sqrMagnitude < 0.5f) return;
@@ -122,7 +131,7 @@ public sealed class HallAudienceCelebration : MonoBehaviour
         StopSounds();
         ResetLayer(judge); ResetLayer(audienceA); ResetLayer(audienceB);
     }
-    private void OnDisable() { StopReactions(); }
+    private void OnDisable() { RestoreAudiencePoses(); StopReactions(); }
     private void PlayCelebration(bool includeJudge, bool cheerForB)
     {
         if (!isActiveAndEnabled) return;
@@ -192,7 +201,7 @@ public sealed class HallAudienceCelebration : MonoBehaviour
         if (applauseSource != null) applauseSource.Stop();
         if (cheerSource != null) cheerSource.Stop();
     }
-    private IEnumerator Play(Animator animator, AnimationClip clip, string state)
+    private IEnumerator Play(Animator animator, AnimationClip clip, string state, float maxDuration = float.PositiveInfinity)
     {
         if (animator == null || !animator.isActiveAndEnabled || !animator.isHuman || clip == null) yield break;
         int layer = animator.GetLayerIndex(layerName);
@@ -203,7 +212,7 @@ public sealed class HallAudienceCelebration : MonoBehaviour
         float initial = animator.GetLayerWeight(layer);
         while (elapsed < blend) { elapsed += Time.deltaTime; animator.SetLayerWeight(layer, Mathf.Lerp(initial, layerWeight, Mathf.Clamp01(elapsed / blend))); yield return null; }
         animator.SetLayerWeight(layer, layerWeight);
-        yield return new WaitForSeconds(Mathf.Max(0, clip.length - blend * 2));
+        yield return new WaitForSeconds(Mathf.Max(0, Mathf.Min(clip.length, maxDuration) - blend * 2));
         elapsed = 0;
         while (elapsed < blend) { elapsed += Time.deltaTime; animator.SetLayerWeight(layer, Mathf.Lerp(layerWeight, 0, Mathf.Clamp01(elapsed / blend))); yield return null; }
         animator.SetLayerWeight(layer, 0);
