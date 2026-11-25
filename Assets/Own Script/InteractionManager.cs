@@ -537,7 +537,7 @@ public class InteractionManager : MonoBehaviour
                 line.dialogue, speaker, fallbackNpcAudioSource, expectedTurnNumber,
                 onPartialTextUpdated: partial => {
                     if (uiManager != null) uiManager.RenderDialogueWithPartialLatest(conversationHistory, partial);
-                }));
+                }, emotion: validatedEmotion, intensity: emotionIntensity));
         }
 
         if (!isSessionActive) yield break;   // closed during NPC audio (CloseSession already saved)

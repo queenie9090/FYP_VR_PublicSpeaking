@@ -93,7 +93,7 @@ public sealed class BusinessmanEmotionGesture : MonoBehaviour
     private void LateUpdate()
     {
         if (!rig.isActiveAndEnabled) return;
-        if (celebrationLayer >= 0 && rig.GetLayerWeight(celebrationLayer) > .001f) return;
+        float activityWeight = celebrationLayer >= 0 ? 1f - Mathf.Clamp01(rig.GetLayerWeight(celebrationLayer)) : 1f;
         // Fade the previous gesture before accepting the latest label, including a neutral reset.
         if (displayed != face.currentEmotion && strength <= .001f)
         {
@@ -108,13 +108,13 @@ public sealed class BusinessmanEmotionGesture : MonoBehaviour
         if (!breathing && strength <= .001f) return;
         for (int i = 0; i < bones.Length; i++)
             if (bones[i]) before[i] = bones[i].localRotation;
-        float w = Mathf.SmoothStep(0f, 1f, strength);
+        float w = activityWeight * Mathf.SmoothStep(0f, 1f, strength);
         Vector3 up = transform.up, right = transform.right, forward = transform.forward;
         float scale = rig.humanScale;
         switch (displayed)
         {
             case "NEUTRAL":
-                Rotate(chest, right, .65f * Mathf.Sin(Time.time * 1.65f));
+                Rotate(chest, right, activityWeight * .65f * Mathf.Sin(Time.time * 1.65f));
                 break;
             case "THINKING":
                 Rotate(head, forward, -14f * w);

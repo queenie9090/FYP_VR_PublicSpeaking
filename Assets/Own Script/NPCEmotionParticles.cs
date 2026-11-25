@@ -14,6 +14,8 @@ public sealed class NPCEmotionParticles : MonoBehaviour
     private float nextMark, nextSmoke;
     private int sequence;
 
+    private void OnEnable() => random = new System.Random(GetInstanceID());
+
     private void Start()
     {
         owner = GetComponent<NPCEmotionController>();
@@ -28,7 +30,6 @@ public sealed class NPCEmotionParticles : MonoBehaviour
             leftArm = rig.GetBoneTransform(HumanBodyBones.LeftUpperArm);
             rightArm = rig.GetBoneTransform(HumanBodyBones.RightUpperArm);
         }
-        random = new System.Random(GetInstanceID());
         marks = CreateEmitter("Emotion particles", material, 28);
         smoke = CreateEmitter("Angry smoke", material, 6);
         SetTile(smoke, Tile.Smoke);
