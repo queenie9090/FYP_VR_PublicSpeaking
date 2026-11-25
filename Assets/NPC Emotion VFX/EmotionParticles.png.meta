@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 12feb98be4614cebb0c88c2de9d4800d
+TextureImporter:
+  serializedVersion: 13
+  mipmaps:
+    enableMipMap: 1
+    sRGBTexture: 1
+  alphaIsTransparency: 1
+  textureType: 0
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    wrapU: 1
+    wrapV: 1

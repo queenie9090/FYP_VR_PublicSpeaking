@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.SceneManagement;
 
 // Explicitly started, local-only test; no scene objects are created.
@@ -12,7 +14,7 @@ public sealed class HallEmotionPreviewWindow : EditorWindow
     private readonly List<string> originalEmotions = new List<string>();
     private readonly List<int> originalIntensities = new List<int>();
     private readonly List<Behaviour> pausedTests = new List<Behaviour>();
-    private int selected, intensity = 50;
+    private int selected, intensity = 80;
     private bool running;
 
     [MenuItem("Tools/Hall/Emotion Preview (Play Mode)")]
@@ -37,10 +39,9 @@ public sealed class HallEmotionPreviewWindow : EditorWindow
         }
         selected = EditorGUILayout.Popup("NPC", selected, new[] { "Judge", "Audience A", "Audience B" });
         intensity = EditorGUILayout.IntSlider("Intensity", intensity, 0, 100);
-        EditorGUILayout.LabelField("Use F6/F7/F8 on the Hall screen to focus the same NPC.", EditorStyles.wordWrappedLabel);
-        foreach (string emotion in labels)
-            if (GUILayout.Button(emotion) && actors[selected] != null)
-                actors[selected].SetEmotion(emotion, emotion == "NEUTRAL" ? 0 : intensity);
+        EditorGUILayout.LabelField("In Game view: F6 Judge, F7 Audience A, F8 Audience B. Press 1–6 for an emotion. Enable the TV's manual keyboard testing to switch its camera too.", EditorStyles.wordWrappedLabel);
+        for (int i = 0; i < labels.Length; i++)
+            if (GUILayout.Button($"{i + 1}   {labels[i]}")) ShowEmotion(i);
         if (GUILayout.Button("Stop and restore original emotions")) StopPreview();
     }
 
@@ -65,10 +66,37 @@ public sealed class HallEmotionPreviewWindow : EditorWindow
                 if (behaviour != null && behaviour.enabled && (behaviour is NPCEmotionKeyboardTest || behaviour is TwoNPCEmotionTest))
                 { pausedTests.Add(behaviour); behaviour.enabled = false; }
         running = true;
+        InputSystem.onAfterUpdate += ReadGameKeys;
     }
+
+    private void ReadGameKeys()
+    {
+        if (!running || !Application.isPlaying) return;
+        if (NPCEmotionSessionManager.Instance != null && NPCEmotionSessionManager.Instance.IsCollectingBodyEvents)
+        { StopPreview(); Repaint(); return; }
+        if (InputState.currentUpdateType != InputUpdateType.Dynamic ||
+            focusedWindow == null || focusedWindow.GetType().Name != "GameView") return;
+        var keys = Keyboard.current;
+        if (keys == null) return;
+        int previous = selected;
+        if (keys.f6Key.wasPressedThisFrame) selected = 0;
+        else if (keys.f7Key.wasPressedThisFrame) selected = 1;
+        else if (keys.f8Key.wasPressedThisFrame) selected = 2;
+        for (int i = 0; i < labels.Length; i++)
+            if (keys[(Key)((int)Key.Digit1 + i)].wasPressedThisFrame) { ShowEmotion(i); break; }
+        if (previous != selected) Repaint();
+    }
+
+    private void ShowEmotion(int index)
+    {
+        if (actors[selected] != null)
+            actors[selected].SetEmotion(labels[index], labels[index] == "NEUTRAL" ? 0 : intensity);
+    }
+
     private void StopPreview()
     {
         if (!running) return;
+        InputSystem.onAfterUpdate -= ReadGameKeys;
         // Do not overwrite genuine emotion data if a session started while this window was open.
         bool sessionActive = NPCEmotionSessionManager.Instance != null && NPCEmotionSessionManager.Instance.IsCollectingBodyEvents;
         if (Application.isPlaying && !sessionActive)
