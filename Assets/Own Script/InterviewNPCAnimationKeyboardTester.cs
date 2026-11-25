@@ -17,6 +17,7 @@ public class InterviewNPCAnimationKeyboardTester : MonoBehaviour
     [Tooltip("Preview Tutorial's SittingTalking clip only while keyboard testing is active.")]
     [SerializeField] private bool previewTutorialSpeaking = true;
     private bool controlling;
+    private NPCEmotionKeyboardTest suspendedEmotionTester;
     private bool lastPreviewSetting;
     private readonly List<SavedBinding> mutedBindings = new List<SavedBinding>();
 
@@ -53,6 +54,12 @@ public class InterviewNPCAnimationKeyboardTester : MonoBehaviour
 
         if (!controlling)
         {
+            var emotionTester = bodyAnimation.GetComponent<NPCEmotionKeyboardTest>();
+            if (emotionTester != null && emotionTester.enabled)
+            {
+                suspendedEmotionTester = emotionTester;
+                emotionTester.enabled = false;
+            }
             MuteSimulatorNumberKeys();
             bodyAnimation.BeginManualTest();
             controlling = true;
@@ -150,6 +157,8 @@ public class InterviewNPCAnimationKeyboardTester : MonoBehaviour
     {
         if (!controlling) return;
         if (bodyAnimation != null) bodyAnimation.EndManualTest();
+        if (suspendedEmotionTester != null) suspendedEmotionTester.enabled = true;
+        suspendedEmotionTester = null;
         RestoreSimulatorNumberKeys();
         controlling = false;
         Debug.Log("[Interview Animation Test] Manual control ended; automatic control restored.", this);

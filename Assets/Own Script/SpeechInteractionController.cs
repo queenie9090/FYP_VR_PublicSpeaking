@@ -261,7 +261,8 @@ public class SpeechInteractionController : MonoBehaviour
         NPCPersona currentNPC,
         AudioSource fallbackAudio,
         int turnNumber = 0,
-        Action<string> onPartialTextUpdated = null)
+        Action<string> onPartialTextUpdated = null,
+        string emotion = "NEUTRAL", int intensity = 0)
     {
         int requestVersion = ++speechRequestVersion;
         StopActiveSpeech();
@@ -276,13 +277,19 @@ public class SpeechInteractionController : MonoBehaviour
             ? currentNPC.voiceId
             : "nova";
 
-        StartCoroutine(openAIManager.TextToSpeech(textToSpeak, voice, c => { clip = c; downloaded = true; },
-            err => downloaded = true, () => this == null || requestVersion != speechRequestVersion));
+        string appliedStyle = null;
+        double requestedAt = Time.realtimeSinceStartupAsDouble;
+        StartCoroutine(openAIManager.GenerateNPCSpeech(textToSpeak, voice, emotion, intensity,
+            (audio, style) => { clip = audio; appliedStyle = style; downloaded = true; },
+            error => { Debug.LogWarning(error); downloaded = true; },
+            () => this == null || requestVersion != speechRequestVersion));
         yield return new WaitUntil(() => downloaded || requestVersion != speechRequestVersion);
         if (requestVersion != speechRequestVersion) yield break;
 
         var emotionSource = currentNPC != null
-            ? currentNPC.GetComponentInParent<NPCEmotionController>() : null;
+            ? currentNPC.GetComponentInParent<NPCEmotionController>() ?? currentNPC.GetComponentInChildren<NPCEmotionController>() : null;
+        NPCEmotionSessionManager.Instance?.SetRealismContext(emotionSource,
+            currentNPC != null ? currentNPC.name : null, "THINKING", turnNumber);
 
         if (clip == null)
         {
@@ -293,6 +300,8 @@ public class SpeechInteractionController : MonoBehaviour
             yield break;
         }
 
+        NPCEmotionSessionManager.Instance?.RecordRealismEvent(
+            emotionSource, "voice", "generated", text: textToSpeak, voiceStyle: appliedStyle);
         AudioSource targetSource = (currentNPC != null && currentNPC.npcAudioSource != null)
             ? currentNPC.npcAudioSource
             : fallbackAudio;
@@ -306,6 +315,8 @@ public class SpeechInteractionController : MonoBehaviour
         if (targetSource == null)
         {
             Debug.LogError("[Speech] NPC audio source is missing; response could not be played.");
+            NPCEmotionSessionManager.Instance?.RecordRealismEvent(
+                emotionSource, "voice", "playback_failed", text: textToSpeak);
             onPartialTextUpdated?.Invoke(textToSpeak);
             yield break;
         }
@@ -340,7 +351,11 @@ public class SpeechInteractionController : MonoBehaviour
             NPCEmotionSessionManager.Instance?.SetRealismContext(emotionSource,
                 currentNPC != null ? currentNPC.name : null, "SPEAKING", turnNumber);
             NPCEmotionSessionManager.Instance?.RecordRealismEvent(
-                emotionSource, "voice", "playback_started", text: textToSpeak);
+                emotionSource, "voice", "playback_started", text: textToSpeak, voiceStyle: appliedStyle);
+#if UNITY_EDITOR
+            Debug.Log($"[Speech] {speakerName}, {appliedStyle}: request to playback " +
+                $"{(Time.realtimeSinceStartupAsDouble - requestedAt) * 1000:F0} ms.");
+#endif
 
             if (hasTalkingParameter) npcAnimator.SetBool("IsTalking", true);
             if (body != null) body.SetActivity(NPCBodyActivity.SPEAKING, turnNumber);
