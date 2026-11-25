@@ -64,3 +64,5 @@ crashlytics-build.properties
 
 # Custom ignored files
 Assets/StreamingAssets/config.json
+
+Assets/StreamingAssets/config.json.meta
