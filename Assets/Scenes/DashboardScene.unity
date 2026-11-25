@@ -6196,7 +6196,7 @@ AudioSource:
   serializedVersion: 4
   OutputAudioMixerGroup: {fileID: 6326084814655831911, guid: 2255f0e67069a364a86a1eea828018ae, type: 2}
   m_audioClip: {fileID: 0}
-  m_Resource: {fileID: 8300000, guid: 7f17bad1ede3a6045afd2a174c6de251, type: 3}
+  m_Resource: {fileID: 8300000, guid: 0e0ca318b7a2388419939e53da9b0b70, type: 3}
   m_PlayOnAwake: 1
   m_Volume: 0.5
   m_Pitch: 1
@@ -10740,8 +10740,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 683c3d0e2b1e3104a893227365dda208, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CursorParallax
+  mode: 0
   targetTransform: {fileID: 0}
   maxTiltAngle: 3
+  maxOffset: {x: 1.5, y: 1}
+  maxRollAngle: 0
+  invert2D: 0
   smoothSpeed: 6
 --- !u!114 &1778123025
 MonoBehaviour:
