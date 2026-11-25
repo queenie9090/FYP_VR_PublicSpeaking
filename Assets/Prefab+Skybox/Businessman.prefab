@@ -556,6 +556,9 @@ PrefabInstance:
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 124ae3eb99a57354ebc206247375efa2, type: 3}
       insertIndex: -1
+      addedObject: {fileID: 907610008824556712}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 124ae3eb99a57354ebc206247375efa2, type: 3}
+      insertIndex: -1
       addedObject: {fileID: 6112067455029907596}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 124ae3eb99a57354ebc206247375efa2, type: 3}
       insertIndex: -1
@@ -607,6 +610,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NPCEmotionController
   headMesh: {fileID: 1677896758829157650}
+  sensitiveEmotionReactions: 1
   currentEmotion: NEUTRAL
   emotionIntensity: 0
   transitionSpeed: 4
@@ -778,3 +782,15 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -380638999131172725, guid: 124ae3eb99a57354ebc206247375efa2, type: 3}
   m_PrefabInstance: {fileID: 1641701207204027187}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &907610008824556712
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1876056408625309282}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3d55ec397f6d47deb075b44c4f6fb10c, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::BusinessmanEmotionGesture

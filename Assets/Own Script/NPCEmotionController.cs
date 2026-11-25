@@ -9,6 +9,11 @@ public class NPCEmotionController : MonoBehaviour
     public SkinnedMeshRenderer HeadMesh => headMesh;
 
     [Header("Emotion Settings")]
+    [SerializeField, Tooltip("Use contextual intensity cues for all five non-neutral emotions.")]
+    [UnityEngine.Serialization.FormerlySerializedAs("sensitiveNegativeReactions")]
+    private bool sensitiveEmotionReactions;
+    public bool SensitiveEmotionReactions => sensitiveEmotionReactions;
+
     public string currentEmotion = "NEUTRAL";
 
     [Range(0, 100)]
@@ -134,6 +139,8 @@ public class NPCEmotionController : MonoBehaviour
             }
         }
 
+        if (!TryGetComponent<NPCEmotionParticles>(out _))
+            gameObject.AddComponent<NPCEmotionParticles>();
         SetEmotion(currentEmotion, emotionIntensity);
     }
 
