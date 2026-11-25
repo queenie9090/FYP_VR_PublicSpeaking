@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 060a0992d498ced4786135703a47e748
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 288923
+  packageName: MC Greet & Talk - Believable 3D Animations by MoCap Central
+  packageVersion: 1.0.0
+  assetPath: Assets/MoCapCentral/MC_GreetTalk/Animations/ctrl_TalkListenSoloB.controller
+  uploadId: 673901
