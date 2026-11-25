@@ -77,28 +77,23 @@ public sealed partial class HallAudienceCelebration
         internal bool Apply(bool listening)
         {
             if (!rig || !rig.isActiveAndEnabled || !face || !face.isActiveAndEnabled) return false;
-            bool celebrating = layer >= 0 && rig.GetLayerWeight(layer) > .0001f;
+            float celebrationWeight = layer >= 0 ? Mathf.Clamp01(rig.GetLayerWeight(layer)) : 0f;
+            bool celebrating = celebrationWeight > .0001f;
             bool changed = emotion != face.currentEmotion;
-            if (celebrating)
-            {
-                emotion = face.currentEmotion;
-                age = weight = nodTime = restWeight = 0f;
-                return false;
-            }
             if (changed && weight <= .001f)
             {
                 emotion = face.currentEmotion;
                 age = 0f;
-                if (emotion == "HAPPY") return true;
+                if (!celebrating && emotion == "HAPPY") return true;
             }
             age += Time.deltaTime;
-            float target = emotion == face.currentEmotion && emotion != "NEUTRAL" && age < 3f
+            float target = !celebrating && emotion == face.currentEmotion && emotion != "NEUTRAL" && age < 3f
                 ? Mathf.Lerp(.45f, 1f, face.emotionIntensity / 100f) : 0f;
             weight = Mathf.MoveTowards(weight, target, Time.deltaTime * 4f);
             float w = Mathf.SmoothStep(0, 1, weight);
             for (int i = 0; i < bones.Length; i++)
                 if (bones[i]) before[i] = bones[i].localRotation;
-            restWeight = Mathf.MoveTowards(restWeight, 1f, Time.deltaTime * 3f);
+            restWeight = Mathf.MoveTowards(restWeight, 1f - celebrationWeight, Time.deltaTime * 5f);
             Animate(w, listening);
             for (int i = 0; i < bones.Length; i++)
                 if (bones[i]) after[i] = bones[i].localRotation;
@@ -114,7 +109,7 @@ public sealed partial class HallAudienceCelebration
             if (!head || !chest) return;
             Vector3 up = body.up, forward = body.forward, right = body.right;
             float scale = rig.humanScale;
-            Turn(chest, right, (isA ? 1f : -3f) + .65f * Mathf.Sin(Time.time * 1.5f));
+            Turn(chest, right, restWeight * ((isA ? 1f : -3f) + .65f * Mathf.Sin(Time.time * 1.5f)));
             Vector3 left = Lap(true), hand = Lap(false);
             if (isA)
             {
@@ -164,7 +159,7 @@ public sealed partial class HallAudienceCelebration
             float cycle = isA ? .63f : .94f;
             bool nod = phase > 0 && phase < cycle*(isA ? 2 : 1);
             if (!listening && !nod) nodTime = 0;
-            if (nod) Turn(head, right, (isA ? 7f : 9f)*Mathf.Pow(Mathf.Sin(Mathf.PI*phase/cycle),2f));
+            if (nod) Turn(head, right, restWeight*(isA ? 7f : 9f)*Mathf.Pow(Mathf.Sin(Mathf.PI*phase/cycle),2f));
         }
 
         private Vector3 Lap(bool left)

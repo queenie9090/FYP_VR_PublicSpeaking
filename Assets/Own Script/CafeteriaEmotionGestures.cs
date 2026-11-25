@@ -33,7 +33,7 @@ public sealed class CafeteriaEmotionGestures : MonoBehaviour
     private readonly float[] weights = new float[6];
     private enum Pose { Neutral, Happy, Sad, Angry, Nervous, Thinking }
     private Pose pose;
-    private float elapsed, nodTime, nodWeight;
+    private float elapsed, nodTime, nodWeight, nervousTime;
     private bool sessionWasActive, suppressAfterExit;
     private static readonly int ChairHeight = Animator.StringToHash("ChairHeight");
     private static readonly int ChairState = Animator.StringToHash("Base Layer.Chair Posture");
@@ -151,6 +151,7 @@ public sealed class CafeteriaEmotionGestures : MonoBehaviour
             float target = i == (int)pose && elapsed < duration ? strength : 0f;
             weights[i] = Mathf.MoveTowards(weights[i], target, Time.deltaTime * 2.5f);
         }
+        nervousTime = Weight(Pose.Nervous) > 0f ? nervousTime + Time.deltaTime : 0f;
         bool rise = pose == Pose.Angry && elapsed < duration;
         chairPhase = Mathf.MoveTowards(chairPhase, rise ? 1f : 0f,
             Time.deltaTime / Mathf.Max(.1f, rise ? standUpSeconds : sitDownSeconds));
@@ -232,7 +233,7 @@ public sealed class CafeteriaEmotionGestures : MonoBehaviour
         animator.SetLookAtWeight(attention, .22f, .9f, 0f, .3f);
         animator.SetLookAtPosition(chest.position + scale * (forward + up *
             (.25f - .95f * sad - .32f * nod * nodWeight)
-            + right * (.2f * nervous * Mathf.Sin(elapsed * 5f))));
+            + right * (.2f * nervous * Mathf.Sin(nervousTime * 5f))));
 
         if (thinking > 0f && head != null)
         {
@@ -243,7 +244,7 @@ public sealed class CafeteriaEmotionGestures : MonoBehaviour
 
         Vector3 origin = chest.position;
         Vector3 fidget = origin + scale * (forward * .24f - up * .16f);
-        float shake = Mathf.Sin(elapsed * 13f) * .022f;
+        float shake = Mathf.Sin(nervousTime * 13f) * .022f;
         Vector3 left = fidget - right * (.045f + shake) * scale;
         animator.SetIKPositionWeight(AvatarIKGoal.LeftHand, nervous);
         animator.SetIKPosition(AvatarIKGoal.LeftHand, left);

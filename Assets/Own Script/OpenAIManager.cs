@@ -206,16 +206,64 @@ public class OpenAIManager : MonoBehaviour
     #region Text-to-Speech (OpenAI Speech)
     public IEnumerator TextToSpeech(string text, string voice, Action<AudioClip> onSuccess, Action<string> onError, Func<bool> shouldCancel = null)
     {
-        var requestBody = new
-        {
-            model = "tts-1",
-            input = text,
-            voice = voice,
-            response_format = "mp3"
-        };
+        return RequestSpeech(text, voice, null, onSuccess, (code, message) => onError?.Invoke(message), shouldCancel);
+    }
 
-        string jsonPayload = Newtonsoft.Json.JsonConvert.SerializeObject(requestBody);
-        byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonPayload);
+    internal static string VoiceInstructions(string emotion, int intensity)
+    {
+        string delivery;
+        switch (emotion)
+        {
+            case "HAPPY": delivery = "warm, bright and pleased"; break;
+            case "SAD": delivery = "soft and subdued, with a slower cadence"; break;
+            case "ANGRY": delivery = "firm and frustrated, with crisp emphasis and controlled volume"; break;
+            case "NERVOUS": delivery = "uneasy, with short hesitant pauses"; break;
+            case "THINKING": delivery = "reflective, with deliberate pauses between thoughts"; break;
+            default: return "Read the supplied line verbatim in a calm, neutral conversational tone.";
+        }
+        return $"Read the supplied line verbatim. Sound {delivery}. " +
+            $"Express this at {Mathf.Clamp(intensity, 0, 100)} out of 100, where 0 is neutral and 100 is pronounced. " +
+            "Keep the voice recognizable and the words intelligible.";
+    }
+
+    internal static bool CanRetryWithDefaultVoice(long status)
+    {
+        return status == 400 || status == 403 || status == 404 || (status >= 500 && status <= 599);
+    }
+
+    public IEnumerator GenerateNPCSpeech(string text, string voice, string emotion, int intensity,
+        Action<AudioClip, string> onSuccess, Action<string> onError, Func<bool> shouldCancel)
+    {
+        emotion = EmotionIntensityClassifier.IsSupported(emotion) ? emotion.Trim().ToUpperInvariant() : "NEUTRAL";
+        long status = 0;
+        string failure = null;
+        yield return RequestSpeech(text, voice, VoiceInstructions(emotion, intensity),
+            clip => onSuccess(clip, emotion), (code, message) => { status = code; failure = message; }, shouldCancel);
+        if (shouldCancel() || failure == null) yield break;
+        if (!CanRetryWithDefaultVoice(status))
+        {
+            onError(failure);
+            yield break;
+        }
+        Debug.LogWarning($"[Speech] Expressive synthesis returned HTTP {status}. Trying standard delivery once.");
+        yield return TextToSpeech(text, voice, clip => onSuccess(clip, "Standard"), onError, shouldCancel);
+    }
+
+    internal static string SpeechPayload(string text, string voice, string instructions)
+    {
+        var requestBody = new Dictionary<string, string> {
+            { "model", instructions == null ? "tts-1" : "gpt-4o-mini-tts" },
+            { "input", text }, { "voice", voice }, { "response_format", "mp3" }
+        };
+        if (instructions != null) requestBody.Add("instructions", instructions);
+        return Newtonsoft.Json.JsonConvert.SerializeObject(requestBody);
+    }
+
+    private IEnumerator RequestSpeech(string text, string voice, string instructions, Action<AudioClip> onSuccess,
+        Action<long, string> onError, Func<bool> shouldCancel)
+    {
+        if (shouldCancel != null && shouldCancel()) yield break;
+        byte[] bodyRaw = Encoding.UTF8.GetBytes(SpeechPayload(text, voice, instructions));
 
         using (UnityWebRequest request = new UnityWebRequest(TtsUrl, "POST"))
         {
@@ -233,13 +281,13 @@ public class OpenAIManager : MonoBehaviour
             {
                 // Safely read standard HTTP error string instead of binary text!
                 string errorMsg = $"[TTS Error]: {request.error}";
-                Debug.LogError(errorMsg);
-                onError?.Invoke(errorMsg);
+                onError?.Invoke(request.responseCode, errorMsg);
             }
             else
             {
                 AudioClip clip = DownloadHandlerAudioClip.GetContent(request);
-                onSuccess?.Invoke(clip);
+                if (clip != null) onSuccess?.Invoke(clip);
+                else onError?.Invoke(request.responseCode, "Speech response contained no playable audio.");
             }
         }
     }
