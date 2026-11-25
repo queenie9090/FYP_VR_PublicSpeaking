@@ -14,6 +14,8 @@ public sealed partial class HallAudienceCelebration : MonoBehaviour
     private Coroutine activeJudge, activeA, activeB;
     private Coroutine soundRoutine;
     private AudioSource applauseSource, cheerSource;
+    public bool IsCelebrationAudible => (applauseSource && applauseSource.isPlaying && applauseSource.volume > 0f)
+        || (cheerSource && cheerSource.isPlaying && cheerSource.volume > 0f);
     [System.Serializable]
     private class ClapPose
     {

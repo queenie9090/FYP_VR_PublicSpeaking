@@ -9,7 +9,8 @@ public class SpeechInteractionController : MonoBehaviour
     private int transcriptionRequestVersion;
     private AudioSource activeSpeechSource;
     private NPCEmotionController activeSpeechEmotion;
-    public bool IsPlayingSpeechFor(NPCEmotionController source) => source != null && activeSpeechEmotion == source && activeSpeechSource != null && activeSpeechSource.isPlaying;
+    public bool IsSpeechPlaying => activeSpeechSource != null && activeSpeechSource.isPlaying;
+    public bool IsPlayingSpeechFor(NPCEmotionController source) => source != null && activeSpeechEmotion == source && IsSpeechPlaying;
     private Animator activeSpeechAnimator;
     private NPCBodyAnimation activeSpeechBody;
     private NPCEyeContactController activeSpeechEyes;
