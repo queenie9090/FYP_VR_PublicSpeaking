@@ -141,6 +141,8 @@ public class NPCEmotionController : MonoBehaviour
 
         if (!TryGetComponent<NPCEmotionParticles>(out _))
             gameObject.AddComponent<NPCEmotionParticles>();
+        if (!TryGetComponent<NPCEmotionSound>(out _))
+            gameObject.AddComponent<NPCEmotionSound>();
         SetEmotion(currentEmotion, emotionIntensity);
     }
 
