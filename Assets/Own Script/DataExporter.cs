@@ -24,50 +24,87 @@ public class DataExporter : MonoBehaviour
 
         string defaultName = $"SessionReport_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
         string filePath = ResolveSavePath(defaultName, "csv", promptUserForPath);
-        if (string.IsNullOrEmpty(filePath)) return null; // User cancelled dialog
+        if (string.IsNullOrEmpty(filePath)) return null;
 
         var metric = data.performance_metric[0];
         StringBuilder sb = new StringBuilder();
-
-        // 1. Session Summary Section
         string sessionStatus = string.IsNullOrEmpty(data.status) ? "Completed" : data.status;
 
-        sb.AppendLine("=== VR COMMUNICATION EVALUATION SUMMARY ===");
-        sb.AppendLine("Scenario,Topic,Difficulty,InputMode,Status,Date,DurationSeconds");
-        sb.AppendLine($"\"{data.scenario_type}\",\"{data.scenario_topic}\",\"{data.difficulty_level}\",\"{data.input_mode_used}\",\"{sessionStatus}\",\"{DateTime.Now:yyyy-MM-dd HH:mm:ss}\",{data.duration_seconds:F1}");
+        // Title Banner
+        sb.AppendLine("VR COMMUNICATION EVALUATION REPORT");
+        sb.AppendLine($"Generated,{DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         sb.AppendLine();
 
-        // 2. Performance Scores Breakdown
-        sb.AppendLine("=== PERFORMANCE SCORES & METRICS ===");
-        sb.AppendLine("OverallScore,SpeechClarityScore,WPM,FillerWordCount,SilenceDurationSeconds,EyeContactPct,HandGestureScore,GesturesPerMinute");
-        sb.AppendLine($"{metric.overall_score:F1},{metric.speech_clarity_score:F1},{metric.average_wpm:F1},{metric.filler_word_count},{metric.total_silence_seconds:F1},{metric.eye_contact_pct:F1},{metric.hand_gesture_score:F1},{metric.gestures_per_minute:F1}");
+        // 1. Session Summary (Vertical Key-Value layout — no horizontal scrolling)
+        sb.AppendLine("1. SESSION SUMMARY");
+        sb.AppendLine("Field,Value");
+        sb.AppendLine($"Scenario,{CsvEscape(data.scenario_type)}");
+        sb.AppendLine($"Topic,{CsvEscape(data.scenario_topic)}");
+        sb.AppendLine($"Difficulty,{CsvEscape(data.difficulty_level)}");
+        sb.AppendLine($"Input Mode,{CsvEscape(data.input_mode_used)}");
+        sb.AppendLine($"Status,{CsvEscape(sessionStatus)}");
+        sb.AppendLine($"Duration (s),{data.duration_seconds:F1}");
+        sb.AppendLine();
+
+        // 2. Performance Scores (Vertical table with Rating/Benchmark column)
+        string wpmStatus = metric.average_wpm < 110 ? "Slow Pace" : (metric.average_wpm > 160 ? "Fast Pace" : "Optimal Pace");
+        string eyeStatus = metric.eye_contact_pct >= 70 ? "Target Reached" : "Below Target";
+        string gestureStatus = metric.gestures_per_minute >= 3.0f ? "Active Expression" : "Low Gesture Rate";
+
+        sb.AppendLine("2. PERFORMANCE METRICS");
+        sb.AppendLine("Metric,Score / Value,Assessment");
+        sb.AppendLine($"Overall Composite Score,{metric.overall_score:F1}%,Overall Rating");
+        sb.AppendLine($"Speech Clarity,{metric.speech_clarity_score:F1}%,{wpmStatus}");
+        sb.AppendLine($"Average Speaking Rate,{metric.average_wpm:F1} WPM,Target: 110-160 WPM");
+        sb.AppendLine($"Filler Words,{metric.filler_word_count},Total Count");
+        sb.AppendLine($"Total Silence,{metric.total_silence_seconds:F1} s,Pause Duration");
+        sb.AppendLine($"Eye Contact,{metric.eye_contact_pct:F1}%,{eyeStatus}");
+        sb.AppendLine($"Hand Gesture Score,{metric.hand_gesture_score:F1}%,{gestureStatus}");
+        sb.AppendLine($"Gestures Per Minute,{metric.gestures_per_minute:F1} GPM,Target: >= 3.0 GPM");
         sb.AppendLine();
 
         // 3. AI Coaching Summary
-        sb.AppendLine("=== AI COACHING FEEDBACK ===");
-        string sanitizedFeedback = metric.ai_feedback_summary?.Replace("\"", "\"\"") ?? "";
-        sb.AppendLine($"\"{sanitizedFeedback}\"");
+        sb.AppendLine("3. AI COACHING FEEDBACK");
+        sb.AppendLine("Summary");
+        sb.AppendLine(CsvEscape(metric.ai_feedback_summary));
         sb.AppendLine();
 
-        // 4. Itemized Dialogue Log Breakdown
-        sb.AppendLine("=== CONVERSATION LOG TRANSCRIPT ===");
-        sb.AppendLine("TurnSequence,UserTranscript,AIResponse,FillerWords,SpeakingRateWPM,SilenceSeconds");
+        // 4. Itemized Dialogue Log Breakdown (Uses all 6 columns A:F cleanly)
+        sb.AppendLine("4. CONVERSATION TRANSCRIPT LOG");
+        sb.AppendLine("Turn #,User Transcript,AI Response,Filler Words,Speaking Rate (WPM),Silence (s)");
 
-        if (data.dialogue_turn != null)
+        if (data.dialogue_turn != null && data.dialogue_turn.Count > 0)
         {
             foreach (var turn in data.dialogue_turn)
             {
-                string sanitizedUser = turn.user_transcript?.Replace("\"", "\"\"") ?? "";
-                string sanitizedAI = turn.ai_response_text?.Replace("\"", "\"\"") ?? "";
-
-                sb.AppendLine($"{turn.turn_sequence},\"{sanitizedUser}\",\"{sanitizedAI}\",{turn.filler_word_count},{turn.speaking_rate_wpm:F1},{turn.silence_duration_seconds:F1}");
+                sb.AppendLine(
+                    $"{turn.turn_sequence}," +
+                    $"{CsvEscape(turn.user_transcript)}," +
+                    $"{CsvEscape(turn.ai_response_text)}," +
+                    $"{turn.filler_word_count}," +
+                    $"{turn.speaking_rate_wpm:F1}," +
+                    $"{turn.silence_duration_seconds:F1}"
+                );
             }
         }
+        else
+        {
+            sb.AppendLine("No dialogue turns recorded.");
+        }
 
-        File.WriteAllText(filePath, sb.ToString(), Encoding.UTF8);
+        // UTF-8 with BOM ensures Excel displays special characters cleanly
+        File.WriteAllText(filePath, sb.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
 
         Debug.Log($"[DataExporter] Complete CSV exported successfully to: {filePath}");
         return filePath;
+    }
+
+    private static string CsvEscape(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return "\"\"";
+        // Flatten line breaks so multi-line AI responses stay cleanly inside a single CSV row
+        string cleaned = value.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ").Replace("\"", "\"\"");
+        return $"\"{cleaned}\"";
     }
 
     /// <summary>
