@@ -27352,36 +27352,6 @@ MonoBehaviour:
   session: {fileID: 2015014612}
   classmate: {fileID: 206417141}
   studentA: 0
---- !u!114 &819210141
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 206417133}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fef0c3b7a90d451bacd5bd773074ed25, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ClassroomStudentGestures
-  session: {fileID: 2015014612}
-  classmate: {fileID: 683457356}
-  studentA: 1
---- !u!114 &819210356
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 683457348}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fef0c3b7a90d451bacd5bd773074ed25, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ClassroomStudentGestures
-  session: {fileID: 2015014612}
-  classmate: {fileID: 206417141}
-  studentA: 0
 --- !u!1001 &829587661
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -59748,7 +59718,6 @@ GameObject:
   - component: {fileID: 2123392566}
   - component: {fileID: 2123392565}
   - component: {fileID: 2123392564}
-  - component: {fileID: 2123392568}
   m_Layer: 0
   m_Name: TriggerZone
   m_TagString: Untagged
@@ -59849,18 +59818,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 342354582}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &2123392568
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2123392563}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: afd9b19f84508f64cb282340bf55750a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!1001 &2125178140
 PrefabInstance:
   m_ObjectHideFlags: 0
