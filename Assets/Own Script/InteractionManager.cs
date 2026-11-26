@@ -68,6 +68,7 @@ public class InteractionManager : MonoBehaviour
     private bool isSessionActive = false;
     private bool isSavingSession = false;
     private bool sessionSaveFailed;
+    private bool closeSessionPending;
     private string sessionSaveOwner;
 
     private int totalFillerWordsDetected = 0;
@@ -79,6 +80,24 @@ public class InteractionManager : MonoBehaviour
 
     private void Start()
     {
+        string sceneName = SceneManager.GetActiveScene().name;
+        if (sceneName == "Hall" || sceneName == "Classroom" ||
+            sceneName == "Cafeteria" || sceneName == "Interview")
+        {
+            if (UserSession.HasEnteredTutorialScene)
+            {
+                GameObject vrOpenPanel = GameObject.Find("VROpenPanel");
+                if (vrOpenPanel != null) vrOpenPanel.SetActive(false);
+                else Debug.LogWarning("[InteractionManager] VROpenPanel was not found in " + sceneName);
+            }
+        }
+
+        if (exitSessionPanel != null)
+        {
+            var cue = exitSessionPanel.GetComponent<ExitConfirmationCue>();
+            if (cue == null) cue = exitSessionPanel.AddComponent<ExitConfirmationCue>();
+            cue.Configure(sfxAudioSource, sessionCompletedClip);
+        }
         EnsureHelpersExist();
         // Hands off OpenXR editor init to ScenarioTransitionController
         transitionController.InitializeXRForEditor(this, InitializeSceneComponents);
@@ -640,6 +659,7 @@ public class InteractionManager : MonoBehaviour
     /// </summary>
     public void CloseSession()
     {
+        if (closeSessionPending) return;
         if (sessionSaveFailed && !isSavingSession)
         {
             CalculateAndSaveResults();
@@ -685,12 +705,22 @@ public class InteractionManager : MonoBehaviour
             fallbackNpcAudioSource.Stop();
         }
 
+        closeSessionPending = true;
+        StartCoroutine(FinishClosingSessionRoutine());
+    }
+
+    private IEnumerator FinishClosingSessionRoutine()
+    {
+        // Let the UI render and the audio system begin the cue before the driver closes the microphone.
+        yield return new WaitForSecondsRealtime(0.2f);
+
         if (audioRecorder != null)
         {
             audioRecorder.StopRecording();
         }
 
         StopMetricCollection();
+        closeSessionPending = false;
 
         SetEmotionPanelsVisible(false);
         if (startConfigPanel != null) startConfigPanel.SetActive(false);
@@ -734,11 +764,6 @@ public class InteractionManager : MonoBehaviour
     {
         isSessionActive = false;
         isSavingSession = false;
-
-        if (sessionCompletedClip != null && sfxAudioSource != null)
-        {
-            sfxAudioSource.PlayOneShot(sessionCompletedClip);
-        }
 
         if (SceneManager.GetActiveScene().name == "TutorialScene")
             NPCEmotionSessionManager.Instance?.FinishBodyEventCollection();

@@ -26,9 +26,9 @@ public class MicrophoneVolumeMeter : MonoBehaviour
     private float GetMicLoudness()
     {
         // 1. Verify recording state and clip validity
-        if (!Microphone.IsRecording(activeDeviceName) || activeMicClip == null) return 0.0f;
+        if (!VoiceMicTrace.IsRecording(activeDeviceName) || activeMicClip == null) return 0.0f;
 
-        int currentMicPos = Microphone.GetPosition(activeDeviceName);
+        int currentMicPos = VoiceMicTrace.Position(activeDeviceName);
 
         // 2. Safely ensure we have accumulated at least 128 samples before reading
         if (currentMicPos < 128) return 0.0f;
@@ -39,7 +39,7 @@ public class MicrophoneVolumeMeter : MonoBehaviour
         if (micPosition < 0 || micPosition + 128 > activeMicClip.samples) return 0.0f;
 
         // 4. Safely extract samples
-        activeMicClip.GetData(sampleBuffer, micPosition);
+        VoiceMicTrace.ReadClip(activeMicClip, sampleBuffer, micPosition);
 
         float sum = 0.0f;
         for (int i = 0; i < 128; i++)

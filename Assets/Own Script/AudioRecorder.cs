@@ -3,10 +3,14 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
+using Unity.Profiling;
 
 public class AudioRecorder : MonoBehaviour
 {
     private const string SavedMicPrefKey = "UserSelectedMicrophone";
+    private static readonly ProfilerMarker MicStartMarker = new ProfilerMarker("Voice.MicrophoneStart");
+    private static readonly ProfilerMarker MicStopMarker = new ProfilerMarker("Voice.MicrophoneStop");
+    private static readonly ProfilerMarker WavMarker = new ProfilerMarker("Voice.WavConversion");
 
     [SerializeField] private MicrophoneVolumeMeter micVolumeMeter;
 
@@ -32,8 +36,12 @@ public class AudioRecorder : MonoBehaviour
 
     private bool stopRequested = false;
     private string activeMicDevice = null;
-    public bool IsCapturing => !string.IsNullOrEmpty(activeMicDevice) && Microphone.IsRecording(activeMicDevice);
+    private AudioClip sessionClip;
+    private bool captureInProgress;
+    public bool IsCapturing => captureInProgress && !string.IsNullOrEmpty(activeMicDevice) && VoiceMicTrace.IsRecording(activeMicDevice);
     private string userSelectedMic = null;
+    public string ActiveMicrophoneDevice => activeMicDevice;
+    public string SelectedMicrophoneDevice => userSelectedMic;
 
     private void OnEnable()
     {
@@ -45,6 +53,7 @@ public class AudioRecorder : MonoBehaviour
     {
         if (micDropdown != null)
             micDropdown.onValueChanged.RemoveListener(OnMicDropdownChanged);
+        StopRecording();
     }
 
     /// <summary>
@@ -57,7 +66,7 @@ public class AudioRecorder : MonoBehaviour
         micDropdown.onValueChanged.RemoveListener(OnMicDropdownChanged);
         micDropdown.ClearOptions();
 
-        string[] devices = Microphone.devices;
+        string[] devices = VoiceMicTrace.Devices();
         if (devices == null || devices.Length == 0)
         {
             micDropdown.AddOptions(new List<string> { "No Microphone Detected" });
@@ -83,7 +92,7 @@ public class AudioRecorder : MonoBehaviour
 
     private void OnMicDropdownChanged(int index)
     {
-        string[] devices = Microphone.devices;
+        string[] devices = VoiceMicTrace.Devices();
         if (devices == null || index < 0 || index >= devices.Length) return;
 
         SetSelectedMicrophone(devices[index]);
@@ -102,7 +111,7 @@ public class AudioRecorder : MonoBehaviour
 
     private string ResolveMicrophoneDevice()
     {
-        string[] devices = Microphone.devices;
+        string[] devices = VoiceMicTrace.Devices();
         if (devices == null || devices.Length == 0)
             return null;
 
@@ -128,20 +137,28 @@ public class AudioRecorder : MonoBehaviour
     public IEnumerator RecordUserSpeechRoutine(Action<byte[], float, float> onRecordingComplete, Action<float, float> onProgress = null)
     {
         stopRequested = false;
-        activeMicDevice = ResolveMicrophoneDevice();
+        string requestedDevice = ResolveMicrophoneDevice();
 
-        if (string.IsNullOrEmpty(activeMicDevice))
+        if (string.IsNullOrEmpty(requestedDevice))
         {
             Debug.LogError("[AudioRecorder] No valid microphone device found!");
             onRecordingComplete?.Invoke(null, 0f, 0f);
             yield break;
         }
 
-        Debug.Log($"[AudioRecorder] Recording with microphone: '{activeMicDevice}'");
-
         int targetSampleRate = 16000;
-        int maxClipSeconds = Mathf.CeilToInt(maxAllowedDuration);
-        AudioClip recordedClip = Microphone.Start(activeMicDevice, false, maxClipSeconds, targetSampleRate);
+        bool reuse = sessionClip != null && string.Equals(activeMicDevice, requestedDevice, StringComparison.OrdinalIgnoreCase)
+            && VoiceMicTrace.IsRecording(activeMicDevice);
+        if (!reuse)
+        {
+            ReleaseSessionCapture();
+            activeMicDevice = requestedDevice;
+            Debug.Log($"[AudioRecorder] Opening session microphone: '{activeMicDevice}'");
+            int bufferSeconds = Mathf.Max(1, Mathf.CeilToInt(maxAllowedDuration) + 2);
+            using (MicStartMarker.Auto())
+                sessionClip = VoiceMicTrace.Start(activeMicDevice, bufferSeconds, targetSampleRate, true);
+        }
+        AudioClip recordedClip = sessionClip;
         if (recordedClip == null)
         {
             Debug.LogError("[AudioRecorder] The microphone could not start recording.");
@@ -149,12 +166,24 @@ public class AudioRecorder : MonoBehaviour
             yield break;
         }
 
+        captureInProgress = true;
+        // A newly opened recording starts at zero; a reused ring starts at its current write position.
+        int startPosition = reuse ? VoiceMicTrace.Position(activeMicDevice) : 0;
+        if (startPosition < 0 || startPosition >= recordedClip.samples)
+        {
+            captureInProgress = false;
+            Debug.LogError("[AudioRecorder] Microphone returned an invalid starting position.");
+            onRecordingComplete?.Invoke(null, 0f, 0f);
+            yield break;
+        }
+        double captureStarted = Time.realtimeSinceStartupAsDouble;
+
         if (micVolumeMeter != null)
             micVolumeMeter.EnableVolumeMeter(true, recordedClip, activeMicDevice);
 
         // Wait until the microphone driver starts writing samples (up to 0.5s)
         float initWait = 0f;
-        while (Microphone.GetPosition(activeMicDevice) <= 0 && initWait < 0.5f && !stopRequested)
+        while (VoiceMicTrace.Position(activeMicDevice) <= 0 && initWait < 0.5f && !stopRequested)
         {
             initWait += Time.unscaledDeltaTime;
             yield return null;
@@ -180,15 +209,15 @@ public class AudioRecorder : MonoBehaviour
 
             bool heardVoiceThisTick = false;
 
-            if (Microphone.IsRecording(activeMicDevice) && recordedClip != null)
+            if (VoiceMicTrace.IsRecording(activeMicDevice) && recordedClip != null)
             {
-                int currentMicPos = Microphone.GetPosition(activeMicDevice);
+                int currentMicPos = VoiceMicTrace.Position(activeMicDevice);
                 if (currentMicPos >= 128)
                 {
                     int micPos = currentMicPos - 128;
                     if (micPos >= 0 && micPos + 128 <= recordedClip.samples)
                     {
-                        recordedClip.GetData(sampleBuffer, micPos);
+                        VoiceMicTrace.ReadClip(recordedClip, sampleBuffer, micPos);
                         float sum = 0.0f;
                         for (int i = 0; i < 128; i++) sum += Mathf.Abs(sampleBuffer[i]);
                         float averageLoudness = sum / 128.0f;
@@ -223,8 +252,8 @@ public class AudioRecorder : MonoBehaviour
             }
         }
 
-        int lastMicPosition = Microphone.GetPosition(activeMicDevice);
-        Microphone.End(activeMicDevice);
+        int lastMicPosition = VoiceMicTrace.Position(activeMicDevice);
+        captureInProgress = false;
 
         if (micVolumeMeter != null)
             micVolumeMeter.EnableVolumeMeter(false, null, null);
@@ -237,44 +266,96 @@ public class AudioRecorder : MonoBehaviour
             ? Mathf.Max(0f, endTime - firstSpeechTime)
             : 0f;
 
-        AudioClip trimmedClip = TrimAudioClip(recordedClip, lastMicPosition);
-        byte[] wavBytes = SavWav.GetWavBytes(trimmedClip);
+        var conversionTimer = System.Diagnostics.Stopwatch.StartNew();
+        // The microphone remains open between turns. GetData wraps at the end of the clip.
+        int capturedFrames = lastMicPosition >= 0 && lastMicPosition < recordedClip.samples
+            ? (lastMicPosition - startPosition + recordedClip.samples) % recordedClip.samples : 0;
+        double elapsedCapture = Time.realtimeSinceStartupAsDouble - captureStarted;
+        if (elapsedCapture >= (double)recordedClip.samples / recordedClip.frequency || capturedFrames <= 0)
+        {
+            Debug.LogWarning("[AudioRecorder] Capture buffer was empty or overwritten; discarding this turn.");
+            onRecordingComplete?.Invoke(null, 0f, 0f);
+            yield break;
+        }
+        byte[] wavBytes;
+        using (WavMarker.Auto())
+            wavBytes = SavWav.GetWavBytes(recordedClip, startPosition, capturedFrames);
+        Debug.Log($"[VoicePerf] audio conversion ms={conversionTimer.Elapsed.TotalMilliseconds:F1} bytes={(wavBytes != null ? wavBytes.Length : 0)} frame={Time.frameCount}");
 
         onRecordingComplete?.Invoke(wavBytes, speechDuration, initialSilenceDuration);
-    }
-
-    private AudioClip TrimAudioClip(AudioClip originalClip, int lastPosition)
-    {
-        if (originalClip == null || lastPosition <= 0) return originalClip;
-
-        float[] samples = new float[lastPosition * originalClip.channels];
-        originalClip.GetData(samples, 0);
-
-        AudioClip trimmedClip = AudioClip.Create(
-            originalClip.name + "_trimmed",
-            lastPosition,
-            originalClip.channels,
-            originalClip.frequency,
-            false
-        );
-        trimmedClip.SetData(samples, 0);
-        return trimmedClip;
     }
 
     public void StopRecording()
     {
         stopRequested = true;
         StopAllCoroutines();
+        captureInProgress = false;
 
-        if (!string.IsNullOrEmpty(activeMicDevice) && Microphone.IsRecording(activeMicDevice))
-        {
-            Microphone.End(activeMicDevice);
-            Debug.Log("[AudioRecorder] Microphone capture forcibly stopped.");
-        }
+        ReleaseSessionCapture();
 
         if (micVolumeMeter != null)
         {
             micVolumeMeter.EnableVolumeMeter(false, null, null);
         }
     }
+
+    private void ReleaseSessionCapture()
+    {
+        if (!string.IsNullOrEmpty(activeMicDevice) && VoiceMicTrace.IsRecording(activeMicDevice))
+        {
+            using (MicStopMarker.Auto()) VoiceMicTrace.End(activeMicDevice);
+            Debug.Log("[AudioRecorder] Session microphone closed.");
+        }
+        if (sessionClip != null) Destroy(sessionClip);
+        sessionClip = null;
+        activeMicDevice = null;
+    }
+}
+
+// Temporary investigation instrumentation. Unity microphone and AudioClip APIs stay on the calling thread.
+internal static class VoiceMicTrace
+{
+    private static readonly ProfilerMarker DevicesMarker = new ProfilerMarker("Voice.MicDevices");
+    private static readonly ProfilerMarker PositionMarker = new ProfilerMarker("Voice.MicPosition");
+    private static readonly ProfilerMarker StateMarker = new ProfilerMarker("Voice.MicIsRecording");
+    private static readonly ProfilerMarker ReadMarker = new ProfilerMarker("Voice.AudioClipGetData");
+    private static readonly ProfilerMarker StartMarker = new ProfilerMarker("Voice.MicStartCall");
+    private static readonly ProfilerMarker EndMarker = new ProfilerMarker("Voice.MicEndCall");
+    private static readonly ProfilerMarker CapsMarker = new ProfilerMarker("Voice.MicDeviceCaps");
+
+    internal struct Scope : IDisposable
+    {
+        private ProfilerMarker.AutoScope marker;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private long start;
+        private string operation;
+#endif
+        internal Scope(ProfilerMarker profilerMarker, string name)
+        {
+            marker = profilerMarker.Auto();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            operation = name;
+            start = System.Diagnostics.Stopwatch.GetTimestamp();
+#endif
+        }
+        public void Dispose()
+        {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            double elapsedMs = (System.Diagnostics.Stopwatch.GetTimestamp() - start) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+#endif
+            marker.Dispose();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (elapsedMs >= 10.0)
+                Debug.LogWarning($"[VoiceOp] {operation} main-thread ms={elapsedMs:F2} frame={Time.frameCount} time={Time.realtimeSinceStartupAsDouble:F3}");
+#endif
+        }
+    }
+
+    internal static string[] Devices() { using (new Scope(DevicesMarker, "Microphone.devices")) return Microphone.devices; }
+    internal static int Position(string device) { using (new Scope(PositionMarker, "Microphone.GetPosition")) return Microphone.GetPosition(device); }
+    internal static bool IsRecording(string device) { using (new Scope(StateMarker, "Microphone.IsRecording")) return Microphone.IsRecording(device); }
+    internal static bool ReadClip(AudioClip clip, float[] samples, int offset) { using (new Scope(ReadMarker, "AudioClip.GetData")) return clip.GetData(samples, offset); }
+    internal static void DeviceCaps(string device, out int min, out int max) { using (new Scope(CapsMarker, "Microphone.GetDeviceCaps")) Microphone.GetDeviceCaps(device, out min, out max); }
+    internal static AudioClip Start(string device, int seconds, int rate, bool loop) { using (new Scope(StartMarker, "Microphone.Start")) return Microphone.Start(device, loop, seconds, rate); }
+    internal static void End(string device) { using (new Scope(EndMarker, "Microphone.End")) Microphone.End(device); }
 }
