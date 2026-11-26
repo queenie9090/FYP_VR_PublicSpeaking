@@ -277,7 +277,7 @@ public class EmotionDashboardUIController : MonoBehaviour
                 finalEmotionLabel.text = "NO DATA";
 
             if (intensityText != null)
-                intensityText.text = "Intensity: --";
+                intensityText.text = "Intensity --";
 
             if (finalEmotionIcon != null)
             {
@@ -297,7 +297,7 @@ public class EmotionDashboardUIController : MonoBehaviour
             finalEmotionLabel.text = emotion;
 
         if (intensityText != null)
-            intensityText.text = $"Intensity: {intensity}%";
+            intensityText.text = $"Intensity {intensity}%";
 
         EmotionDisplayBinding binding = FindBinding(emotion);
 

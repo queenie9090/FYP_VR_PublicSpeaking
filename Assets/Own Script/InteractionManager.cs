@@ -425,8 +425,10 @@ public class InteractionManager : MonoBehaviour
                 hallAudienceReactions, SafeAudienceEmotion(hallAudienceA), SafeAudienceEmotion(hallAudienceB), multiNpcRoster);
             if (npcEmotionController != null && npcEmotionController.SensitiveEmotionReactions && multiNpcRoster == null)
                 prompt += "\nA professional can show happiness at a success, sadness at a loss, anger at a personal insult, nervousness under pressure, or thoughtfulness when weighing alternatives, even while speaking calmly. Respond naturally to the context; routine disagreement alone is insufficient.";
+            if (IsClassroomPair || hallAudienceReactions)
+                prompt += "\nRe-evaluate each character independently on this turn. A small new cue is enough: encouragement may reassure, a personal loss may sadden, blame may anger, pressure may worry, a dilemma may prompt reflection. Let the newest meaningful cue outweigh the previous mood. Keep the same label when it still fits.";
             if (IsClassroomPair)
-                prompt += "\nEither student may speak first. Use each responding student's exact roster name once.";
+                prompt += "\nEither student may speak first. For a single speaker, also include the top-level JSON field listener_emotion with the silent classmate's independent reaction (one supported emotion). Omit it when both speak.";
             if (attempt > 0)
                 prompt += "\nReassess the emotion using the participant's actual context. Return one valid JSON response with a supported emotion.";
             StartCoroutine(openAIManager.SendChatRequest(prompt, conversationHistory, formattedTranscript,
@@ -508,8 +510,18 @@ public class InteractionManager : MonoBehaviour
                 validatedEmotion == "HAPPY" && previousEmotion != "HAPPY";
             if (firstLine) previousEmotion = validatedEmotion;
             int emotionIntensity = EmotionIntensityClassifier.Classify(validatedEmotion, userTranscript, line.dialogue,
-                npcEmotionController != null && npcEmotionController.SensitiveEmotionReactions);
-            if (npcEmotionController != null) npcEmotionController.SetEmotion(validatedEmotion, emotionIntensity);
+                IsClassroomPair || hallAudienceReactions || (npcEmotionController != null && npcEmotionController.SensitiveEmotionReactions));
+            if (npcEmotionController != null)
+            {
+                if (IsClassroomPair || hallAudienceReactions)
+                    npcEmotionController.ApplyConversationReaction(validatedEmotion, emotionIntensity);
+                else npcEmotionController.SetEmotion(validatedEmotion, emotionIntensity);
+            }
+            if (IsClassroomPair && response.npc_responses.Count == 1)
+            {
+                var listener = roomNPCs[0] == speaker ? roomNPCs[1] : roomNPCs[0];
+                ApplySilentReaction(EmotionSource(listener), response.listener_emotion, userTranscript);
+            }
             if (IsClassroomPair)
                 RecordClassroomEmotions(expectedTurnNumber, speaker, response.npc_responses.Count == 1);
             else if (hallScreen == null || npcEmotionController != hallScreen.Judge)
@@ -517,8 +529,8 @@ public class InteractionManager : MonoBehaviour
 
             if (firstLine && hallAudienceReactions)
             {
-                ApplyHallAudienceEmotion(hallAudienceA, response.audience_a_emotion, userTranscript);
-                ApplyHallAudienceEmotion(hallAudienceB, response.audience_b_emotion, userTranscript);
+                ApplySilentReaction(hallAudienceA, response.audience_a_emotion, userTranscript);
+                ApplySilentReaction(hallAudienceB, response.audience_b_emotion, userTranscript);
                 if (hallScreen != null)
                 {
                     RecordHallEmotion(expectedTurnNumber, "Judge", hallScreen.Judge);
@@ -849,16 +861,16 @@ public class InteractionManager : MonoBehaviour
             NPCEmotionSessionManager.Instance?.RecordEmotion(turn, name, source.currentEmotion, source.emotionIntensity);
     }
 
-    private void ApplyHallAudienceEmotion(NPCEmotionController audience, string rawEmotion, string participantText)
+    private void ApplySilentReaction(NPCEmotionController audience, string rawEmotion, string participantText)
     {
         if (audience == null || !audience.isActiveAndEnabled || audience == npcEmotionController)
             return;
         if (!EmotionIntensityClassifier.TryClassifyHallAudience(rawEmotion, participantText, out string emotion, out int intensity))
         {
-            Debug.Log("[Hall Emotion] Missing/invalid label or no participant context; audience state retained.");
+            Debug.Log("[NPC Emotion] Listener reaction unavailable; current emotion retained.");
             return;
         }
-        audience.SetEmotion(emotion, intensity);
+        audience.ApplyConversationReaction(emotion, intensity);
     }
 
     public void SelectActiveNPC(NPCPersona targetNPC)

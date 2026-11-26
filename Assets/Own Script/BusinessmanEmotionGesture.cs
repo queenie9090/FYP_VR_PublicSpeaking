@@ -15,6 +15,7 @@ public sealed class BusinessmanEmotionGesture : MonoBehaviour
     private readonly Quaternion[] relaxedFingers = new Quaternion[15], curledFingers = new Quaternion[15];
     private Quaternion handFrame;
     private bool applied, hasHandFrame;
+    private int seenReaction;
     private string displayed = "NEUTRAL";
     private float elapsed, strength;
     private const float Duration = 2.4f;
@@ -94,6 +95,11 @@ public sealed class BusinessmanEmotionGesture : MonoBehaviour
     {
         if (!rig.isActiveAndEnabled) return;
         float activityWeight = celebrationLayer >= 0 ? 1f - Mathf.Clamp01(rig.GetLayerWeight(celebrationLayer)) : 1f;
+        if (seenReaction != face.ConversationReactionVersion)
+        {
+            seenReaction = face.ConversationReactionVersion;
+            if (displayed == face.currentEmotion) elapsed = 0f;
+        }
         // Fade the previous gesture before accepting the latest label, including a neutral reset.
         if (displayed != face.currentEmotion && strength <= .001f)
         {
