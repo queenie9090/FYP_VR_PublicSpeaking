@@ -349,16 +349,22 @@ public class OpenAIManager : MonoBehaviour
 
     private static IEnumerator WaitForRequest(UnityWebRequest request, Func<bool> shouldCancel)
     {
+        string stage = request.url.StartsWith(DeepgramUrl, StringComparison.Ordinal) ? "transcription" :
+            request.url.StartsWith(ChatUrl, StringComparison.Ordinal) ? "dialogue" : "tts";
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        Debug.Log($"[VoicePerf] {stage} start frame={Time.frameCount} time={Time.realtimeSinceStartupAsDouble:F3}");
         var operation = request.SendWebRequest();
         while (!operation.isDone)
         {
             if (shouldCancel != null && shouldCancel())
             {
                 request.Abort();
+                Debug.Log($"[VoicePerf] {stage} cancelled ms={timer.Elapsed.TotalMilliseconds:F1} frame={Time.frameCount}");
                 yield break;
             }
             yield return null;
         }
+        Debug.Log($"[VoicePerf] {stage} complete ms={timer.Elapsed.TotalMilliseconds:F1} HTTP={request.responseCode} result={request.result} frame={Time.frameCount} time={Time.realtimeSinceStartupAsDouble:F3}");
     }
 
     private static bool IsValidEmotion(string emotion)

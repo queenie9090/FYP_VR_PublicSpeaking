@@ -55,27 +55,27 @@ public class SetupUIController : MonoBehaviour
     {
         { "Hall", new List<string> {
             "Pitching a Mental Health App",
-            "Presenting FYP Smart Parking System",
-            "Explaining Why App Launch Delayed",
-            "Talk: How Sleep Affects Memory"
+            "Presenting a Smart Parking System",
+            "Explaining an App Launch Delay",
+            "How Sleep Affects Memory"
         } },
         { "Interview", new List<string> {
-            "Junior Web Developer Job Interview",
-            "Handling a Late Teammate Question",
+            "Junior Web Developer Interview",
+            "Handling a Late Teammate",
             "Why I Deserve This Scholarship",
-            "Asking for a 15% Salary Raise"
+            "Negotiating a 15% Salary Raise"
         } },
         { "Classroom", new List<string> {
-            "Explaining How Cloud Storage Works",
-            "Briefing Students on Final Project Rules",
-            "Giving Feedback on Weak Group Slides",
-            "Handling Student Questions on Exam Scope"
+            "Explaining Cloud Storage",
+            "Final Project Guidelines",
+            "Giving Feedback on Group Slides",
+            "Answering Questions on Exam Scope"
         } },
         { "Cafeteria", new List<string> {
-            "Convincing Friend to Visit Langkawi",
-            "Apologizing for Missing Group Meeting",
-            "Asking Senior for Internship Tips",
-            "Inviting Classmate to Join Hackathon"
+            "Convincing a Friend to Visit Langkawi",
+            "Apologizing for a Missed Meeting",
+            "Asking for Internship Advice",
+            "Inviting a Classmate to a Hackathon"
         } }
     };
 
@@ -122,11 +122,82 @@ public class SetupUIController : MonoBehaviour
             OnScenarioDropdownChanged(scenarioDropdown.value);
         }
 
+        ConnectIntroductionAndRoleControls();
+
         // 3. Hide tutorial modal by default
         if (tutorialModalPanel != null)
         {
             tutorialModalPanel.SetActive(false);
         }
+    }
+
+    private void ConnectIntroductionAndRoleControls()
+    {
+        if (participantRoleInput != null) participantRoleInput.readOnly = true;
+        if (npcPersonaInput != null) npcPersonaInput.readOnly = true;
+
+        ConnectRoleEditButton(participantRoleInput);
+        ConnectRoleEditButton(npcPersonaInput);
+
+        Transform menuCanvas = configurationPanel != null ? configurationPanel.transform.parent : null;
+        Transform scenarioButtons = menuCanvas != null
+            ? menuCanvas.Find("IntroPanel/settingBG/settingSide") : null;
+        if (scenarioButtons == null)
+        {
+            Debug.LogWarning("[SetupUIController] Introduction scenario buttons were not found.");
+            return;
+        }
+
+        ConnectScenarioButton(scenarioButtons, "HallBttn", "Hall");
+        ConnectScenarioButton(scenarioButtons, "ClassroomBttn", "Classroom");
+        ConnectScenarioButton(scenarioButtons, "CafeBttn", "Cafeteria");
+        ConnectScenarioButton(scenarioButtons, "InterviewBttn", "Interview");
+    }
+
+    private void ConnectRoleEditButton(TMP_InputField input)
+    {
+        if (input == null) return;
+        Transform buttonTransform = input.transform.parent.Find("editButton");
+        Button button = buttonTransform != null ? buttonTransform.GetComponent<Button>() : null;
+        if (button == null)
+        {
+            Debug.LogWarning("[SetupUIController] Edit button not found for " + input.name);
+            return;
+        }
+
+        button.onClick.AddListener(() =>
+        {
+            input.readOnly = false;
+            input.Select();
+            input.ActivateInputField();
+        });
+    }
+
+    private void ConnectScenarioButton(Transform parent, string buttonName, string scenario)
+    {
+        Transform buttonTransform = parent.Find(buttonName);
+        Button button = buttonTransform != null ? buttonTransform.GetComponent<Button>() : null;
+        if (button == null)
+        {
+            Debug.LogWarning("[SetupUIController] Scenario button not found: " + buttonName);
+            return;
+        }
+
+        button.onClick.AddListener(() => SelectIntroductionScenario(scenario));
+    }
+
+    private void SelectIntroductionScenario(string scenario)
+    {
+        if (scenarioDropdown == null) return;
+        int index = scenarioDropdown.options.FindIndex(option =>
+            string.Equals(option.text, scenario, System.StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            Debug.LogWarning("[SetupUIController] Scenario dropdown has no option for " + scenario);
+            return;
+        }
+
+        scenarioDropdown.value = index;
     }
 
     // Handles both default preset populating AND updating the ScenarioCardUI weights display

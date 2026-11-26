@@ -2,11 +2,13 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.XR;
+using Unity.Profiling;
 
 /// <summary>Observes playback availability during a VR session; never changes capture devices.</summary>
 public sealed class WindowsAudioRouteMonitor : MonoBehaviour
 {
     const int MaxAttempts = 3;
+    static readonly ProfilerMarker PollMarker = new ProfilerMarker("WindowsAudioRoute.Poll");
     string lastEndpoint;
     int lastPresence = -2;
     int attempts;
@@ -45,7 +47,9 @@ public sealed class WindowsAudioRouteMonitor : MonoBehaviour
         {
             var hmd = InputDevices.GetDeviceAtXRNode(XRNode.Head);
             int presence = hmd.isValid && hmd.TryGetFeatureValue(CommonUsages.userPresence, out bool present) ? (present ? 1 : 0) : -1;
-            string endpoint = WindowsAudioRouter.ProbeQuestEndpoint();
+            string endpoint;
+            using (PollMarker.Auto())
+                endpoint = WindowsAudioRouter.ProbeQuestEndpoint();
             if (stopping) yield break;
 
             if (endpoint != lastEndpoint || presence != lastPresence)
@@ -56,7 +60,13 @@ public sealed class WindowsAudioRouteMonitor : MonoBehaviour
                 attempts = 0;
                 routed = false;
             }
-            if (routed && endpoint != null && !WindowsAudioRouter.AreQuestDefaultsActive(endpoint))
+            bool defaultsActive = true;
+            if (routed && endpoint != null)
+            {
+                using (PollMarker.Auto())
+                    defaultsActive = WindowsAudioRouter.AreQuestDefaultsActive(endpoint);
+            }
+            if (routed && endpoint != null && !defaultsActive)
             {
                 Debug.LogWarning("[WindowsAudioRouter] Windows playback defaults changed during VR; retrying the Quest route.");
                 routed = false;

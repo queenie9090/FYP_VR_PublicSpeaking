@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using Unity.Profiling;
 
 public class DialogueUIManager : MonoBehaviour
 {
@@ -25,6 +26,10 @@ public class DialogueUIManager : MonoBehaviour
     private int activeMaxTurns = 5;
     private readonly List<GameObject> spawnedBubbles = new List<GameObject>();
     private TMP_Text latestBubbleText;
+    private bool scrollPending;
+    private int lastDisplayedSecond = -1;
+    private int lastDisplayedTurn = -1;
+    private static readonly ProfilerMarker ScrollMarker = new ProfilerMarker("DialogueUI.ScrollLayout");
 
     public void ShowUI()
     {
@@ -49,6 +54,9 @@ public class DialogueUIManager : MonoBehaviour
         if (conversationTimerText == null) return;
         int minutes = Mathf.FloorToInt(elapsedSeconds / 60.0f);
         int seconds = Mathf.FloorToInt(elapsedSeconds % 60.0f);
+        int totalSeconds = minutes * 60 + seconds;
+        if (lastDisplayedSecond == totalSeconds) return;
+        lastDisplayedSecond = totalSeconds;
         conversationTimerText.text = $"{minutes:D2}:{seconds:D2}";
     }
 
@@ -58,6 +66,7 @@ public class DialogueUIManager : MonoBehaviour
     public void InitTurnCounter(int maxLimit)
     {
         activeMaxTurns = maxLimit;
+        lastDisplayedTurn = -1;
         if (turnPanel != null) turnPanel.SetActive(true);
         UpdateTurnDisplay(1);
     }
@@ -163,11 +172,19 @@ public class DialogueUIManager : MonoBehaviour
 
     private void ScrollToBottom()
     {
-        if (dialogueScrollRect != null)
+        if (dialogueScrollRect != null) scrollPending = true;
+    }
+
+    private void LateUpdate()
+    {
+        if (scrollPending && dialogueScrollRect != null && chatContentParent != null)
         {
-            Canvas.ForceUpdateCanvases();
-            LayoutRebuilder.ForceRebuildLayoutImmediate(chatContentParent as RectTransform);
-            dialogueScrollRect.verticalNormalizedPosition = 0.0f;
+            scrollPending = false;
+            using (ScrollMarker.Auto())
+            {
+                Canvas.ForceUpdateCanvases();
+                dialogueScrollRect.verticalNormalizedPosition = 0.0f;
+            }
         }
     }
 
@@ -176,6 +193,8 @@ public class DialogueUIManager : MonoBehaviour
         if (turnText != null)
         {
             int displayTurn = Mathf.Min(turnNumber, activeMaxTurns);
+            if (lastDisplayedTurn == displayTurn) return;
+            lastDisplayedTurn = displayTurn;
             turnText.text = $"Turn {displayTurn} / {activeMaxTurns}";
         }
     }

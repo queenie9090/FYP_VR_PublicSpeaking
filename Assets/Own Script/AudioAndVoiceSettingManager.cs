@@ -32,6 +32,7 @@ public class AudioAndVoiceSettingsManager : MonoBehaviour
     private AudioClip micTestClip;
     private string currentMicDevice;
     private bool isTestingMic = false;
+    private readonly float[] micTestSamples = new float[128];
 
     private void Start()
     {
@@ -138,18 +139,17 @@ public class AudioAndVoiceSettingsManager : MonoBehaviour
         if (liveInputMeterFill == null || string.IsNullOrEmpty(currentMicDevice) || micTestClip == null) return;
         if (!Microphone.IsRecording(currentMicDevice)) return;
 
-        int sampleWindow = 128;
-        float[] waveData = new float[sampleWindow];
+        int sampleWindow = micTestSamples.Length;
         int micPosition = Microphone.GetPosition(currentMicDevice) - (sampleWindow + 1);
 
         if (micPosition < 0) return;
 
-        micTestClip.GetData(waveData, micPosition);
+        micTestClip.GetData(micTestSamples, micPosition);
 
         float levelMax = 0;
         for (int i = 0; i < sampleWindow; i++)
         {
-            float wavePeak = waveData[i] * waveData[i];
+            float wavePeak = micTestSamples[i] * micTestSamples[i];
             if (levelMax < wavePeak)
             {
                 levelMax = wavePeak;
