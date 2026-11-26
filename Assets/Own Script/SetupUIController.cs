@@ -53,10 +53,30 @@ public class SetupUIController : MonoBehaviour
 
     private readonly Dictionary<string, List<string>> scenarioTopicPresets = new Dictionary<string, List<string>>
     {
-        { "Hall", new List<string> { "Keynote Presentation", "Product Pitch", "Research Defense", "Quarterly Town Hall" } },
-        { "Interview", new List<string> { "Job Interview Evaluation", "Software Engineering Role", "Leadership & Behavioral", "University Admission" } },
-        { "Classroom", new List<string> { "Classroom Discussion", "Group Project Debate", "Literature Analysis", "Science Q&A" } },
-        { "Cafeteria", new List<string> { "Casual Catch-Up", "Weekend Plans & Hobbies", "Movies, Music & Games", "Travel & Food Recommendations" } }
+        { "Hall", new List<string> {
+            "Pitching a Mental Health App",
+            "Presenting FYP Smart Parking System",
+            "Explaining Why App Launch Delayed",
+            "Talk: How Sleep Affects Memory"
+        } },
+        { "Interview", new List<string> {
+            "Junior Web Developer Job Interview",
+            "Handling a Late Teammate Question",
+            "Why I Deserve This Scholarship",
+            "Asking for a 15% Salary Raise"
+        } },
+        { "Classroom", new List<string> {
+            "Explaining How Cloud Storage Works",
+            "Briefing Students on Final Project Rules",
+            "Giving Feedback on Weak Group Slides",
+            "Handling Student Questions on Exam Scope"
+        } },
+        { "Cafeteria", new List<string> {
+            "Convincing Friend to Visit Langkawi",
+            "Apologizing for Missing Group Meeting",
+            "Asking Senior for Internship Tips",
+            "Inviting Classmate to Join Hackathon"
+        } }
     };
 
     private void Awake()
@@ -127,16 +147,16 @@ public class SetupUIController : MonoBehaviour
         switch (selectedScenario)
         {
             case "Hall":
-                SetPresetIfEmpty("Keynote Presentation", "Presenter", "Audience Member");
+                SetRoles("Presenter", "Audience Member");
                 break;
             case "Interview":
-                SetPresetIfEmpty("Job Interview Evaluation", "Candidate", "Interviewer");
+                SetRoles("Candidate", "Interviewer");
                 break;
             case "Classroom":
-                SetPresetIfEmpty("Classroom Discussion", "Lecturer", "Student");
+                SetRoles("Lecturer", "Student");
                 break;
             case "Cafeteria":
-                SetPresetIfEmpty("Weekend Plans & Hobbies", "Friend", "Close Friend");
+                SetRoles("Friend", "Close Friend");
                 break;
         }
 

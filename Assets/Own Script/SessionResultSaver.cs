@@ -251,8 +251,12 @@ public class SessionResultSaver : MonoBehaviour
             Debug.LogWarning("[SessionResultSaver] OpenAIManager not found. Using default summary.");
         }
 
-        string statsHeader = $"<b>Session Counts:</b> Expressive Gestures: {totalExpressiveGestures} | Inappropriate Gestures: {unprofessionalCount} | Hints Used: {totalHintsUsed}\n\n";
-        aiSummary = statsHeader + aiSummary;
+        string activityBreakdown =
+                    $"Delivery Activity:\n" +
+                    $"- Expressive Gestures: {totalExpressiveGestures}\n" +
+                    $"- Unprofessional Gestures: {unprofessionalCount}\n" +
+                    $"- Hints Used: {totalHintsUsed}\n\n";
+        aiSummary = activityBreakdown + aiSummary;
 
         // 6. Supabase database save
         if (supabaseManager == null)
