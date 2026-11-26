@@ -1,6 +1,9 @@
 using System.Collections;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
+using UnityEngine.UI;
 #if UNITY_EDITOR
 using UnityEngine.InputSystem;
 #endif
@@ -20,7 +23,13 @@ public class HallNPCRealismScreen : MonoBehaviour
     [SerializeField] private Transform tvRoot;
     [SerializeField] private MeshRenderer displaySurface;
     [SerializeField] private TMP_Text viewingLabel;
-    [SerializeField] private TMP_Text[] previewLabels = new TMP_Text[2];
+    [SerializeField] private RawImage[] previewImages = new RawImage[2];
+    private readonly RenderTexture[] previewFeeds = new RenderTexture[2];
+    private readonly int[] previewTargets = { -1, -1 };
+    private readonly UniversalRenderPipeline.SingleCameraRequest previewRequest = new UniversalRenderPipeline.SingleCameraRequest();
+    private int nextPreviewSlot;
+    private float nextPreviewTime;
+
     [SerializeField] private NPCEmotionIndicatorUI tvEmotionBar;
     [Header("Automatic camera direction")]
     [SerializeField] private bool enableAutomaticDirection = true;
@@ -55,7 +64,7 @@ public class HallNPCRealismScreen : MonoBehaviour
         closeUpCameras = new[] { judgeCamera, audienceACamera, audienceBCamera };
         DisableCloseUpCameras();
         if (tvRoot == null || displaySurface == null || displaySurface.sharedMaterial == null ||
-            viewingLabel == null || previewLabels == null || previewLabels.Length != 2 || previewLabels[0] == null || previewLabels[1] == null)
+            viewingLabel == null)
         {
             Debug.LogWarning("[Hall Screen] TV, display material or serialized TV labels are missing.", this);
             yield break;
@@ -114,11 +123,50 @@ public class HallNPCRealismScreen : MonoBehaviour
         for (int i = 0; i < names.Length && slot < 2; i++)
         {
             if (i == index) continue;
-            bool available = closeUpCameras[i] != null && closeUpCameras[i].gameObject.activeInHierarchy && targets[i] != null && targets[i].isActiveAndEnabled && targets[i].HeadMesh != null && targets[i].HeadMesh.gameObject.activeInHierarchy;
-            previewLabels[slot++].text = names[i] + (available ? "\nShown on rotation" : "\nUnavailable");
+            previewTargets[slot] = i;
+            if (PreviewImage(slot) != null) PreviewImage(slot).enabled = false;
+            slot++;
         }
-        while (slot < 2) previewLabels[slot++].text = "Unavailable";
+        nextPreviewTime = 0f;
         Debug.Log("[Hall Screen] " + viewingLabel.text, this);
+    }
+
+    private RawImage PreviewImage(int slot)
+    {
+        return previewImages != null && slot < previewImages.Length ? previewImages[slot] : null;
+    }
+
+    private void LateUpdate()
+    {
+        if (!ready || Time.unscaledTime < nextPreviewTime) return;
+
+        // Stagger the two thumbnails so only one extra low-resolution view is drawn per refresh.
+        int slot = nextPreviewSlot;
+        nextPreviewSlot = 1 - slot;
+        nextPreviewTime = Time.unscaledTime + 0.125f;
+        var image = PreviewImage(slot);
+        int npc = previewTargets[slot];
+        if (image == null || npc < 0) return;
+        var camera = closeUpCameras[npc];
+        if (FindAvailable(npc) != npc || !RenderPipeline.SupportsRenderRequest(camera, previewRequest))
+        {
+            image.enabled = false;
+            return;
+        }
+
+        if (previewFeeds[slot] == null)
+        {
+            previewFeeds[slot] = new RenderTexture(432, 248, 24, RenderTextureFormat.ARGB32)
+            {
+                name = "Hall TV Preview " + (slot + 1)
+            };
+            previewFeeds[slot].Create();
+        }
+
+        previewRequest.destination = previewFeeds[slot];
+        RenderPipeline.SubmitRenderRequest(camera, previewRequest);
+        image.texture = previewFeeds[slot];
+        image.enabled = true;
     }
 
     private void Update()
@@ -210,13 +258,15 @@ public class HallNPCRealismScreen : MonoBehaviour
         }
     }
 
-    private void OnDisable() { DisableCloseUpCameras(); if (displayMaterial != null) displayMaterial.SetColor("_BaseColor", Color.black); }
+    private void OnDisable() { foreach (var image in previewImages ?? System.Array.Empty<RawImage>()) if (image != null) image.enabled = false; DisableCloseUpCameras(); if (displayMaterial != null) displayMaterial.SetColor("_BaseColor", Color.black); }
     private void OnEnable() { if (ready) SelectTarget(FindAvailable(selected >= 0 ? selected : 0)); }
     private void OnDestroy()
     {
         DisableCloseUpCameras();
         if (displaySurface != null && displaySurface.sharedMaterial == displayMaterial) displaySurface.sharedMaterial = originalDisplayMaterial;
         if (displayMaterial != null) Destroy(displayMaterial);
+        foreach (var preview in previewFeeds)
+            if (preview != null) { preview.Release(); Destroy(preview); }
         if (feed != null) { feed.Release(); Destroy(feed); }
     }
 }
