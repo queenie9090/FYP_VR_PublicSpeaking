@@ -25,6 +25,7 @@ public sealed partial class HallAudienceCelebration
 
     private void UpdateAudiencePoses()
     {
+        if (groupRoutine != null || groupClapping) return;
         bool listening = session && session.IsSessionActive && session.IsPlayerCapturing;
         if (poseForA != null && poseForA.Apply(listening) && CanPlay(audienceA, clapClip, "Clap"))
         {
@@ -47,6 +48,7 @@ public sealed partial class HallAudienceCelebration
         private string emotion;
         private float age, weight, nodTime, restWeight;
         private bool applied;
+        private int seenReaction;
 
         internal static AudiencePose Create(Animator rig, NPCEmotionController face, bool isA, string layerName)
         {
@@ -62,6 +64,7 @@ public sealed partial class HallAudienceCelebration
             foreach (B id in new[] { B.Head, B.Chest, B.LeftShoulder, B.RightShoulder, B.LeftUpperArm,
                 B.LeftLowerArm, B.LeftHand, B.RightUpperArm, B.RightLowerArm, B.RightHand, B.RightThumbProximal })
                 bones[(int)id] = rig.GetBoneTransform(id);
+            bones[(int)B.Spine] = rig.GetBoneTransform(B.Spine);
         }
 
         internal void Restore()
@@ -79,6 +82,12 @@ public sealed partial class HallAudienceCelebration
             if (!rig || !rig.isActiveAndEnabled || !face || !face.isActiveAndEnabled) return false;
             float celebrationWeight = layer >= 0 ? Mathf.Clamp01(rig.GetLayerWeight(layer)) : 0f;
             bool celebrating = celebrationWeight > .0001f;
+            if (seenReaction != face.ConversationReactionVersion)
+            {
+                seenReaction = face.ConversationReactionVersion;
+                if (emotion == face.currentEmotion) age = 0f;
+                if (!celebrating && emotion == "HAPPY" && emotion == face.currentEmotion) return true;
+            }
             bool changed = emotion != face.currentEmotion;
             if (changed && weight <= .001f)
             {
@@ -87,8 +96,8 @@ public sealed partial class HallAudienceCelebration
                 if (!celebrating && emotion == "HAPPY") return true;
             }
             age += Time.deltaTime;
-            float target = !celebrating && emotion == face.currentEmotion && emotion != "NEUTRAL" && age < 3f
-                ? Mathf.Lerp(.45f, 1f, face.emotionIntensity / 100f) : 0f;
+            float target = !celebrating && emotion == face.currentEmotion && emotion != "NEUTRAL" && age < 4.2f
+                ? Mathf.Lerp(.55f, 1f, face.emotionIntensity / 100f) : 0f;
             weight = Mathf.MoveTowards(weight, target, Time.deltaTime * 4f);
             float w = Mathf.SmoothStep(0, 1, weight);
             for (int i = 0; i < bones.Length; i++)
@@ -105,7 +114,7 @@ public sealed partial class HallAudienceCelebration
         {
             var body = rig.transform;
             var head = bones[(int)B.Head];
-            var chest = bones[(int)B.Chest];
+            var chest = bones[(int)B.Chest] ?? bones[(int)B.Spine];
             if (!head || !chest) return;
             Vector3 up = body.up, forward = body.forward, right = body.right;
             float scale = rig.humanScale;

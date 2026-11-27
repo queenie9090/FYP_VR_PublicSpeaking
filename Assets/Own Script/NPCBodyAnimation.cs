@@ -78,6 +78,10 @@ public class NPCBodyAnimation : MonoBehaviour
     [SerializeField] private ActionBinding[] actions = Array.Empty<ActionBinding>();
     private readonly List<ActionBinding> validActions = new();
     private readonly List<ActionBinding> candidates = new();
+    public enum SeatedOverlay { None, Speaking, AllConversationActivities }
+    [SerializeField] private SeatedOverlay seatedOverlay;
+    public SeatedOverlay Overlay => seatedOverlay;
+    public NPCBodyActivity Activity => activity;
     private NPCBodyActivity activity;
     private int turnNumber;
     private int layer = -1;
@@ -244,6 +248,10 @@ public class NPCBodyAnimation : MonoBehaviour
     {
         if (animator == null) animator = GetComponent<Animator>();
         if (emotionSource == null) emotionSource = GetComponentInChildren<NPCEmotionController>();
+        // The Hall Judge reserves its only masked layer for applause.
+        if (seatedOverlay == SeatedOverlay.AllConversationActivities && animator &&
+            animator.isHuman && animator.runtimeAnimatorController && !animator.applyRootMotion &&
+            GetComponent<BusinessmanEmotionGesture>()) return;
         layer = animator != null && animator.runtimeAnimatorController != null &&
             !string.IsNullOrWhiteSpace(layerName) ? animator.GetLayerIndex(layerName) : -1;
         if (layer <= 0 || animator.runtimeAnimatorController == null ||
@@ -768,7 +776,14 @@ public class NPCBodyAnimation : MonoBehaviour
         nodApplied = false;
     }
 
-    private void RecordSeatedGestureStart()
+    public void RecordOverlayMotion()
+    {
+        if (seatedGestureRecorded || activity == NPCBodyActivity.IDLE) return;
+        seatedGestureRecorded = true;
+        RecordSeatedGestureStart("Seated " + activity + " upper-body gesture");
+    }
+
+    private void RecordSeatedGestureStart(string motion = null)
     {
 #if UNITY_EDITOR
         if (manualTestActive) return;
@@ -780,7 +795,7 @@ public class NPCBodyAnimation : MonoBehaviour
             animation_event_id = Guid.NewGuid().ToString(), npc_id = npcId,
             npc_type = npcType.ToString(), scene_type = gameObject.scene.name,
             npc_activity = activity.ToString(), emotion = emotionSource != null ? emotionSource.currentEmotion : "NEUTRAL",
-            animation_name = "Seated " + activity + " forearm gesture", timestamp = DateTime.UtcNow.ToString("o"),
+            animation_name = motion ?? ("Seated " + activity + " forearm gesture"), timestamp = DateTime.UtcNow.ToString("o"),
             turnNumber = turnNumber
         });
     }

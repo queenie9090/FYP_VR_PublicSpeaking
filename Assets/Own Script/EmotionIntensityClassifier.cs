@@ -93,7 +93,7 @@ public static class EmotionIntensityClassifier
         intensity = 0;
         if (!IsSupported(rawEmotion) || !HasConversationTrigger(participantText)) return false;
         emotion = rawEmotion.Trim().ToUpperInvariant();
-        intensity = Classify(emotion, participantText, "");
+        intensity = Classify(emotion, participantText, "", sensitive: true);
         return true;
     }
 
