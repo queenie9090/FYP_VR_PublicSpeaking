@@ -13,6 +13,26 @@ public static class UserSession
 
     // Session control flags
     public static bool IsRunningTutorial { get; set; } = false;
+    // Tracks scene entry for this application run, regardless of tutorial outcome.
+    public static bool HasEnteredTutorialScene { get; private set; }
+
+    [UnityEngine.RuntimeInitializeOnLoadMethod(UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetTutorialSceneEntryForNewRun()
+    {
+        HasEnteredTutorialScene = false;
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoaded;
+    }
+
+    [UnityEngine.RuntimeInitializeOnLoadMethod(UnityEngine.RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void TrackTutorialSceneEntry()
+    {
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    private static void OnSceneLoaded(UnityEngine.SceneManagement.Scene scene, UnityEngine.SceneManagement.LoadSceneMode mode)
+    {
+        if (scene.name == "TutorialScene") HasEnteredTutorialScene = true;
+    }
 
     // Active session payload for detailed analytics view
     public static NormalizedSessionData CurrentSessionData { get; set; }

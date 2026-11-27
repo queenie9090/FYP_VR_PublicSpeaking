@@ -1,16 +1,22 @@
-using System;
-using System.IO;
-using System.Collections.Generic;
 using UnityEngine;
 
 public static class SavWav
 {
-    private const int HEADER_SIZE = 44;
+    private const int HeaderSize = 44;
 
-    /// <summary>
-    /// Converts an AudioClip into a raw PCM WAV byte array for network transmission (e.g., OpenAI Whisper STT API).
-    /// </summary>
     public static byte[] GetWavBytes(AudioClip clip)
+    {
+        return GetWavBytes(clip, clip != null ? clip.samples : 0);
+    }
+
+    // frameCount is in sample frames, not individual interleaved channel samples.
+    public static byte[] GetWavBytes(AudioClip clip, int frameCount)
+    {
+        return GetWavBytes(clip, 0, frameCount);
+    }
+
+    // AudioClip.GetData wraps when the requested range crosses the clip boundary.
+    public static byte[] GetWavBytes(AudioClip clip, int startFrame, int frameCount)
     {
         if (clip == null)
         {
@@ -18,75 +24,48 @@ public static class SavWav
             return null;
         }
 
-        using (MemoryStream stream = new MemoryStream())
+        int sampleCount = checked(frameCount * clip.channels);
+        float[] samples = new float[sampleCount];
+        VoiceMicTrace.ReadClip(clip, samples, startFrame);
+        return EncodePcm16(samples, clip.channels, clip.frequency);
+    }
+
+    // This method only accesses managed data; the AudioClip read above remains on Unity's main thread.
+    private static byte[] EncodePcm16(float[] samples, int channels, int frequency)
+    {
+        int dataSize = checked(samples.Length * 2);
+        byte[] wav = new byte[checked(HeaderSize + dataSize)];
+        wav[0] = (byte)'R'; wav[1] = (byte)'I'; wav[2] = (byte)'F'; wav[3] = (byte)'F';
+        Write32(wav, 4, wav.Length - 8);
+        wav[8] = (byte)'W'; wav[9] = (byte)'A'; wav[10] = (byte)'V'; wav[11] = (byte)'E';
+        wav[12] = (byte)'f'; wav[13] = (byte)'m'; wav[14] = (byte)'t'; wav[15] = (byte)' ';
+        Write32(wav, 16, 16);
+        Write16(wav, 20, 1);
+        Write16(wav, 22, channels);
+        Write32(wav, 24, frequency);
+        Write32(wav, 28, frequency * channels * 2);
+        Write16(wav, 32, channels * 2);
+        Write16(wav, 34, 16);
+        wav[36] = (byte)'d'; wav[37] = (byte)'a'; wav[38] = (byte)'t'; wav[39] = (byte)'a';
+        Write32(wav, 40, dataSize);
+
+        for (int i = 0; i < samples.Length; i++)
         {
-            // Reserve space for the 44-byte WAV header
-            byte[] emptyHeader = new byte[HEADER_SIZE];
-            stream.Write(emptyHeader, 0, HEADER_SIZE);
-
-            // Convert audio samples from float [-1.0, 1.0] to 16-bit PCM short
-            float[] samples = new float[clip.samples * clip.channels];
-            clip.GetData(samples, 0);
-
-            Byte[] intData = new Byte[samples.Length * 2];
-            int rescaleFactor = 32767; // 16-bit amplitude scaling factor
-
-            for (int i = 0; i < samples.Length; i++)
-            {
-                short bitValue = (short)(samples[i] * rescaleFactor);
-                Byte[] byteArr = BitConverter.GetBytes(bitValue);
-                byteArr.CopyTo(intData, i * 2);
-            }
-
-            stream.Write(intData, 0, intData.Length);
-
-            // Write final WAV header
-            stream.Seek(0, SeekOrigin.Begin);
-
-            Byte[] riff = System.Text.Encoding.UTF8.GetBytes("RIFF");
-            stream.Write(riff, 0, 4);
-
-            Byte[] chunkSize = BitConverter.GetBytes(stream.Length - 8);
-            stream.Write(chunkSize, 0, 4);
-
-            Byte[] wave = System.Text.Encoding.UTF8.GetBytes("WAVE");
-            stream.Write(wave, 0, 4);
-
-            Byte[] fmt = System.Text.Encoding.UTF8.GetBytes("fmt ");
-            stream.Write(fmt, 0, 4);
-
-            Byte[] subChunk1 = BitConverter.GetBytes(16); // Subchunk1Size (16 for PCM)
-            stream.Write(subChunk1, 0, 4);
-
-            UInt16 two = 2;
-            UInt16 one = 1;
-
-            Byte[] audioFormat = BitConverter.GetBytes(one); // 1 = Uncompressed PCM
-            stream.Write(audioFormat, 0, 2);
-
-            Byte[] numChannels = BitConverter.GetBytes((ushort)clip.channels);
-            stream.Write(numChannels, 0, 2);
-
-            Byte[] sampleRate = BitConverter.GetBytes(clip.frequency);
-            stream.Write(sampleRate, 0, 4);
-
-            Byte[] byteRate = BitConverter.GetBytes(clip.frequency * clip.channels * 2);
-            stream.Write(byteRate, 0, 4);
-
-            UInt16 blockAlign = (ushort)(clip.channels * 2);
-            stream.Write(BitConverter.GetBytes(blockAlign), 0, 2);
-
-            UInt16 bps = 16;
-            Byte[] bitsPerSample = BitConverter.GetBytes(bps);
-            stream.Write(bitsPerSample, 0, 2);
-
-            Byte[] datastring = System.Text.Encoding.UTF8.GetBytes("data");
-            stream.Write(datastring, 0, 4);
-
-            Byte[] subChunk2 = BitConverter.GetBytes(clip.samples * clip.channels * 2);
-            stream.Write(subChunk2, 0, 4);
-
-            return stream.ToArray();
+            short value = (short)(samples[i] * 32767);
+            Write16(wav, HeaderSize + i * 2, value);
         }
+        return wav;
+    }
+
+    private static void Write16(byte[] buffer, int offset, int value)
+    {
+        buffer[offset] = (byte)value;
+        buffer[offset + 1] = (byte)(value >> 8);
+    }
+
+    private static void Write32(byte[] buffer, int offset, int value)
+    {
+        Write16(buffer, offset, value);
+        Write16(buffer, offset + 2, value >> 16);
     }
 }
