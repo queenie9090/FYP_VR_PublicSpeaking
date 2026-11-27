@@ -26,8 +26,9 @@ public class AudioAndVoiceSettingsManager : MonoBehaviour
     private const string KEY_SFX_VOL = "Settings_SfxVol";
     private const string KEY_BGM_VOL = "Settings_BgmVol";
     private const string KEY_NPC_VOL = "Settings_NpcVoiceVol";
-    private const string KEY_MIC_NAME = "Settings_SelectedMic";
-    private const string KEY_MIC_SENS = "Settings_MicSensitivity";
+    internal const string KEY_MIC_NAME = "Settings_SelectedMic";
+    internal const string KEY_MIC_SENS = "Settings_MicSensitivity";
+    internal const string LEGACY_MIC_NAME = "UserSelectedMicrophone";
 
     private AudioClip micTestClip;
     private string currentMicDevice;
@@ -72,7 +73,7 @@ public class AudioAndVoiceSettingsManager : MonoBehaviour
         }
 
         int savedIndex = 0;
-        string savedMic = PlayerPrefs.GetString(KEY_MIC_NAME, "");
+        string savedMic = GetSavedMicrophone();
 
         for (int i = 0; i < devices.Length; i++)
         {
@@ -167,7 +168,7 @@ public class AudioAndVoiceSettingsManager : MonoBehaviour
     {
         PlayerPrefs.SetFloat(KEY_NPC_VOL, value);
         if (mainAudioMixer != null)
-            mainAudioMixer.SetFloat("NpcVoiceVol", Mathf.Log10(Mathf.Max(0.0001f, value)) * 20);
+            mainAudioMixer.SetFloat("NPCVol", Mathf.Log10(Mathf.Max(0.0001f, value)) * 20);
     }
 
     private void RegisterListeners()
@@ -249,8 +250,79 @@ public class AudioAndVoiceSettingsManager : MonoBehaviour
         SetBgmVolume(bgm);
     }
 
+    internal static string GetSavedMicrophone()
+    {
+        return PlayerPrefs.GetString(KEY_MIC_NAME, PlayerPrefs.GetString(LEGACY_MIC_NAME, ""));
+    }
+
     public static string GetActiveMicrophoneDevice()
     {
-        return PlayerPrefs.GetString(KEY_MIC_NAME, Microphone.devices.Length > 0 ? Microphone.devices[0] : "");
+        string[] devices = Microphone.devices;
+        string saved = GetSavedMicrophone();
+        foreach (string device in devices)
+            if (string.Equals(device, saved, System.StringComparison.OrdinalIgnoreCase)) return device;
+        return devices.Length > 0 ? devices[0] : "";
+    }
+}
+
+// Reapply saved mixer levels whenever a scene loads, including direct scene launches.
+internal static class SavedAudioLevels
+{
+    private static AudioMixer mixer;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void Initialize()
+    {
+        mixer = null;
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoaded;
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    private static void OnSceneLoaded(UnityEngine.SceneManagement.Scene scene, UnityEngine.SceneManagement.LoadSceneMode mode)
+    {
+        mixer = null;
+        AudioMixer current = FindMixer();
+        if (current == null) return;
+        Apply(current, "MasterVol", "Settings_MasterVol");
+        Apply(current, "SfxVol", "Settings_SfxVol");
+        Apply(current, "BgmVol", "Settings_BgmVol");
+        Apply(current, "NPCVol", "Settings_NpcVoiceVol");
+    }
+
+    private static void Apply(AudioMixer current, string parameter, string key)
+    {
+        float value = Mathf.Clamp01(PlayerPrefs.GetFloat(key, 0.8f));
+        if (!current.SetFloat(parameter, Mathf.Log10(Mathf.Max(0.0001f, value)) * 20f))
+            Debug.LogWarning("[Audio Settings] Mixer parameter not found: " + parameter);
+    }
+
+    internal static void Route(AudioSource source, string groupName)
+    {
+        AudioMixer current = FindMixer();
+        if (source == null || current == null) return;
+        AudioMixerGroup[] groups = current.FindMatchingGroups(groupName);
+        foreach (AudioMixerGroup group in groups)
+        {
+            if (group.name == groupName)
+            {
+                source.outputAudioMixerGroup = group;
+                return;
+            }
+        }
+        Debug.LogWarning("[Audio Settings] Mixer group not found: " + groupName);
+    }
+
+    private static AudioMixer FindMixer()
+    {
+        if (mixer != null) return mixer;
+        foreach (AudioMixer candidate in Resources.FindObjectsOfTypeAll<AudioMixer>())
+        {
+            if (candidate.name == "AudioMixer")
+            {
+                mixer = candidate;
+                break;
+            }
+        }
+        return mixer;
     }
 }

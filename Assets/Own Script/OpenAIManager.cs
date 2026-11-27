@@ -34,21 +34,37 @@ public class OpenAIManager : MonoBehaviour
             }
             else
             {
-                string rawJson = www.downloadHandler.text;
-                DeepgramResponse res = Newtonsoft.Json.JsonConvert.DeserializeObject<DeepgramResponse>(rawJson);
-
-                if (res != null && res.results != null && res.results.channels != null && res.results.channels.Length > 0)
-                {
-                    string transcript = res.results.channels[0].alternatives[0].transcript;
-                    Debug.Log($"[Deepgram Transcript]: {transcript}");
+                if (TryParseTranscription(www.downloadHandler.text, out string transcript, out string parseError))
                     onSuccess?.Invoke(transcript);
-                }
                 else
-                {
-                    onSuccess?.Invoke("");
-                }
+                    onError?.Invoke(parseError);
             }
         }
+    }
+    internal static bool TryParseTranscription(string rawJson, out string transcript, out string error)
+    {
+        transcript = null;
+        error = null;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(rawJson))
+                error = "Speech recognition returned an empty response.";
+            else
+            {
+                DeepgramResponse res = Newtonsoft.Json.JsonConvert.DeserializeObject<DeepgramResponse>(rawJson);
+                var channels = res?.results?.channels;
+                var alternatives = channels != null && channels.Length > 0 ? channels[0]?.alternatives : null;
+                if (alternatives == null || alternatives.Length == 0 || alternatives[0] == null || alternatives[0].transcript == null)
+                    error = "Speech recognition returned an invalid response.";
+                else
+                    transcript = alternatives[0].transcript;
+            }
+        }
+        catch (Exception ex)
+        {
+            error = "Speech recognition response could not be parsed: " + ex.GetType().Name;
+        }
+        return error == null;
     }
     #endregion
 

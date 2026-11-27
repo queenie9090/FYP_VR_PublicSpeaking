@@ -98,7 +98,22 @@ public class SetupUIController : MonoBehaviour
         if (inputModeToggle != null)
         {
             bool isHandTracking = (UserSession.InputMode == "Hands-Tracking");
-            inputModeToggle.isOn = isHandTracking;
+            if (isHandTracking || inputModeToggle.group == null)
+            {
+                inputModeToggle.SetIsOnWithoutNotify(isHandTracking);
+            }
+            else
+            {
+                // Select the other group member without invoking its click sound.
+                foreach (Toggle toggle in inputModeToggle.group.GetComponentsInChildren<Toggle>(true))
+                {
+                    if (toggle != inputModeToggle && toggle.group == inputModeToggle.group)
+                    {
+                        toggle.SetIsOnWithoutNotify(true);
+                        break;
+                    }
+                }
+            }
         }
 
         if (toggleCustomTopicButton != null)

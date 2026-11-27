@@ -7,7 +7,7 @@ using Unity.Profiling;
 
 public class AudioRecorder : MonoBehaviour
 {
-    private const string SavedMicPrefKey = "UserSelectedMicrophone";
+    private const string SavedMicPrefKey = AudioAndVoiceSettingsManager.KEY_MIC_NAME;
     private static readonly ProfilerMarker MicStartMarker = new ProfilerMarker("Voice.MicrophoneStart");
     private static readonly ProfilerMarker MicStopMarker = new ProfilerMarker("Voice.MicrophoneStop");
     private static readonly ProfilerMarker WavMarker = new ProfilerMarker("Voice.WavConversion");
@@ -45,7 +45,7 @@ public class AudioRecorder : MonoBehaviour
 
     private void OnEnable()
     {
-        userSelectedMic = PlayerPrefs.GetString(SavedMicPrefKey, "");
+        userSelectedMic = AudioAndVoiceSettingsManager.GetSavedMicrophone();
         RefreshMicrophoneDropdown();
     }
 
@@ -115,7 +115,9 @@ public class AudioRecorder : MonoBehaviour
         if (devices == null || devices.Length == 0)
             return null;
 
-        // 1. Use the user's explicitly chosen microphone if it is still connected
+        // Refresh the preference in case Settings changed since this component was enabled.
+        userSelectedMic = AudioAndVoiceSettingsManager.GetSavedMicrophone();
+        // Use the selected device if it is still connected, otherwise use the default.
         if (!string.IsNullOrEmpty(userSelectedMic))
         {
             for (int i = 0; i < devices.Length; i++)
@@ -196,6 +198,10 @@ public class AudioRecorder : MonoBehaviour
         float silenceTimer = 0.0f;
         float totalRecordingTimer = 0.0f;
         float[] sampleBuffer = new float[128];
+        // Higher sensitivity means quieter speech can cross the detection threshold.
+        // A value of 1 preserves the original threshold; zero remains a usable minimum.
+        float sensitivity = Mathf.Max(0.1f, PlayerPrefs.GetFloat(AudioAndVoiceSettingsManager.KEY_MIC_SENS, 1f));
+        float effectiveThreshold = loudnessThreshold / sensitivity;
 
         while (totalRecordingTimer < maxAllowedDuration && !stopRequested)
         {
@@ -222,7 +228,7 @@ public class AudioRecorder : MonoBehaviour
                         for (int i = 0; i < 128; i++) sum += Mathf.Abs(sampleBuffer[i]);
                         float averageLoudness = sum / 128.0f;
 
-                        if (averageLoudness > loudnessThreshold)
+                        if (averageLoudness > effectiveThreshold)
                         {
                             heardVoiceThisTick = true;
                             if (!hasDetectedSpeech)
@@ -277,11 +283,33 @@ public class AudioRecorder : MonoBehaviour
             onRecordingComplete?.Invoke(null, 0f, 0f);
             yield break;
         }
-        byte[] wavBytes;
-        using (WavMarker.Auto())
-            wavBytes = SavWav.GetWavBytes(recordedClip, startPosition, capturedFrames);
-        Debug.Log($"[VoicePerf] audio conversion ms={conversionTimer.Elapsed.TotalMilliseconds:F1} bytes={(wavBytes != null ? wavBytes.Length : 0)} frame={Time.frameCount}");
-
+        float[] samples = null;
+        int channels = recordedClip.channels;
+        int frequency = recordedClip.frequency;
+        try
+        {
+            using (WavMarker.Auto()) samples = SavWav.ReadSamples(recordedClip, startPosition, capturedFrames);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("[AudioRecorder] Could not read recorded audio: " + ex.Message);
+        }
+        if (samples == null)
+        {
+            onRecordingComplete?.Invoke(null, 0f, 0f);
+            yield break;
+        }
+        // Only the managed PCM conversion runs off-thread; Unity audio calls stay above.
+        var conversion = System.Threading.Tasks.Task.Run(() => SavWav.EncodePcm16(samples, channels, frequency));
+        while (!conversion.IsCompleted) yield return null;
+        if (conversion.IsFaulted || conversion.IsCanceled)
+        {
+            Debug.LogError("[AudioRecorder] WAV conversion failed.");
+            onRecordingComplete?.Invoke(null, 0f, 0f);
+            yield break;
+        }
+        byte[] wavBytes = conversion.Result;
+        Debug.Log($"[VoicePerf] audio conversion ms={conversionTimer.Elapsed.TotalMilliseconds:F1} bytes={wavBytes.Length} frame={Time.frameCount}");
         onRecordingComplete?.Invoke(wavBytes, speechDuration, initialSilenceDuration);
     }
 

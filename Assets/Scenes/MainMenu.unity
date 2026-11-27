@@ -8758,7 +8758,7 @@ MonoBehaviour:
   npcPersonaInput: {fileID: 1770195601}
   inputModeToggle: {fileID: 2019157699}
   dontShowTutorialAgainToggle: {fileID: 1862631168}
-  editorVrSimulatorMode: 0
+  editorVrSimulatorMode: 1
 --- !u!4 &362763786
 Transform:
   m_ObjectHideFlags: 0

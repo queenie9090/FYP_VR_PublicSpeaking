@@ -94,11 +94,9 @@ public class EyeContactTracker : MonoBehaviour
             if (headsetTransform != null && (targetNPCs.Count > 0 || avatarFacialCollider != null))
             {
                 Ray gazeRay = new Ray(headsetTransform.position, headsetTransform.forward);
-                Debug.DrawRay(gazeRay.origin, gazeRay.direction * maxDistance, Color.red, samplingInterval);
 
                 if (Physics.Raycast(gazeRay, out RaycastHit hitInfo, maxDistance))
                 {
-                    Debug.Log($"[GazeDebug] targetCount={targetNPCs.Count} | hit={hitInfo.collider.name} | dist={hitInfo.distance:F2}m");
                     if (targetNPCs.Count > 0)
                     {
                         foreach (var npc in targetNPCs)

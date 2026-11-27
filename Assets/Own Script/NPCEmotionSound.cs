@@ -25,6 +25,7 @@ public sealed class NPCEmotionSound : MonoBehaviour
         var emitter = new GameObject("Emotion sound");
         emitter.transform.SetParent(transform, false);
         output = emitter.AddComponent<AudioSource>();
+        SavedAudioLevels.Route(output, "NPC");
         output.playOnAwake = false;
         output.loop = false;
         output.spatialBlend = 1f;
