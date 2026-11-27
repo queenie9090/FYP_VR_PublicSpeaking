@@ -138,7 +138,16 @@ public class HallNPCRealismScreen : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (!ready || Time.unscaledTime < nextPreviewTime) return;
+        if (!ready) return;
+        // Keep the live camera idle while its display is outside all camera views.
+        // Renderers become visible again independently of the close-up camera.
+        if (selected >= 0 && closeUpCameras[selected] != null)
+        {
+            bool showFeed = displaySurface != null && displaySurface.isVisible;
+            if (closeUpCameras[selected].enabled != showFeed)
+                closeUpCameras[selected].enabled = showFeed;
+        }
+        if (Time.unscaledTime < nextPreviewTime) return;
 
         // Stagger the two thumbnails so only one extra low-resolution view is drawn per refresh.
         int slot = nextPreviewSlot;
@@ -146,7 +155,7 @@ public class HallNPCRealismScreen : MonoBehaviour
         nextPreviewTime = Time.unscaledTime + 0.125f;
         var image = PreviewImage(slot);
         int npc = previewTargets[slot];
-        if (image == null || npc < 0) return;
+        if (image == null || npc < 0 || !image.gameObject.activeInHierarchy) return;
         var camera = closeUpCameras[npc];
         if (FindAvailable(npc) != npc || !RenderPipeline.SupportsRenderRequest(camera, previewRequest))
         {

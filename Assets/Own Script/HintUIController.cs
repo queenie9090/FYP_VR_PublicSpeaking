@@ -71,6 +71,8 @@ public class HintUIController : MonoBehaviour
         if (audioSource == null)
             audioSource = GetComponent<AudioSource>() ?? gameObject.AddComponent<AudioSource>();
 
+        if (audioSource.outputAudioMixerGroup == null) SavedAudioLevels.Route(audioSource, "SFX");
+
         if (interactionManager == null)
             interactionManager = FindObjectOfType<InteractionManager>();
 
@@ -331,7 +333,7 @@ public class HintUIController : MonoBehaviour
         if (hintPanelRoot != null && hintPanelRoot.activeSelf && hintText != null)
         {
             hintText.text = "Generating AI hint...";
-            hintTriggerCount++;
+            //hintTriggerCount++;
         }
 
         isHintPrefetching = true;

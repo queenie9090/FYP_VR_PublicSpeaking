@@ -24,14 +24,21 @@ public static class SavWav
             return null;
         }
 
-        int sampleCount = checked(frameCount * clip.channels);
-        float[] samples = new float[sampleCount];
-        VoiceMicTrace.ReadClip(clip, samples, startFrame);
+        float[] samples = ReadSamples(clip, startFrame, frameCount);
         return EncodePcm16(samples, clip.channels, clip.frequency);
     }
 
-    // This method only accesses managed data; the AudioClip read above remains on Unity's main thread.
-    private static byte[] EncodePcm16(float[] samples, int channels, int frequency)
+    // Unity's AudioClip API must stay on the main thread.
+    internal static float[] ReadSamples(AudioClip clip, int startFrame, int frameCount)
+    {
+        float[] samples = new float[checked(frameCount * clip.channels)];
+        if (!VoiceMicTrace.ReadClip(clip, samples, startFrame))
+            throw new System.InvalidOperationException("Unable to read recorded microphone audio.");
+        return samples;
+    }
+
+    // This method only accesses managed data and can run on a worker thread.
+    internal static byte[] EncodePcm16(float[] samples, int channels, int frequency)
     {
         int dataSize = checked(samples.Length * 2);
         byte[] wav = new byte[checked(HeaderSize + dataSize)];

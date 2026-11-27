@@ -8,6 +8,7 @@ public class SpeechInteractionController : MonoBehaviour
     private int speechRequestVersion;
     private int transcriptionRequestVersion;
     private AudioSource activeSpeechSource;
+    private AudioClip activeGeneratedClip;
     private NPCEmotionController activeSpeechEmotion;
     public bool IsSpeechPlaying => activeSpeechSource != null && activeSpeechSource.isPlaying;
     public bool IsPlayingSpeechFor(NPCEmotionController source) => source != null && activeSpeechEmotion == source && IsSpeechPlaying;
@@ -122,9 +123,9 @@ public class SpeechInteractionController : MonoBehaviour
                 if (++sttFailures >= 3)
                 {
                     if (uiManager != null)
-                        uiManager.SetStatus("Speech recognition unavailable. Check your connection.");
-                    onFatalMicError?.Invoke();
-                    yield break;
+                        uiManager.SetStatus("Speech recognition unavailable. Check your connection; trying again shortly.");
+                    sttFailures = 0;
+                    yield return new WaitForSecondsRealtime(3f);
                 }
 
                 if (uiManager != null)
@@ -171,7 +172,13 @@ public class SpeechInteractionController : MonoBehaviour
 
     private void StopActiveSpeech()
     {
-        if (activeSpeechSource != null) activeSpeechSource.Stop();
+        if (activeSpeechSource != null)
+        {
+            activeSpeechSource.Stop();
+            if (activeSpeechSource.clip == activeGeneratedClip) activeSpeechSource.clip = null;
+        }
+        if (activeGeneratedClip != null) Destroy(activeGeneratedClip);
+        activeGeneratedClip = null;
         if (activeTalkingParameter && activeSpeechAnimator != null)
             activeSpeechAnimator.SetBool("IsTalking", false);
         if (activeSpeechBody != null) activeSpeechBody.SetActivity(NPCBodyActivity.IDLE);
@@ -211,18 +218,37 @@ public class SpeechInteractionController : MonoBehaviour
         bool sttFailed = false;
         string userTranscript = "";
 
-        StartCoroutine(openAIManager.TranscribeAudioWithPrompt(wavBytes, "Um, uh, er.", transcript => {
+        if (openAIManager == null)
+        {
+            onTranscriptionFailed?.Invoke();
+            onTranscriptionComplete?.Invoke();
+            yield break;
+        }
+        bool timedOut = false;
+        Coroutine request = StartCoroutine(openAIManager.TranscribeAudioWithPrompt(wavBytes, "Um, uh, er.", transcript => {
+            if (sttDone || timedOut || requestVersion != transcriptionRequestVersion) return;
             userTranscript = transcript;
             sttDone = true;
         }, err => {
+            if (sttDone || timedOut || requestVersion != transcriptionRequestVersion) return;
             Debug.LogError($"[STT Error] {err}");
             if (uiManager != null) uiManager.SetStatus("Speech Error.");
             sttFailed = true;
             sttDone = true;
-        }, () => this == null || requestVersion != transcriptionRequestVersion));
+        }, () => this == null || timedOut || requestVersion != transcriptionRequestVersion));
 
-        yield return new WaitUntil(() => sttDone || requestVersion != transcriptionRequestVersion);
+        float deadline = Time.realtimeSinceStartup + 55f;
+        while (!sttDone && requestVersion == transcriptionRequestVersion && Time.realtimeSinceStartup < deadline)
+            yield return null;
         if (requestVersion != transcriptionRequestVersion) yield break;
+        if (!sttDone)
+        {
+            timedOut = true;
+            // Let the request coroutine abort its own UnityWebRequest on its next frame.
+            if (request != null) yield return null;
+            sttFailed = true;
+            Debug.LogWarning("[STT] Request timed out; recording can be retried.");
+        }
 
         if (sttFailed)
         {
@@ -267,6 +293,7 @@ public class SpeechInteractionController : MonoBehaviour
         int requestVersion = ++speechRequestVersion;
         StopActiveSpeech();
         bool downloaded = false;
+        bool speechTimedOut = false;
         AudioClip clip = null;
 
         string speakerName = (currentNPC != null && !string.IsNullOrWhiteSpace(currentNPC.characterName))
@@ -280,11 +307,33 @@ public class SpeechInteractionController : MonoBehaviour
         string appliedStyle = null;
         double requestedAt = Time.realtimeSinceStartupAsDouble;
         StartCoroutine(openAIManager.GenerateNPCSpeech(textToSpeak, voice, emotion, intensity,
-            (audio, style) => { clip = audio; appliedStyle = style; downloaded = true; },
-            error => { Debug.LogWarning(error); downloaded = true; },
-            () => this == null || requestVersion != speechRequestVersion));
-        yield return new WaitUntil(() => downloaded || requestVersion != speechRequestVersion);
-        if (requestVersion != speechRequestVersion) yield break;
+            (audio, style) => {
+                if (this == null || speechTimedOut || requestVersion != speechRequestVersion)
+                {
+                    if (audio != null) Destroy(audio);
+                    return;
+                }
+                clip = audio; activeGeneratedClip = audio; appliedStyle = style; downloaded = true;
+            },
+            error => {
+                if (speechTimedOut || requestVersion != speechRequestVersion || downloaded) return;
+                Debug.LogWarning(error); downloaded = true;
+            },
+            () => this == null || speechTimedOut || requestVersion != speechRequestVersion));
+        float speechDeadline = Time.realtimeSinceStartup + 100f;
+        while (!downloaded && requestVersion == speechRequestVersion && Time.realtimeSinceStartup < speechDeadline)
+            yield return null;
+        if (!downloaded && requestVersion == speechRequestVersion)
+        {
+            speechTimedOut = true;
+            Debug.LogWarning("[Speech] Voice generation timed out; showing the dialogue as text.");
+            yield return null;
+        }
+        if (requestVersion != speechRequestVersion)
+        {
+            if (clip != null) Destroy(clip);
+            yield break;
+        }
 
         var emotionSource = currentNPC != null
             ? currentNPC.GetComponentInParent<NPCEmotionController>() ?? currentNPC.GetComponentInChildren<NPCEmotionController>() : null;
@@ -318,6 +367,8 @@ public class SpeechInteractionController : MonoBehaviour
             NPCEmotionSessionManager.Instance?.RecordRealismEvent(
                 emotionSource, "voice", "playback_failed", text: textToSpeak);
             onPartialTextUpdated?.Invoke(textToSpeak);
+            if (activeGeneratedClip == clip) activeGeneratedClip = null;
+            Destroy(clip);
             yield break;
         }
 
@@ -330,6 +381,8 @@ public class SpeechInteractionController : MonoBehaviour
         try
         {
             targetSource.clip = clip;
+            activeSpeechSource = targetSource;
+            activeGeneratedClip = clip;
             targetSource.Play();
             if (!targetSource.isPlaying)
             {
@@ -399,5 +452,10 @@ public class SpeechInteractionController : MonoBehaviour
         {
             if (requestVersion == speechRequestVersion) StopActiveSpeech();
         }
+    }
+
+    private void OnDestroy()
+    {
+        CancelPendingSpeech();
     }
 }

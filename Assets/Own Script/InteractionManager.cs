@@ -439,6 +439,7 @@ public class InteractionManager : MonoBehaviour
         {
             LLMResponse candidate = null;
             bool llmDone = false;
+            bool llmTimedOut = false;
             string multiNpcRoster = hallAudienceReactions ? null : BuildMultiNpcRoster();
             string prompt = PromptBuilder.BuildSystemPrompt(activeConfig, turnCounter, previousEmotion,
                 hallAudienceReactions, SafeAudienceEmotion(hallAudienceA), SafeAudienceEmotion(hallAudienceB), multiNpcRoster);
@@ -451,11 +452,19 @@ public class InteractionManager : MonoBehaviour
             if (attempt > 0)
                 prompt += "\nReassess the emotion using the participant's actual context. Return one valid JSON response with a supported emotion.";
             StartCoroutine(openAIManager.SendChatRequest(prompt, conversationHistory, formattedTranscript,
-                res => { candidate = res; llmDone = true; },
-                err => { Debug.LogError($"[LLM Error] {err}"); llmDone = true; },
-                true, () => this == null || !isSessionActive));
-            yield return new WaitUntil(() => llmDone || !isSessionActive);
+                res => { if (!llmTimedOut && !llmDone) { candidate = res; llmDone = true; } },
+                err => { if (!llmTimedOut && !llmDone) { Debug.LogError($"[LLM Error] {err}"); llmDone = true; } },
+                true, () => this == null || !isSessionActive || llmTimedOut));
+            float deadline = Time.realtimeSinceStartup + 55f;
+            while (!llmDone && isSessionActive && Time.realtimeSinceStartup < deadline) yield return null;
             if (!isSessionActive) yield break;
+            if (!llmDone)
+            {
+                llmTimedOut = true;
+                Debug.LogWarning("[LLM] Request timed out.");
+                // Give the cancelled request time to abort before starting a retry.
+                yield return null;
+            }
             if (candidate == null)
             {
                 if (attempt == 0)
