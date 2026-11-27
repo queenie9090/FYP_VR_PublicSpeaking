@@ -6,6 +6,8 @@ using UnityEngine;
 public sealed class BusinessmanEmotionGesture : MonoBehaviour
 {
     private Animator rig;
+    private NPCBodyAnimation body;
+    private float listen, think, speak, phase;
     private NPCEmotionController face;
     private int celebrationLayer;
     private Transform chest, head, leftShoulder, rightShoulder;
@@ -23,6 +25,7 @@ public sealed class BusinessmanEmotionGesture : MonoBehaviour
     private void Awake()
     {
         rig = GetComponent<Animator>();
+        body = GetComponent<NPCBodyAnimation>();
         face = GetComponent<NPCEmotionController>();
         if (!rig.isHuman || !rig.runtimeAnimatorController) { enabled = false; return; }
         celebrationLayer = rig.GetLayerIndex("HallCelebration");
@@ -111,7 +114,11 @@ public sealed class BusinessmanEmotionGesture : MonoBehaviour
             Mathf.Lerp(.45f, 1f, Mathf.Clamp01(face.emotionIntensity / 100f));
         strength = Mathf.MoveTowards(strength, target, Time.deltaTime * 3.2f);
         bool breathing = displayed == "NEUTRAL";
-        if (!breathing && strength <= .001f) return;
+        bool hasOverlay = body && body.isActiveAndEnabled && body.Overlay != NPCBodyAnimation.SeatedOverlay.None;
+#if UNITY_EDITOR
+        hasOverlay &= !body || !body.ManualTestActive;
+#endif
+        if (!breathing && strength <= .001f && !hasOverlay) return;
         for (int i = 0; i < bones.Length; i++)
             if (bones[i]) before[i] = bones[i].localRotation;
         float w = activityWeight * Mathf.SmoothStep(0f, 1f, strength);
@@ -166,9 +173,34 @@ public sealed class BusinessmanEmotionGesture : MonoBehaviour
                 }
                 break;
         }
+        if (hasOverlay) ApplyConversationPose(activityWeight * (breathing ? 1f : 1f - .8f * w));
         for (int i = 0; i < bones.Length; i++)
             if (bones[i]) after[i] = bones[i].localRotation;
         applied = true;
+    }
+
+    private void ApplyConversationPose(float weight)
+    {
+        var activity = body.Activity;
+        bool all = body.Overlay == NPCBodyAnimation.SeatedOverlay.AllConversationActivities;
+        float step = Time.deltaTime * 3f;
+        listen = Mathf.MoveTowards(listen, all && activity == NPCBodyActivity.LISTENING ? 1f : 0f, step);
+        think = Mathf.MoveTowards(think, all && activity == NPCBodyActivity.THINKING ? 1f : 0f, step);
+        speak = Mathf.MoveTowards(speak, activity == NPCBodyActivity.SPEAKING ? 1f : 0f, step);
+        if (listen + think + speak == 0f) { phase = 0; return; }
+        phase += Time.deltaTime;
+        float beat = .5f + .5f * Mathf.Sin(phase * 4.4f + .7f * Mathf.Sin(phase * 1.3f));
+        float reply = .5f + .5f * Mathf.Sin(phase * 3.2f + 1.4f);
+        float nod = Mathf.Repeat(phase, 2.8f);
+        nod = nod < 2f ? Mathf.Pow(Mathf.Sin(Mathf.PI * nod), 2f) : 0f;
+        Vector3 right = transform.right;
+        Rotate(head, right, weight * (8f * listen * nod - 5f * think));
+        Rotate(head, transform.forward, weight * think * 8f);
+        Rotate(chest, right, weight * (listen * 2f + speak * (1f + 3f * beat)));
+        // Lift relative to the animated rest pose, keeping the elbows near the body.
+        Rotate(Bone(HumanBodyBones.RightLowerArm), -right, weight * (think * 8f + speak * (5f + 14f * beat)));
+        Rotate(Bone(HumanBodyBones.LeftLowerArm), -right, weight * speak * (3f + 9f * reply));
+        if (weight > .1f && activity != NPCBodyActivity.IDLE) body.RecordOverlayMotion();
     }
 
     private static void Rotate(Transform bone, Vector3 axis, float degrees)

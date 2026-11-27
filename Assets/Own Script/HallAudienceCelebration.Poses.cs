@@ -25,6 +25,7 @@ public sealed partial class HallAudienceCelebration
 
     private void UpdateAudiencePoses()
     {
+        if (groupRoutine != null || groupClapping) return;
         bool listening = session && session.IsSessionActive && session.IsPlayerCapturing;
         if (poseForA != null && poseForA.Apply(listening) && CanPlay(audienceA, clapClip, "Clap"))
         {

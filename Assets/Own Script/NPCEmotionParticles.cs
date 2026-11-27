@@ -136,9 +136,9 @@ public sealed class NPCEmotionParticles : MonoBehaviour
         if (Time.time >= nextMark)
         {
             Vector3 side = right * (sequence % 2 == 0 ? 1 : -1);
-            Vector3 origin = centre + side * span * Range(1,1.15f);
+            Vector3 origin = centre + side * span * Range(1.06f,1.40f);
             float interval;
-            float size = Mathf.Lerp(.78f,1.12f,strength);
+            float size = Mathf.Lerp(1.30f,1.95f,strength);
             switch (emotion)
             {
                 case "HAPPY":
@@ -161,17 +161,17 @@ public sealed class NPCEmotionParticles : MonoBehaviour
                         (.025f+.017f*bubble)*size, 1.45f, new Color(.82f,.68f,1,.88f));
                     interval = bubble == 2 ? Mathf.Lerp(1.6f,1f,strength) : .23f; break;
                 default:
-                    Emit(marks, origin-Vector3.up*.13f, Vector3.up*.023f, .024f, 1.55f, new Color(.92f,.95f,1,.42f));
+                    Emit(marks, origin-Vector3.up*.13f, Vector3.up*.023f, .03f, 1.55f, new Color(.92f,.95f,1,.42f));
                     interval = 1.75f; break;
             }
             sequence++;
-            nextMark = Time.time + interval;
+            nextMark = Time.time + (emotion == "NEUTRAL" ? interval : interval * .72f);
         }
         if (smoky && Time.time >= nextSmoke)
         {
             if (!smoke.isPlaying) smoke.Play(false);
             Vector3 side = right * (random.Next(2)==0 ? 1 : -1);
-            Emit(smoke, centre + side*span - Vector3.up*.12f, Vector3.up*.125f+side*.025f, .13f, 1.4f, new Color(.64f,.63f,.63f,.57f),Range(-45,45));
+            Emit(smoke, centre + side*span - Vector3.up*.12f, Vector3.up*.125f+side*.025f, Mathf.Lerp(.15f,.22f,strength), 1.4f, new Color(.64f,.63f,.63f,.67f),Range(-45,45));
             nextSmoke = Time.time + Mathf.Lerp(.7f,.35f,strength);
         }
     }

@@ -10,6 +10,7 @@ public class SpeechInteractionController : MonoBehaviour
     private AudioSource activeSpeechSource;
     private AudioClip activeGeneratedClip;
     private NPCEmotionController activeSpeechEmotion;
+    public NPCEmotionController CurrentSpeaker => IsSpeechPlaying ? activeSpeechEmotion : null;
     public bool IsSpeechPlaying => activeSpeechSource != null && activeSpeechSource.isPlaying;
     public bool IsPlayingSpeechFor(NPCEmotionController source) => source != null && activeSpeechEmotion == source && IsSpeechPlaying;
     private Animator activeSpeechAnimator;
@@ -395,6 +396,8 @@ public class SpeechInteractionController : MonoBehaviour
 
             activeSpeechSource = targetSource;
             activeSpeechEmotion = emotionSource;
+            if (emotionSource && !TryGetComponent<NPCSpeakerBorder>(out _))
+                gameObject.AddComponent<NPCSpeakerBorder>();
             activeSpeechAnimator = npcAnimator;
             activeSpeechBody = body;
             activeSpeechEyes = eyes;
