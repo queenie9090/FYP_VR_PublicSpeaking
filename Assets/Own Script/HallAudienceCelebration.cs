@@ -190,6 +190,7 @@ public sealed partial class HallAudienceCelebration : MonoBehaviour
     private AudioSource CreateSoundSource()
     {
         AudioSource source = gameObject.AddComponent<AudioSource>();
+        SavedAudioLevels.Route(source, "SFX");
         source.playOnAwake = false;
         source.spatialBlend = 0f;
         return source;
