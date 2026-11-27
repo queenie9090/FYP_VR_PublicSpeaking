@@ -4489,6 +4489,10 @@ PrefabInstance:
       propertyPath: m_LocalPosition.z
       value: -0
       objectReference: {fileID: 0}
+    - target: {fileID: 1149270532055076013, guid: bf2308810d3e6fe4daf67c9dc88ed48c, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 1262694844019012375, guid: bf2308810d3e6fe4daf67c9dc88ed48c, type: 3}
       propertyPath: m_Name
       value: Classroom
@@ -4645,6 +4649,10 @@ PrefabInstance:
       propertyPath: m_LocalPosition.z
       value: -0
       objectReference: {fileID: 0}
+    - target: {fileID: 6326762487945878921, guid: bf2308810d3e6fe4daf67c9dc88ed48c, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 6484762175165662798, guid: bf2308810d3e6fe4daf67c9dc88ed48c, type: 3}
       propertyPath: m_LocalPosition.y
       value: 0.00713
@@ -4708,6 +4716,10 @@ PrefabInstance:
     - target: {fileID: 7319163111848676950, guid: bf2308810d3e6fe4daf67c9dc88ed48c, type: 3}
       propertyPath: m_IsActive
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7329416486183666045, guid: bf2308810d3e6fe4daf67c9dc88ed48c, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7604342644107874211, guid: bf2308810d3e6fe4daf67c9dc88ed48c, type: 3}
       propertyPath: m_IsActive
@@ -21054,6 +21066,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1571062112}
     m_Modifications:
+    - target: {fileID: 5473949352561789069, guid: c13e00a1b567daf4aa2b07cfd6a7a336, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 7369250930997726976, guid: c13e00a1b567daf4aa2b07cfd6a7a336, type: 3}
       propertyPath: m_LocalPosition.x
       value: -0.143
@@ -21097,6 +21113,10 @@ PrefabInstance:
     - target: {fileID: 7858506476558898618, guid: c13e00a1b567daf4aa2b07cfd6a7a336, type: 3}
       propertyPath: m_Name
       value: Lightsource_Candle_Orange
+      objectReference: {fileID: 0}
+    - target: {fileID: 8147671154316756940, guid: c13e00a1b567daf4aa2b07cfd6a7a336, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -26641,6 +26661,14 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5855522135024154734, guid: f27745cf1181bd3448644af0f3dec7f4, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6437543369533464230, guid: f27745cf1181bd3448644af0f3dec7f4, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 6598439097319863480, guid: f27745cf1181bd3448644af0f3dec7f4, type: 3}
       propertyPath: m_Name
       value: Sconce_Candle (1)
@@ -26731,6 +26759,84 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: eca0fb105828de44294f8e4348422eb0, type: 3}
+--- !u!1 &803363182
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 803363184}
+  - component: {fileID: 803363183}
+  m_Layer: 0
+  m_Name: Classroom NPC Light Probes
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!220 &803363183
+LightProbeGroup:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 803363182}
+  m_Enabled: 1
+  m_SourcePositions:
+  - {x: -2.5, y: 0.25, z: -3.5}
+  - {x: -2.5, y: 1.2, z: -3.5}
+  - {x: -2.5, y: 2.1, z: -3.5}
+  - {x: -2.5, y: 0.25, z: -1}
+  - {x: -2.5, y: 1.2, z: -1}
+  - {x: -2.5, y: 2.1, z: -1}
+  - {x: -2.5, y: 0.25, z: 1.5}
+  - {x: -2.5, y: 1.2, z: 1.5}
+  - {x: -2.5, y: 2.1, z: 1.5}
+  - {x: -2.5, y: 0.25, z: 3.5}
+  - {x: -2.5, y: 1.2, z: 3.5}
+  - {x: -2.5, y: 2.1, z: 3.5}
+  - {x: 0, y: 0.25, z: -3.5}
+  - {x: 0, y: 1.2, z: -3.5}
+  - {x: 0, y: 2.1, z: -3.5}
+  - {x: 0, y: 0.25, z: -1}
+  - {x: 0, y: 1.2, z: -1}
+  - {x: 0, y: 2.1, z: -1}
+  - {x: 0, y: 0.25, z: 1.5}
+  - {x: 0, y: 1.2, z: 1.5}
+  - {x: 0, y: 2.1, z: 1.5}
+  - {x: 0, y: 0.25, z: 3.5}
+  - {x: 0, y: 1.2, z: 3.5}
+  - {x: 0, y: 2.1, z: 3.5}
+  - {x: 2.5, y: 0.25, z: -3.5}
+  - {x: 2.5, y: 1.2, z: -3.5}
+  - {x: 2.5, y: 2.1, z: -3.5}
+  - {x: 2.5, y: 0.25, z: -1}
+  - {x: 2.5, y: 1.2, z: -1}
+  - {x: 2.5, y: 2.1, z: -1}
+  - {x: 2.5, y: 0.25, z: 1.5}
+  - {x: 2.5, y: 1.2, z: 1.5}
+  - {x: 2.5, y: 2.1, z: 1.5}
+  - {x: 2.5, y: 0.25, z: 3.5}
+  - {x: 2.5, y: 1.2, z: 3.5}
+  - {x: 2.5, y: 2.1, z: 3.5}
+  m_Dering: 1
+--- !u!4 &803363184
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 803363182}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &803734362 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1149270532055076013, guid: bf2308810d3e6fe4daf67c9dc88ed48c, type: 3}
@@ -28799,6 +28905,14 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5855522135024154734, guid: f27745cf1181bd3448644af0f3dec7f4, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6437543369533464230, guid: f27745cf1181bd3448644af0f3dec7f4, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 6598439097319863480, guid: f27745cf1181bd3448644af0f3dec7f4, type: 3}
       propertyPath: m_Name
       value: Sconce_Candle (4)
@@ -30134,6 +30248,14 @@ PrefabInstance:
     - target: {fileID: 5825843494815329794, guid: f27745cf1181bd3448644af0f3dec7f4, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5855522135024154734, guid: f27745cf1181bd3448644af0f3dec7f4, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6437543369533464230, guid: f27745cf1181bd3448644af0f3dec7f4, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 6598439097319863480, guid: f27745cf1181bd3448644af0f3dec7f4, type: 3}
       propertyPath: m_Name
@@ -34339,6 +34461,10 @@ PrefabInstance:
       propertyPath: m_Intensity
       value: 0.3
       objectReference: {fileID: 0}
+    - target: {fileID: 7552325380232887710, guid: 9f90aa15c6b14234ea7247f33f09e816, type: 3}
+      propertyPath: m_Lightmapping
+      value: 2
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -34701,6 +34827,10 @@ PrefabInstance:
     - target: {fileID: 7552325380232887710, guid: 9f90aa15c6b14234ea7247f33f09e816, type: 3}
       propertyPath: m_Intensity
       value: 0.3
+      objectReference: {fileID: 0}
+    - target: {fileID: 7552325380232887710, guid: 9f90aa15c6b14234ea7247f33f09e816, type: 3}
+      propertyPath: m_Lightmapping
+      value: 2
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -35070,6 +35200,10 @@ PrefabInstance:
     - target: {fileID: 7552325380232887710, guid: 9f90aa15c6b14234ea7247f33f09e816, type: 3}
       propertyPath: m_Intensity
       value: 0.3
+      objectReference: {fileID: 0}
+    - target: {fileID: 7552325380232887710, guid: 9f90aa15c6b14234ea7247f33f09e816, type: 3}
+      propertyPath: m_Lightmapping
+      value: 2
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -43221,6 +43355,10 @@ PrefabInstance:
       propertyPath: m_Intensity
       value: 0.3
       objectReference: {fileID: 0}
+    - target: {fileID: 7552325380232887710, guid: 9f90aa15c6b14234ea7247f33f09e816, type: 3}
+      propertyPath: m_Lightmapping
+      value: 2
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -45081,6 +45219,10 @@ PrefabInstance:
       propertyPath: m_Intensity
       value: 0.3
       objectReference: {fileID: 0}
+    - target: {fileID: 7552325380232887710, guid: 9f90aa15c6b14234ea7247f33f09e816, type: 3}
+      propertyPath: m_Lightmapping
+      value: 2
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -46810,6 +46952,14 @@ PrefabInstance:
     - target: {fileID: 5825843494815329794, guid: f27745cf1181bd3448644af0f3dec7f4, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5855522135024154734, guid: f27745cf1181bd3448644af0f3dec7f4, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6437543369533464230, guid: f27745cf1181bd3448644af0f3dec7f4, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 6598439097319863480, guid: f27745cf1181bd3448644af0f3dec7f4, type: 3}
       propertyPath: m_Name
@@ -53232,6 +53382,14 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5855522135024154734, guid: f27745cf1181bd3448644af0f3dec7f4, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6437543369533464230, guid: f27745cf1181bd3448644af0f3dec7f4, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 6598439097319863480, guid: f27745cf1181bd3448644af0f3dec7f4, type: 3}
       propertyPath: m_Name
       value: Sconce_Candle
@@ -59314,6 +59472,10 @@ PrefabInstance:
       propertyPath: m_Intensity
       value: 0.1
       objectReference: {fileID: 0}
+    - target: {fileID: 7552325380232887710, guid: 9f90aa15c6b14234ea7247f33f09e816, type: 3}
+      propertyPath: m_Lightmapping
+      value: 4
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -60475,3 +60637,4 @@ SceneRoots:
   - {fileID: 1451128580}
   - {fileID: 794811684}
   - {fileID: 1741056419}
+  - {fileID: 803363184}
