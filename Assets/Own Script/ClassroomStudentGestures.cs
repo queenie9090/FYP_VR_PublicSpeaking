@@ -62,9 +62,11 @@ public sealed class ClassroomStudentGestures : MonoBehaviour
         }
         if (emotion != face.currentEmotion && weight <= .001f) { emotion = face.currentEmotion; age = 0; }
         age += dt;
-        float target = emotion == face.currentEmotion && emotion != "NEUTRAL" && (speaking || age < 4.2f)
-            ? Mathf.Lerp(.55f, 1f, Mathf.Clamp01(face.emotionIntensity / 100f)) : 0f;
-        weight = Mathf.MoveTowards(weight, target, 4f*dt);
+        float intensity = Mathf.Clamp01(face.emotionIntensity / 100f);
+        float hold = Mathf.Lerp(3.2f, 5f, intensity);
+        float target = emotion == face.currentEmotion && emotion != "NEUTRAL" && (speaking || age < hold)
+            ? Mathf.Lerp(.70f, 1f, intensity) : 0f;
+        weight = Mathf.MoveTowards(weight, target, (target > weight ? 2.8f : 3.5f)*dt);
         settle = Mathf.MoveTowards(settle, 1f, 3f*dt);
         for (int i = 0; i < bones.Length; i++)
             if (bones[i]) original[i] = bones[i].localRotation;
@@ -110,50 +112,64 @@ public sealed class ClassroomStudentGestures : MonoBehaviour
         Vector3 up = transform.up, forward = transform.forward, right = transform.right;
         float size = rig.humanScale;
         Vector3 left = Lap(true), hand = Lap(false);
-        float pitch = studentA ? 2 : -3, headPitch = 0, roll = 0, yaw = 0;
+        float pitch = (studentA ? 2 : -3) + .7f * Mathf.Sin(Time.time * 1.6f);
+        float headPitch = 0, roll = 0, yaw = 0;
         float beat = Pulse(speechTime, studentA ? 2.5f : 2.8f, 1.35f)*speechWeight;
+        if (emotion == "THINKING" || emotion == "SAD") beat *= 1f - w;
+        pitch += beat * (studentA ? 3f : 5f);
         float nod = Pulse(listeningTime - (studentA ? .35f : 1.1f), studentA ? 4.1f : 5.3f, studentA ? 1.2f : .95f, studentA ? 2 : 1);
         Vector3 front = chest.position + forward*(.25f*size);
-        hand = Vector3.Lerp(hand, front + (right*.12f-up*.045f)*size, beat*(studentA ? .8f : .65f));
+        hand = Vector3.Lerp(hand, front + (right*.12f-up*.045f)*size, beat*.85f);
+        // One emphatic gesture on entry, followed by a quieter pose during longer replies.
+        float accent = w * (1f - Mathf.SmoothStep(0f, 1f, (age - 2f) / 1.1f));
         switch (emotion)
         {
             case "HAPPY":
-                pitch += 5*w;
-                if (studentA) hand = Vector3.Lerp(hand, head.position + (right*.14f + forward*.17f - up*.13f)*size, w);
-                else headPitch += 12*w*Pulse(age, 4, 1.3f, 2);
+                pitch -= (studentA ? 6f : 9f)*w;
+                headPitch += (studentA ? 9f : 19f)*accent*Pulse(age, 4f, 1.6f, 2);
+                if (studentA) hand = Vector3.Lerp(hand, head.position + (right*.20f + forward*.21f - up*.12f)*size, accent);
                 break;
             case "SAD":
-                pitch += (studentA ? 4 : 8)*w;
-                headPitch += (studentA ? 16 : 13)*w;
+                pitch += (studentA ? 11 : 16)*w;
+                headPitch += (studentA ? 23 : 18)*w*Mathf.SmoothStep(0, 1, age/.8f);
                 roll += (studentA ? 0 : 10)*w;
-                Turn(B.LeftShoulder, forward, 7*w);
-                Turn(B.RightShoulder, forward, -7*w);
+                Turn(B.LeftShoulder, forward, 13*w);
+                Turn(B.RightShoulder, forward, -13*w);
                 break;
             case "ANGRY":
-                pitch += (studentA ? 8 : -6)*w;
-                if (studentA) hand = Vector3.Lerp(hand, head.position + (right*.16f + forward*.27f - up*.19f)*size, w);
-                else yaw += 17*w*Mathf.Sin(age*6f)*Mathf.Clamp01(2-age);
+                pitch += (studentA ? 13 : -15)*w;
+                if (studentA) hand = Vector3.Lerp(hand, head.position + (right*.16f + forward*.32f - up*.19f)*size, accent);
+                else {
+                    yaw += 24*accent*Mathf.Sin(Mathf.Max(0, age-.35f)*6f);
+                    hand = Vector3.Lerp(hand, front + (right*.17f + up*.02f)*size,
+                        accent*Mathf.SmoothStep(0,1,(age-.35f)/.5f));
+                }
                 break;
             case "NERVOUS":
-                headPitch += (studentA ? 9 : 4)*w;
+                headPitch += (studentA ? 10 : 6)*w;
+                float rub = Mathf.Sin(age*8f + .6f*Mathf.Sin(age*3f));
                 if (studentA)
                 {
                     Vector3 fidget = head.position + (forward*.20f - up*.21f)*size;
                     left = Vector3.Lerp(left, fidget - right*.048f*size, w);
-                    hand = Vector3.Lerp(hand, fidget + (right*.048f+up*.008f*Mathf.Sin(age*12))*size, w);
+                    hand = Vector3.Lerp(hand, fidget + (right*.048f+up*.032f*rub)*size, w);
                     Turn(B.RightThumbProximal, forward, 12*w*Mathf.Sin(age*12));
                 }
                 else
                 {
-                    yaw += 18*w*Mathf.Clamp01(2-age);
+                    yaw += 23*w*Pulse(age, 3.2f, 1.6f);
+                    Vector3 clasp = chest.position + (forward*.23f - up*.10f)*size;
+                    left = Vector3.Lerp(left, clasp - right*.045f*size, w);
+                    hand = Vector3.Lerp(hand, clasp + (right*.045f + forward*.028f*rub)*size, w);
                     Turn(B.LeftShoulder, forward, -8*w);
                     Turn(B.RightShoulder, forward, 8*w);
                 }
                 break;
             case "THINKING":
-                roll += (studentA ? 7 : -14)*w;
+                roll += (studentA ? 16 : -21)*w;
+                yaw += (studentA ? 11 : -16)*w;
+                headPitch -= (studentA ? 9 : 14)*w;
                 if (studentA) hand = Vector3.Lerp(hand, head.position + (right*.055f+forward*.12f-up*.14f)*size, w);
-                else headPitch -= 8*w;
                 break;
         }
         Turn(chest == Bone(B.Chest) ? B.Chest : B.Spine, right, pitch*settle);
@@ -162,9 +178,9 @@ public sealed class ClassroomStudentGestures : MonoBehaviour
         Turn(B.Head, up, yaw);
         Reach(true, left);
         Reach(false, hand);
-        if (studentA && emotion == "ANGRY") AimPalm(up, forward, w);
+        if (emotion == "ANGRY") AimPalm(up, forward, accent);
         if (studentA && emotion == "THINKING") AimPalm(-right, (up-right*.45f).normalized, w);
-        if (studentA && emotion == "HAPPY") ThumbsUp(w);
+        if (studentA && emotion == "HAPPY") ThumbsUp(accent);
     }
 
     private static float Pulse(float time, float period, float duration, int cycles = 1)

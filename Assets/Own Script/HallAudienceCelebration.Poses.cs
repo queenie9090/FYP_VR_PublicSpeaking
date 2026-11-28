@@ -96,9 +96,10 @@ public sealed partial class HallAudienceCelebration
                 if (!celebrating && emotion == "HAPPY") return true;
             }
             age += Time.deltaTime;
-            float target = !celebrating && emotion == face.currentEmotion && emotion != "NEUTRAL" && age < 4.2f
-                ? Mathf.Lerp(.55f, 1f, face.emotionIntensity / 100f) : 0f;
-            weight = Mathf.MoveTowards(weight, target, Time.deltaTime * 4f);
+            float intensity = Mathf.Clamp01(face.emotionIntensity / 100f);
+            float target = !celebrating && emotion == face.currentEmotion && emotion != "NEUTRAL" && age < Mathf.Lerp(3.8f, 5.2f, intensity)
+                ? Mathf.Lerp(.73f, 1f, intensity) : 0f;
+            weight = Mathf.MoveTowards(weight, target, Time.deltaTime * 3f);
             float w = Mathf.SmoothStep(0, 1, weight);
             for (int i = 0; i < bones.Length; i++)
                 if (bones[i]) before[i] = bones[i].localRotation;
@@ -129,30 +130,42 @@ public sealed partial class HallAudienceCelebration
             switch (emotion)
             {
                 case "SAD":
-                    Turn(head, right, (isA ? 16f : 7f) * w);
-                    Turn(chest, right, (isA ? 4f : -6f) * w);
+                    Turn(head, right, (isA ? 22f : 15f) * w);
+                    Turn(chest, right, (isA ? 11f : -8f) * w);
+                    if (!isA) Turn(head, up, -22f * w);
                     Turn(bones[(int)B.LeftShoulder], forward, 6f * w);
                     Turn(bones[(int)B.RightShoulder], forward, -6f * w);
                     break;
                 case "ANGRY":
-                    if (isA) Turn(head, up, 16f * Mathf.Sin(age * 5f) * Mathf.Clamp01(2f-age) * w);
+                    if (isA)
+                    {
+                        Turn(chest, right, -10f * w);
+                        Turn(head, up, 25f * Mathf.Sin(age * 5f) * Mathf.Clamp01(2.8f-age) * w);
+                        left = Vector3.Lerp(left, chest.position + (right*.055f + forward*.19f - up*.07f)*scale, w);
+                    }
                     else
                     {
-                        Turn(chest, right, 7f * w);
-                        hand = Vector3.Lerp(hand, chest.position + (right*.18f + forward*.32f - up*.02f)*scale, w);
+                        Turn(chest, right, 14f * w);
+                        hand = Vector3.Lerp(hand, chest.position + (right*.19f + forward*.38f + up*.04f)*scale, w);
                     }
                     break;
                 case "THINKING":
-                    Turn(head, forward, (isA ? -13f : 7f) * w);
-                    if (isA) Turn(head, right, -9f * w);
+                    Turn(head, forward, (isA ? -22f : 12f) * w);
+                    if (isA) Turn(head, right, -16f * w);
                     else hand = Vector3.Lerp(hand, head.position + (right*.065f + forward*.105f - up*.075f)*scale, w);
                     break;
                 case "NERVOUS":
-                    Turn(head, up, (isA ? 13f : -5f) * w);
+                    Turn(head, up, (isA ? 18f : -18f) * w);
                     Turn(head, right, (isA ? 9f : 4f) * w);
                     Vector3 centre = chest.position + (forward*.20f - up*.12f)*scale;
                     left = Vector3.Lerp(left, centre - right*.055f*scale, w);
-                    hand = Vector3.Lerp(hand, centre + (right*(isA ? .045f : .015f) + up*(.025f+.009f*Mathf.Sin(age*12f)))*scale, w);
+                    if (isA)
+                        hand = Vector3.Lerp(hand, centre + (right*.05f + up*(.03f+.028f*Mathf.Sin(age*8f)))*scale, w);
+                    else
+                    {
+                        hand = Vector3.Lerp(hand, chest.position + (right*.11f + forward*.15f + up*(.13f+.018f*Mathf.Sin(age*6f)))*scale, w);
+                        Turn(bones[(int)B.RightShoulder], forward, 11f*w);
+                    }
                     break;
             }
             Reach(true, left);

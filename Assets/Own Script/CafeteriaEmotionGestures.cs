@@ -21,6 +21,12 @@ public sealed class CafeteriaEmotionGestures : MonoBehaviour
     private Animator animator;
     private NPCEmotionController face;
     private Transform chest, shoulder, head, hand;
+    private Transform indexBase, indexTip;
+    private NPCPersona persona;
+    private float speakingWeight, speakingTime;
+    private int lastReaction;
+    private Quaternion animatedWrist, aimedWrist;
+    private bool wristAdjusted;
     private readonly FingerJoint[] pointingJoints = new FingerJoint[15];
     private Quaternion pointingHandFrame;
     private bool hasPointingPose;
@@ -39,6 +45,8 @@ public sealed class CafeteriaEmotionGestures : MonoBehaviour
     private static readonly int ChairState = Animator.StringToHash("Base Layer.Chair Posture");
     private static readonly int Cheer = Animator.StringToHash("CafeReaction.Cheer");
     private int reactionLayer;
+    private int recordedTurn;
+    private string recordedGesture, recordedActivity, recordedEmotion;
 
     private void Awake()
     {
@@ -58,8 +66,11 @@ public sealed class CafeteriaEmotionGestures : MonoBehaviour
         shoulder = Bone(HumanBodyBones.RightUpperArm);
         hand = Bone(HumanBodyBones.RightHand);
         head = Bone(HumanBodyBones.Head);
+        indexBase = Bone(HumanBodyBones.RightIndexProximal);
+        indexTip = Bone(HumanBodyBones.RightIndexDistal);
+        persona = GetComponent<NPCPersona>();
         hasPointingPose = BuildPointingPose();
-        if (!hasPointingPose) Debug.LogWarning("Café pointing needs a skinned right hand with mapped index and little fingers.", this);
+        if (!hasPointingPose) Debug.LogWarning("Cafe pointing needs a skinned right hand with mapped index and little fingers.", this);
     }
 
     private Transform Bone(HumanBodyBones bone) => animator.GetBoneTransform(bone);
@@ -118,6 +129,9 @@ public sealed class CafeteriaEmotionGestures : MonoBehaviour
 
     private void RestoreFingers()
     {
+        if (wristAdjusted && Quaternion.Angle(hand.localRotation, aimedWrist) < .01f)
+            hand.localRotation = animatedWrist;
+        wristAdjusted = false;
         for (int j = 0; j < pointingJoints.Length; j++)
         {
             ref var joint = ref pointingJoints[j];
@@ -136,23 +150,27 @@ public sealed class CafeteriaEmotionGestures : MonoBehaviour
         if (active || face.currentEmotion == "NEUTRAL") suppressAfterExit = false;
         sessionWasActive = active;
         Pose next = suppressAfterExit ? Pose.Neutral : ReadPose(face.currentEmotion);
-        if (next != pose)
+        if (next != pose || lastReaction != face.ConversationReactionVersion)
         {
+            lastReaction = face.ConversationReactionVersion;
             pose = next;
             elapsed = 0f;
             if (pose == Pose.Happy) animator.Play(Cheer, reactionLayer, 0f);
         }
         elapsed += Time.deltaTime;
-        // Perform each reaction once on entry, including a seated recovery while the face retains its emotion.
+        bool speaking = persona && persona.npcAudioSource && persona.npcAudioSource.isPlaying;
+        speakingWeight = Mathf.MoveTowards(speakingWeight, speaking ? 1f : 0f, Time.deltaTime * 4f);
+        speakingTime = speakingWeight > 0 ? speakingTime + Time.deltaTime : 0;
         float duration = pose == Pose.Angry ? 3.8f : 3f;
+        bool reacting = elapsed < duration || speaking;
         float strength = Mathf.Lerp(.65f, 1f, face.emotionIntensity / 100f);
         for (int i = 1; i < weights.Length; i++)
         {
-            float target = i == (int)pose && elapsed < duration ? strength : 0f;
+            float target = i == (int)pose && reacting ? strength : 0f;
             weights[i] = Mathf.MoveTowards(weights[i], target, Time.deltaTime * 2.5f);
         }
         nervousTime = Weight(Pose.Nervous) > 0f ? nervousTime + Time.deltaTime : 0f;
-        bool rise = pose == Pose.Angry && elapsed < duration;
+        bool rise = pose == Pose.Angry && reacting;
         chairPhase = Mathf.MoveTowards(chairPhase, rise ? 1f : 0f,
             Time.deltaTime / Mathf.Max(.1f, rise ? standUpSeconds : sitDownSeconds));
         // Leave time to lean over the feet before extending the knees, and to settle after sitting.
@@ -259,6 +277,13 @@ public sealed class CafeteriaEmotionGestures : MonoBehaviour
         if (total > .001f)
             animator.SetIKPosition(AvatarIKGoal.RightHand,
                 ((fidget + right * (.045f + shake) * scale) * nervous + point * angry) / total);
+        else if (speakingWeight > 0 && pose != Pose.Angry && pose != Pose.Happy && pose != Pose.Thinking)
+        {
+            float beat = .5f - .5f * Mathf.Cos(speakingTime * 3.4f);
+            animator.SetIKPositionWeight(AvatarIKGoal.RightHand, speakingWeight * .82f);
+            animator.SetIKPosition(AvatarIKGoal.RightHand, origin + scale *
+                (right * .16f + forward * (.22f + .10f * beat) - up * (.22f - .12f * beat)));
+        }
 
         if (angry > 0f && hasPointingPose)
         {
@@ -267,13 +292,60 @@ public sealed class CafeteriaEmotionGestures : MonoBehaviour
                 Quaternion.LookRotation(aim, up) * Quaternion.Inverse(pointingHandFrame));
         }
         else animator.SetIKRotationWeight(AvatarIKGoal.RightHand, 0f);
+
+        // Record the evaluated reaction, including the seated IK gestures that do
+        // not have a named Animator state of their own.
+        string gesture = null;
+        if (pose != Pose.Neutral && Weight(pose) > .01f)
+        {
+            gesture = pose switch {
+                Pose.Happy => "Seated cheer", Pose.Sad => "Downcast posture",
+                Pose.Angry => "Stand and point", Pose.Nervous => "Hand fidget",
+                Pose.Thinking when head => "Thinking head tilt", _ => null
+            };
+        }
+        if (gesture == null && session && session.IsPlayerCapturing && nodWeight > .01f)
+            gesture = "Listening nod";
+        if (gesture == null && speakingWeight > .01f && total <= .001f &&
+            pose != Pose.Angry && pose != Pose.Happy && pose != Pose.Thinking)
+            gesture = "Speaking hand gesture";
+        RecordGesture(gesture);
+    }
+
+    private void RecordGesture(string gesture)
+    {
+        // A response can arrive between Update and IK. Wait for the new pose
+        // before attributing an animation to that response.
+        if (ReadPose(face.currentEmotion) != pose) return;
+        var history = NPCEmotionSessionManager.Instance;
+        if (gesture == null || !session || !session.IsSessionActive || !persona ||
+            !history || !history.IsCollectingBodyEvents || history.CurrentBehaviourTurn <= 0)
+        {
+            recordedGesture = null;
+            return;
+        }
+        string activity = history.GetBehaviourActivity(face);
+        if (string.IsNullOrEmpty(activity)) return;
+        int turn = history.CurrentBehaviourTurn;
+        if (gesture == recordedGesture && turn == recordedTurn && activity == recordedActivity &&
+            face.currentEmotion == recordedEmotion) return;
+        history.RecordBodyAnimation(new BodyAnimationEventRecord {
+            animation_event_id = System.Guid.NewGuid().ToString(), npc_id = persona.characterName,
+            npc_type = NPCBodyType.AMBIENT.ToString(), scene_type = gameObject.scene.name,
+            npc_activity = activity, emotion = face.currentEmotion, animation_name = gesture,
+            timestamp = System.DateTime.UtcNow.ToString("o"), turnNumber = turn
+        });
+        recordedGesture = gesture;
+        recordedTurn = turn;
+        recordedActivity = activity;
+        recordedEmotion = face.currentEmotion;
     }
 
     private void LateUpdate()
     {
         float point = PointWeight;
-        if (point <= 0f || !hasPointingPose) return;
-        for (int j = 0; j < pointingJoints.Length; j++)
+        if (point <= 0f) return;
+        for (int j = 0; hasPointingPose && j < pointingJoints.Length; j++)
         {
             ref var joint = ref pointingJoints[j];
             if (!joint.bone) continue;
@@ -282,6 +354,17 @@ public sealed class CafeteriaEmotionGestures : MonoBehaviour
             joint.bone.localRotation = joint.applied;
             joint.modified = true;
         }
+        // Align the actual index after evaluating Humanoid IK and finger curls.
+        var player = Camera.main;
+        if (!player || !indexBase || !indexTip || !hand) return;
+        Vector3 pointing = indexTip.position - indexBase.position;
+        Vector3 target = player.transform.position - indexBase.position;
+        if (pointing.sqrMagnitude < .000001f || target.sqrMagnitude < .000001f) return;
+        animatedWrist = hand.localRotation;
+        float blend = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(point / .6f));
+        hand.rotation = Quaternion.Slerp(Quaternion.identity, Quaternion.FromToRotation(pointing, target), blend) * hand.rotation;
+        aimedWrist = hand.localRotation;
+        wristAdjusted = true;
     }
 
     private void OnDisable()
@@ -295,5 +378,6 @@ public sealed class CafeteriaEmotionGestures : MonoBehaviour
         pose = Pose.Neutral;
         System.Array.Clear(weights, 0, weights.Length);
         nodWeight = nodTime = 0f;
+        speakingTime = speakingWeight = 0f;
     }
 }

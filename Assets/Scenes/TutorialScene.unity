@@ -4334,7 +4334,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NPCFaceZoom
   interactionManager: {fileID: 0}
   panelDistance: 1.3
-  faceDistance: 0.81
+  faceDistance: 0.84
   framingHeightOffset: 0
   fieldOfView: 32
   boneFramedNpcs: []

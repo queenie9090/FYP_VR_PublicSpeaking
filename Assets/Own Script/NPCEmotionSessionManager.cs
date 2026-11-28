@@ -53,6 +53,8 @@ public class NPCEmotionSessionManager : MonoBehaviour
     private string activeNpc, activeState;
     private int activeTurn;
     public int CurrentBehaviourTurn => activeTurn;
+    public string GetBehaviourActivity(NPCEmotionController source) =>
+        source != null && source == activeSource ? activeState : null;
 
     public void SetRealismContext(NPCEmotionController source, string npc, string state, int turn)
     {
