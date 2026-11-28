@@ -1,17 +1,18 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.XR.Management;
 
 public enum LocomotionMode
 {
-    Dynamic = 0,     // Both Teleport and Continuous enabled
-    TeleportOnly = 1,// Only Teleportation enabled
-    Continuous = 2   // Only Joystick Smooth Movement enabled
+    Dynamic = 0,
+    TeleportOnly = 1,
+    Continuous = 2
 }
 
 public enum TurningMode
 {
-    Snap = 0,       // Angle-based step turning (Best for comfort)
-    Continuous = 1  // Smooth joystick rotation
+    Snap = 0,
+    Continuous = 1
 }
 
 public class AppSystemManager : MonoBehaviour
@@ -22,9 +23,11 @@ public class AppSystemManager : MonoBehaviour
     public LocomotionMode selectedLocomotionMode = LocomotionMode.Dynamic;
     public TurningMode selectedTurningMode = TurningMode.Snap;
     public bool isSeatedModeEnabled = false;
-   // public bool isQuickExitEnabled = false;
 
-    // PlayerPrefs Keys
+    [Header("Debug Overlay")]
+    public bool showFpsCounter = true;
+    private float deltaTime = 0.0f;
+
     public const string KEY_LOCOMOTION_MODE = "VR_LocomotionMode";
     public const string KEY_TURNING_MODE = "VR_TurningMode";
     public const string KEY_SEATED_MODE = "VR_SeatedMode";
@@ -36,7 +39,6 @@ public class AppSystemManager : MonoBehaviour
         if (Instance == null)
         {
             Instance = this;
-            // Unity can only preserve root objects across scene changes.
             transform.SetParent(null, true);
             DontDestroyOnLoad(gameObject);
             LoadSettings();
@@ -47,14 +49,38 @@ public class AppSystemManager : MonoBehaviour
         }
     }
 
+    private void Update()
+    {
+        if (showFpsCounter)
+        {
+            deltaTime += (Time.unscaledDeltaTime - deltaTime) * 0.1f;
+        }
+    }
+
+    private void OnGUI()
+    {
+        if (!showFpsCounter) return;
+
+        int w = Screen.width, h = Screen.height;
+        GUIStyle style = new GUIStyle();
+        Rect rect = new Rect(16, 16, w, h * 4 / 100);
+        style.alignment = TextAnchor.UpperLeft;
+        style.fontSize = Mathf.Max(18, h / 40);
+        style.normal.textColor = Color.green;
+
+        float msec = deltaTime * 1000.0f;
+        float fps = deltaTime > 0f ? 1.0f / deltaTime : 0f;
+        string text = string.Format("{0:0.0} ms ({1:0.} FPS)", msec, fps);
+        GUI.Label(rect, text, style);
+    }
+
     public void LoadSettings()
     {
         selectedLocomotionMode = (LocomotionMode)PlayerPrefs.GetInt(KEY_LOCOMOTION_MODE, (int)LocomotionMode.Dynamic);
         selectedTurningMode = (TurningMode)PlayerPrefs.GetInt(KEY_TURNING_MODE, (int)TurningMode.Continuous);
         isSeatedModeEnabled = PlayerPrefs.GetInt(KEY_SEATED_MODE, 0) == 1;
-       // isQuickExitEnabled = PlayerPrefs.GetInt(KEY_QUICK_EXIT, 0) == 1;
 
-        Debug.Log($"[AppSystemManager] Loaded -> Loco: {selectedLocomotionMode} | Turn: {selectedTurningMode} | Seated: {isSeatedModeEnabled}"); //| QuickExit: {isQuickExitEnabled}");
+        Debug.Log($"[AppSystemManager] Loaded -> Loco: {selectedLocomotionMode} | Turn: {selectedTurningMode} | Seated: {isSeatedModeEnabled}");
     }
 
     public void SaveLocomotionModeSetting(LocomotionMode mode)
@@ -80,7 +106,6 @@ public class AppSystemManager : MonoBehaviour
 
     public void SaveQuickExitSetting(bool enabled)
     {
-       // isQuickExitEnabled = enabled;
         PlayerPrefs.SetInt(KEY_QUICK_EXIT, enabled ? 1 : 0);
         PlayerPrefs.Save();
     }
@@ -95,15 +120,23 @@ public class AppSystemManager : MonoBehaviour
     {
         UserSession.IsRunningTutorial = false;
 
+        // Cleanly shut down XR subsystems before closing the process
+        if (XRGeneralSettings.Instance != null && XRGeneralSettings.Instance.Manager != null)
+        {
+            var manager = XRGeneralSettings.Instance.Manager;
+            if (manager.isInitializationComplete)
+            {
+                try { manager.StopSubsystems(); } catch { }
+                try { manager.DeinitializeLoader(); } catch { }
+            }
+        }
+
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
-#elif UNITY_ANDROID
-        using (AndroidJavaClass androidClass = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
-        {
-            AndroidJavaObject currentActivity = androidClass.GetStatic<AndroidJavaObject>("currentActivity");
-            currentActivity.Call<bool>("moveTaskToBack", true);
-        }
+#elif UNITY_STANDALONE_WIN
         Application.Quit();
+        // Fallback if a background thread (OpenXR/Supabase) keeps the Windows process alive
+        System.Diagnostics.Process.GetCurrentProcess().Kill();
 #else
         Application.Quit();
 #endif
