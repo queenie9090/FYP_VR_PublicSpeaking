@@ -27,6 +27,8 @@ public class HallNPCRealismScreen : MonoBehaviour
     private readonly RenderTexture[] previewFeeds = new RenderTexture[2];
     private readonly int[] previewTargets = { -1, -1 };
     private readonly UniversalRenderPipeline.SingleCameraRequest previewRequest = new UniversalRenderPipeline.SingleCameraRequest();
+    private readonly Vector3[] previewCorners = new Vector3[4];
+    private Camera previewViewer;
     private int nextPreviewSlot;
     private float nextPreviewTime;
 
@@ -156,6 +158,7 @@ public class HallNPCRealismScreen : MonoBehaviour
         var image = PreviewImage(slot);
         int npc = previewTargets[slot];
         if (image == null || npc < 0 || !image.gameObject.activeInHierarchy) return;
+        if (!IsPreviewPotentiallyVisible(image)) return;
         var camera = closeUpCameras[npc];
         if (FindAvailable(npc) != npc || !RenderPipeline.SupportsRenderRequest(camera, previewRequest))
         {
@@ -176,6 +179,44 @@ public class HallNPCRealismScreen : MonoBehaviour
         RenderPipeline.SubmitRenderRequest(camera, previewRequest);
         image.texture = previewFeeds[slot];
         image.enabled = true;
+    }
+
+    // A world-space portrait does not need a fresh render while it is outside the
+    // player's view. Keep the previous texture so it remains available on return.
+    private bool IsPreviewPotentiallyVisible(RawImage image)
+    {
+        var canvas = image.canvas;
+        if (canvas == null || canvas.rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay)
+            return true;
+        if (previewViewer == null || !previewViewer.isActiveAndEnabled)
+            previewViewer = Camera.main;
+        if (previewViewer == null) return true;
+
+        image.rectTransform.GetWorldCorners(previewCorners);
+        if (IntersectsViewport(Camera.MonoOrStereoscopicEye.Mono)) return true;
+        return previewViewer.stereoEnabled &&
+            (IntersectsViewport(Camera.MonoOrStereoscopicEye.Left) ||
+             IntersectsViewport(Camera.MonoOrStereoscopicEye.Right));
+    }
+
+    private bool IntersectsViewport(Camera.MonoOrStereoscopicEye eye)
+    {
+        const float margin = 0.2f;
+        float minX = float.PositiveInfinity, minY = float.PositiveInfinity;
+        float maxX = float.NegativeInfinity, maxY = float.NegativeInfinity;
+        int inFront = 0;
+        for (int i = 0; i < previewCorners.Length; i++)
+        {
+            Vector3 p = previewViewer.WorldToViewportPoint(previewCorners[i], eye);
+            if (p.z <= 0f) continue;
+            inFront++;
+            minX = Mathf.Min(minX, p.x); maxX = Mathf.Max(maxX, p.x);
+            minY = Mathf.Min(minY, p.y); maxY = Mathf.Max(maxY, p.y);
+        }
+        // A rectangle crossing the camera plane is conservatively treated as visible.
+        if (inFront > 0 && inFront < previewCorners.Length) return true;
+        return inFront > 0 && maxX >= -margin && minX <= 1f + margin &&
+            maxY >= -margin && minY <= 1f + margin;
     }
 
     private void Update()
