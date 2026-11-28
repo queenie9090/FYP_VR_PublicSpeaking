@@ -85,6 +85,11 @@ public class SetupUIController : MonoBehaviour
         // Guarantee game time and audio listener are active upon entering Main Menu
         Time.timeScale = 1f;
         AudioListener.pause = false;
+
+        // Reduce Direct3D mouse input latency on desktop dashboard
+        QualitySettings.maxQueuedFrames = 1;
+        QualitySettings.vSyncCount = 0;
+        Application.targetFrameRate = 120;
     }
 
     private void Start()
@@ -410,6 +415,25 @@ public class SetupUIController : MonoBehaviour
         topicDropdown.value = 0;
         topicDropdown.RefreshShownValue();
         OnTopicDropdownChanged(0);
+    }
+
+    public void OnClickQuitApplication()
+    {
+        if (AppSystemManager.Instance != null)
+        {
+            AppSystemManager.Instance.QuitApplication();
+        }
+        else
+        {
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#elif UNITY_STANDALONE_WIN
+        Application.Quit();
+        System.Diagnostics.Process.GetCurrentProcess().Kill();
+#else
+            Application.Quit();
+#endif
+        }
     }
 
     // <-- ADDED: Called when user clicks the "Custom" / "Presets" button
