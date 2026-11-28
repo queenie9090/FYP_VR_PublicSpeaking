@@ -17,6 +17,8 @@ public sealed class ClassroomStudentGestures : MonoBehaviour
     private float weight, age, listeningTime, listeningWeight, speechTime, speechWeight, settle;
     private bool applied;
     private int seenReaction;
+    private int recordedTurn;
+    private string recordedActivity, recordedEmotion;
 
     private void Start()
     {
@@ -60,7 +62,7 @@ public sealed class ClassroomStudentGestures : MonoBehaviour
         }
         if (emotion != face.currentEmotion && weight <= .001f) { emotion = face.currentEmotion; age = 0; }
         age += dt;
-        float target = emotion == face.currentEmotion && emotion != "NEUTRAL" && age < 4.2f
+        float target = emotion == face.currentEmotion && emotion != "NEUTRAL" && (speaking || age < 4.2f)
             ? Mathf.Lerp(.55f, 1f, Mathf.Clamp01(face.emotionIntensity / 100f)) : 0f;
         weight = Mathf.MoveTowards(weight, target, 4f*dt);
         settle = Mathf.MoveTowards(settle, 1f, 3f*dt);
@@ -70,6 +72,35 @@ public sealed class ClassroomStudentGestures : MonoBehaviour
         for (int i = 0; i < bones.Length; i++)
             if (bones[i]) posed[i] = bones[i].localRotation;
         applied = true;
+        RecordGesture(speaking, listening);
+    }
+
+    private void RecordGesture(bool speaking, bool listening)
+    {
+        var history = NPCEmotionSessionManager.Instance;
+        if (!session || !session.IsSessionActive || !history || !history.IsCollectingBodyEvents ||
+            history.CurrentBehaviourTurn <= 0 || (!speaking && !listening && weight <= .01f))
+        {
+            recordedActivity = null;
+            return;
+        }
+        string activity = speaking ? "SPEAKING" : listening ? "LISTENING" : "IDLE";
+        int turn = history.CurrentBehaviourTurn;
+        if (turn == recordedTurn && activity == recordedActivity && emotion == recordedEmotion) return;
+        // Only log a pose after the rig actually received a visible bone offset.
+        bool moved = false;
+        for (int i = 0; i < bones.Length && !moved; i++)
+            moved = bones[i] && Quaternion.Angle(original[i], posed[i]) > .5f;
+        if (!moved) return;
+        history.RecordBodyAnimation(new BodyAnimationEventRecord {
+            animation_event_id = System.Guid.NewGuid().ToString(), npc_id = persona.characterName,
+            npc_type = NPCBodyType.AMBIENT.ToString(), scene_type = gameObject.scene.name,
+            npc_activity = activity, emotion = emotion, animation_name = "Seated student " + activity + " / " + emotion,
+            timestamp = System.DateTime.UtcNow.ToString("o"), turnNumber = turn
+        });
+        recordedTurn = turn;
+        recordedActivity = activity;
+        recordedEmotion = emotion;
     }
 
     private void Pose(float w)
@@ -80,10 +111,10 @@ public sealed class ClassroomStudentGestures : MonoBehaviour
         float size = rig.humanScale;
         Vector3 left = Lap(true), hand = Lap(false);
         float pitch = studentA ? 2 : -3, headPitch = 0, roll = 0, yaw = 0;
-        float beat = Pulse(speechTime, studentA ? 2.5f : 3.3f, .95f)*speechWeight;
+        float beat = Pulse(speechTime, studentA ? 2.5f : 2.8f, 1.35f)*speechWeight;
         float nod = Pulse(listeningTime - (studentA ? .35f : 1.1f), studentA ? 4.1f : 5.3f, studentA ? 1.2f : .95f, studentA ? 2 : 1);
         Vector3 front = chest.position + forward*(.25f*size);
-        hand = Vector3.Lerp(hand, front + (right*.12f-up*.045f)*size, beat*(studentA ? .8f : .35f));
+        hand = Vector3.Lerp(hand, front + (right*.12f-up*.045f)*size, beat*(studentA ? .8f : .65f));
         switch (emotion)
         {
             case "HAPPY":
