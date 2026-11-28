@@ -23,6 +23,7 @@ public class SpeechInteractionController : MonoBehaviour
     [SerializeField] private float retryPauseSeconds = 0.5f;
 
     private int captureRequestVersion;
+    public string LastCaptureError { get; private set; }
 
     public IEnumerator CaptureUserTurnWithRetriesRoutine(
         List<DialogueTurn> conversationHistory,
@@ -33,17 +34,18 @@ public class SpeechInteractionController : MonoBehaviour
         Func<bool> shouldCancel = null)
     {
         int requestVersion = ++captureRequestVersion;
+        LastCaptureError = null;
 
         if (audioRecorder == null)
         {
+            LastCaptureError = "Microphone recorder is unavailable.";
             if (uiManager != null) uiManager.SetStatus("Audio recorder missing.");
-            Debug.LogError("[SpeechInteractionController] AudioRecorder reference is null.");
+            Debug.LogWarning("[SpeechInteractionController] AudioRecorder reference is null.");
             onFatalMicError?.Invoke();
             yield break;
         }
 
         int maxAttempts = Mathf.Max(1, maxSilentAttempts);
-        int sttFailures = 0;
         float totalSpeechDuration = 0f;
         float totalSilenceDuration = 0f;
 
@@ -96,9 +98,10 @@ public class SpeechInteractionController : MonoBehaviour
 
             if (wavBytes == null || wavBytes.Length == 0)
             {
+                LastCaptureError = "Microphone unavailable. Check the microphone connection.";
                 if (uiManager != null)
                     uiManager.SetStatus("Microphone unavailable. Check the microphone and restart the session.");
-                Debug.LogError("[SpeechInteractionController] No microphone audio was recorded.");
+                Debug.LogWarning("[SpeechInteractionController] No microphone audio was recorded.");
                 onFatalMicError?.Invoke();
                 yield break;
             }
@@ -121,18 +124,19 @@ public class SpeechInteractionController : MonoBehaviour
 
             if (sttFailed)
             {
-                if (++sttFailures >= 3)
+                if (attempt >= maxAttempts)
                 {
+                    LastCaptureError = "Speech recognition unavailable. Check your network connection.";
                     if (uiManager != null)
-                        uiManager.SetStatus("Speech recognition unavailable. Check your connection; trying again shortly.");
-                    sttFailures = 0;
-                    yield return new WaitForSecondsRealtime(3f);
+                        uiManager.SetStatus("Speech recognition unavailable. Check your connection and restart the session.");
+                    Debug.LogWarning("[SpeechInteractionController] Speech recognition failed after all retry attempts.");
+                    onFatalMicError?.Invoke();
+                    yield break;
                 }
 
                 if (uiManager != null)
                     uiManager.SetStatus("Speech recognition failed. Please try speaking again.");
                 yield return new WaitForSeconds(1.5f);
-                attempt--;
                 continue;
             }
 
@@ -232,7 +236,7 @@ public class SpeechInteractionController : MonoBehaviour
             sttDone = true;
         }, err => {
             if (sttDone || timedOut || requestVersion != transcriptionRequestVersion) return;
-            Debug.LogError($"[STT Error] {err}");
+            Debug.LogWarning($"[STT Error] {err}");
             if (uiManager != null) uiManager.SetStatus("Speech Error.");
             sttFailed = true;
             sttDone = true;

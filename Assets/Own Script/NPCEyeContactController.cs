@@ -1,5 +1,6 @@
 
 using UnityEngine;
+using Unity.XR.CoreUtils;
 
 public class NPCEyeContactController : MonoBehaviour
 {
@@ -60,6 +61,7 @@ public class NPCEyeContactController : MonoBehaviour
     private NPCBodyActivity activity = NPCBodyActivity.IDLE;
     private float thinkingStarted;
     private bool thinkingShiftRecorded;
+    private float nextHeadSearchTime;
 
     // Scene code can reconnect a replacement tracked headset without recreating the NPC.
     public void SetPlayerHead(Transform trackedHead) => playerHead = trackedHead;
@@ -91,6 +93,8 @@ public class NPCEyeContactController : MonoBehaviour
             return;
         }
 
+        if (playerHead == null)
+            ResolvePlayerHead();
         if (playerHead == null)
             Debug.LogWarning($"[{name}] Assign the tracked headset to Player Head for eye contact.");
 
@@ -149,6 +153,9 @@ public class NPCEyeContactController : MonoBehaviour
     {
         if (eyeMesh == null || gazeReference == null)
             return;
+
+        if (playerHead == null && Time.unscaledTime >= nextHeadSearchTime)
+            ResolvePlayerHead();
 
         if (playerHead == null || !playerHead.gameObject.activeInHierarchy)
         {
@@ -230,6 +237,14 @@ public class NPCEyeContactController : MonoBehaviour
 
         SetWeight(leftDown, lookDown);
         SetWeight(rightDown, lookDown);
+    }
+
+    private void ResolvePlayerHead()
+    {
+        nextHeadSearchTime = Time.unscaledTime + 1f;
+        var origin = FindFirstObjectByType<XROrigin>();
+        if (origin != null && origin.Camera != null)
+            playerHead = origin.Camera.transform;
     }
 
     private Vector2 UpdateEmotionGaze()

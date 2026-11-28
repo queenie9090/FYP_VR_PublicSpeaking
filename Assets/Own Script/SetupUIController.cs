@@ -9,6 +9,7 @@ public class SetupUIController : MonoBehaviour
     [Header("UI Panel References")]
     [SerializeField] private GameObject configurationPanel;
     [SerializeField] private GameObject tutorialModalPanel;
+    [SerializeField] private TMP_Text validationErrorText;
 
     [Header("Informational Card Display")]
     [SerializeField] private ScenarioCardUI scenarioCardUI;
@@ -138,6 +139,14 @@ public class SetupUIController : MonoBehaviour
         }
 
         ConnectIntroductionAndRoleControls();
+
+        ClearValidationError();
+        if (activityInput != null) activityInput.onValueChanged.AddListener(_ => ClearValidationError());
+        if (participantRoleInput != null) participantRoleInput.onValueChanged.AddListener(_ => ClearValidationError());
+        if (npcPersonaInput != null) npcPersonaInput.onValueChanged.AddListener(_ => ClearValidationError());
+        if (scenarioDropdown != null) scenarioDropdown.onValueChanged.AddListener(_ => ClearValidationError());
+        if (topicDropdown != null) topicDropdown.onValueChanged.AddListener(_ => ClearValidationError());
+        if (difficultyDropdown != null) difficultyDropdown.onValueChanged.AddListener(_ => ClearValidationError());
 
         // 3. Hide tutorial modal by default
         if (tutorialModalPanel != null)
@@ -269,25 +278,39 @@ public class SetupUIController : MonoBehaviour
     // Called when the user clicks "Confirm Scenario" / "Start Session"
     public void OnConfirmConfiguration()
     {
-        string currentTopic = "General Presentation";
-        if (isCustomTopicMode)
+        string scenario = SelectedOption(scenarioDropdown);
+        string currentTopic = isCustomTopicMode ? activityInput != null ? activityInput.text : null : SelectedOption(topicDropdown);
+        string difficulty = SelectedOption(difficultyDropdown);
+        string role = participantRoleInput != null ? participantRoleInput.text : null;
+        string persona = npcPersonaInput != null ? npcPersonaInput.text : null;
+        var missing = new List<string>();
+        if (string.IsNullOrWhiteSpace(scenario)) missing.Add("scenario");
+        if (string.IsNullOrWhiteSpace(currentTopic)) missing.Add("topic");
+        if (string.IsNullOrWhiteSpace(difficulty)) missing.Add("difficulty");
+        if (string.IsNullOrWhiteSpace(role)) missing.Add("your role");
+        if (string.IsNullOrWhiteSpace(persona)) missing.Add("NPC role");
+        if (missing.Count > 0)
         {
-            if (activityInput != null && !string.IsNullOrWhiteSpace(activityInput.text))
-                currentTopic = activityInput.text.Trim();
+            if (validationErrorText != null)
+            {
+                validationErrorText.text = "Please complete: " + string.Join(", ", missing) + ".";
+                validationErrorText.gameObject.SetActive(true);
+            }
+            else Debug.LogWarning("[SetupUIController] Complete the required fields: " + string.Join(", ", missing));
+            return;
         }
-        else if (topicDropdown != null && topicDropdown.options.Count > 0)
-        {
-            currentTopic = topicDropdown.options[topicDropdown.value].text;
-        }
+
+        ClearValidationError();
+        currentTopic = currentTopic.Trim();
 
         // Package setup selections into UserSession
         UserSession.SelectedScenarioConfig = new ScenarioConfig
         {
-            scenario = scenarioDropdown != null ? scenarioDropdown.options[scenarioDropdown.value].text : "Classroom",
+            scenario = scenario.Trim(),
             topic = currentTopic,
-            difficulty = difficultyDropdown != null ? difficultyDropdown.options[difficultyDropdown.value].text : "Medium",
-            participantRole = participantRoleInput != null && !string.IsNullOrEmpty(participantRoleInput.text) ? participantRoleInput.text : "Student",
-            persona = npcPersonaInput != null && !string.IsNullOrEmpty(npcPersonaInput.text) ? npcPersonaInput.text : "Evaluator",
+            difficulty = difficulty.Trim(),
+            participantRole = role.Trim(),
+            persona = persona.Trim(),
             sessionObjective = FormatDynamicObjective(currentTopic),
             maxTurnLimit = 5,
             sessionStartSignal = "Session Start"
@@ -297,6 +320,8 @@ public class SetupUIController : MonoBehaviour
         UserSession.InputMode = (inputModeToggle != null && inputModeToggle.isOn) ? "Hands-Tracking" : "Controller";
 
         Debug.Log($"[SetupUIController] Configured: {UserSession.SelectedScenarioConfig.scenario} | Topic: {UserSession.SelectedScenarioConfig.topic} | Input: {UserSession.InputMode}");
+
+        if (configurationPanel != null) configurationPanel.SetActive(false);
 
         // Check if user previously checked "Don't show this message again"
         bool shouldSkipModal = PlayerPrefs.GetInt(NeverShowTutorialKey, 0) == 1;
@@ -390,7 +415,23 @@ public class SetupUIController : MonoBehaviour
     // <-- ADDED: Called when user clicks the "Custom" / "Presets" button
     public void ToggleCustomTopicMode()
     {
+        ClearValidationError();
         SetCustomTopicMode(!isCustomTopicMode);
+    }
+
+    private static string SelectedOption(TMP_Dropdown dropdown)
+    {
+        return dropdown != null && dropdown.options != null && dropdown.value >= 0 && dropdown.value < dropdown.options.Count
+            ? dropdown.options[dropdown.value]?.text : null;
+    }
+
+    private void ClearValidationError()
+    {
+        if (validationErrorText != null)
+        {
+            validationErrorText.text = "";
+            validationErrorText.gameObject.SetActive(false);
+        }
     }
 
     // <-- ADDED: Swaps visibility between topicDropdown and activityInput

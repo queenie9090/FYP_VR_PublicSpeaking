@@ -66,6 +66,8 @@ public class InteractionManager : MonoBehaviour
     private ScenarioConfig activeConfig;
     private List<DialogueTurn> conversationHistory = new List<DialogueTurn>();
     private bool isSessionActive = false;
+    private bool sceneComponentsReady;
+    private bool speechRecoveryPending;
     private bool isSavingSession = false;
     private bool sessionSaveFailed;
     private bool closeSessionPending;
@@ -77,6 +79,18 @@ public class InteractionManager : MonoBehaviour
     private Coroutine initiationCoroutine;
     private Coroutine activeSpeechLoopCoroutine;
     private Coroutine activeRecordingCoroutine;
+
+    private void Awake()
+    {
+        if (startSessionButton != null)
+            startSessionButton.onClick.AddListener(OnUserConfirmedStart);
+    }
+
+    private void OnDestroy()
+    {
+        if (startSessionButton != null)
+            startSessionButton.onClick.RemoveListener(OnUserConfirmedStart);
+    }
 
     private void Start()
     {
@@ -110,6 +124,8 @@ public class InteractionManager : MonoBehaviour
 
         EnsureHelpersExist();
 
+        sceneComponentsReady = true;
+
         SetLocomotionEnabled(true);
 
         TutorialPanelManager tutorialManager = FindObjectOfType<TutorialPanelManager>();
@@ -141,8 +157,6 @@ public class InteractionManager : MonoBehaviour
 
         if (startSessionButton != null)
         {
-            startSessionButton.onClick.RemoveAllListeners();
-            startSessionButton.onClick.AddListener(OnUserConfirmedStart);
             if (uiManager != null) uiManager.SetStatus("Press 'Start Conversation' to begin.");
         }
     }
@@ -233,8 +247,21 @@ public class InteractionManager : MonoBehaviour
 
     public void OnUserConfirmedStart()
     {
-        if (!isActiveAndEnabled || isSessionActive || isSavingSession || sessionSaveFailed) return;
+        if (!isActiveAndEnabled || isSavingSession || sessionSaveFailed) return;
+        if (isSessionActive) return;
         if (initiationCoroutine != null) return;
+        if (!sceneComponentsReady)
+        {
+            RestoreTutorialStartPanel();
+            ShowSpeechProblem("The session is still preparing. Please try again.");
+            return;
+        }
+        if (audioRecorder == null || !audioRecorder.IsMicrophoneAvailable())
+        {
+            RestoreTutorialStartPanel();
+            ShowSpeechProblem("No microphone detected. Connect a microphone, then try again.");
+            return;
+        }
         Debug.Log("[InteractionManager] OnUserConfirmedStart called");
         if (startSessionButton != null)
             startSessionButton.interactable = false;
@@ -406,7 +433,13 @@ public class InteractionManager : MonoBehaviour
                 shouldCancel: () => !isSessionActive
             ));
 
-            if (!isSessionActive || fatalError || !captureDone) yield break;
+            if (!isSessionActive) yield break;
+            if (fatalError || !captureDone)
+            {
+                EnterSpeechRecovery(speechController.LastCaptureError);
+                activeSpeechLoopCoroutine = null;
+                yield break;
+            }
 
             if (conversationHistory.Count > historyCountBeforeCapture && conversationHistory[conversationHistory.Count - 1].speaker == "User")
                 conversationHistory[conversationHistory.Count - 1].turnNumber = nextTurnNumber;
@@ -693,6 +726,9 @@ public class InteractionManager : MonoBehaviour
             return;
         }
 
+        speechRecoveryPending = false;
+        FindFirstObjectByType<WarningPanelManager>()?.DismissRecovery();
+
         if (SceneManager.GetActiveScene().name == "Hall") GetComponent<HallAudienceCelebration>()?.StopReactions();
 
         SetNPCBodyActivity(NPCBodyActivity.IDLE);
@@ -728,6 +764,56 @@ public class InteractionManager : MonoBehaviour
 
         closeSessionPending = true;
         StartCoroutine(FinishClosingSessionRoutine());
+    }
+
+    private void ShowSpeechProblem(string message)
+    {
+        if (uiManager != null) { uiManager.ShowUI(); uiManager.SetStatus(message); }
+        var warning = FindFirstObjectByType<WarningPanelManager>();
+        if (warning != null)
+            warning.ShowWarning(message,
+                startSessionButton != null ? startSessionButton.transform as RectTransform : null,
+                exitButton != null ? exitButton.transform as RectTransform : null);
+    }
+
+    private void EnterSpeechRecovery(string error)
+    {
+        speechRecoveryPending = true;
+        if (audioRecorder != null) audioRecorder.StopRecording();
+        ShowRecoveryMessage((error ?? "Speech input failed.") + " Press Retry, or exit to end the session.");
+    }
+
+    private void ShowRecoveryMessage(string message)
+    {
+        if (uiManager != null) { uiManager.ShowUI(); uiManager.SetStatus(message); }
+        var warning = FindFirstObjectByType<WarningPanelManager>();
+        if (warning != null)
+            warning.ShowRecovery(message, startSessionButton, RetrySpeech);
+        else
+            Debug.LogError("[InteractionManager] Recovery warning panel is unavailable.");
+    }
+
+    private void RetrySpeech()
+    {
+        if (!speechRecoveryPending || !isSessionActive || isSavingSession || activeSpeechLoopCoroutine != null) return;
+        if (audioRecorder == null || !audioRecorder.IsMicrophoneAvailable())
+        {
+            ShowRecoveryMessage("No microphone detected. Connect a microphone, then press Retry, or exit to end the session.");
+            return;
+        }
+
+        speechRecoveryPending = false;
+        FindFirstObjectByType<WarningPanelManager>()?.DismissRecovery();
+        if (uiManager != null) uiManager.SetStatus("Retrying speech...");
+        activeSpeechLoopCoroutine = StartCoroutine(HandsFreeSpeechInteractionLoop());
+    }
+
+    private void RestoreTutorialStartPanel()
+    {
+        // The tutorial's persistent button callback hides its parent first.
+        if (SceneManager.GetActiveScene().name == "TutorialScene" &&
+            startSessionButton != null && startSessionButton.transform.parent != null)
+            startSessionButton.transform.parent.gameObject.SetActive(true);
     }
 
     private IEnumerator FinishClosingSessionRoutine()

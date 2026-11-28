@@ -52,6 +52,7 @@ public class EducatorDashboardController : MonoBehaviour
         if (exportJsonButton != null)
             exportJsonButton.onClick.AddListener(OnExportJsonClicked);
 
+        UpdateExportButtons(null);
         FetchAllParticipantData();
     }
 
@@ -77,6 +78,9 @@ public class EducatorDashboardController : MonoBehaviour
 
     private void PopulateCohortTable(List<NormalizedSessionData> sessions)
     {
+        currentlyInspectedSession = null;
+        UpdateExportButtons(null);
+        if (sessions != null) sessions = sessions.FindAll(session => session != null);
         foreach (Transform child in cohortTableContent)
         {
             Destroy(child.gameObject);
@@ -123,10 +127,10 @@ public class EducatorDashboardController : MonoBehaviour
         }
 
         string cleanQuery = searchQuery.ToLower().Trim();
-        List<NormalizedSessionData> filtered = allCohortSessions.FindAll(s =>
-            (s.user_id != null && s.user_id.ToLower().Contains(cleanQuery)) ||
+        List<NormalizedSessionData> filtered = allCohortSessions.FindAll(s => s != null &&
+            ((s.user_id != null && s.user_id.ToLower().Contains(cleanQuery)) ||
             (s.scenario_type != null && s.scenario_type.ToLower().Contains(cleanQuery)) ||
-            (s.scenario_topic != null && s.scenario_topic.ToLower().Contains(cleanQuery))
+            (s.scenario_topic != null && s.scenario_topic.ToLower().Contains(cleanQuery)))
         );
 
         PopulateCohortTable(filtered);
@@ -135,6 +139,8 @@ public class EducatorDashboardController : MonoBehaviour
     private void OnParticipantSelectedForInspection(NormalizedSessionData session)
     {
         currentlyInspectedSession = session;
+        UpdateExportButtons(session);
+        if (session == null) return;
 
         string participantShortId = !string.IsNullOrEmpty(session.user_id) && session.user_id.Length >= 6
             ? "P_" + session.user_id.Substring(0, 6)
@@ -150,7 +156,15 @@ public class EducatorDashboardController : MonoBehaviour
             ? session.performance_metric[0]
             : null;
 
-        float eyeContact = metric != null ? metric.eye_contact_pct : 0f;
+        if (metric == null)
+        {
+            if (selectedRecordDetailsText != null)
+                selectedRecordDetailsText.text = "<b>Performance metrics are not available for this session.</b> You can still export its JSON record.";
+            if (aiFeedbackText != null) aiFeedbackText.text = "<i>No feedback available.</i>";
+            return;
+        }
+
+        float eyeContact = metric.eye_contact_pct;
         float wpm = metric != null ? metric.average_wpm : 0f;
         int fillers = metric != null ? metric.filler_word_count : 0;
         string paceEvaluation = wpm < 110 ? "Slow" : (wpm <= 160 ? "Optimal Pace" : "Fast");
@@ -190,12 +204,27 @@ public class EducatorDashboardController : MonoBehaviour
         }
     }
 
+    private void UpdateExportButtons(NormalizedSessionData session)
+    {
+        bool hasSession = session != null;
+        bool hasMetrics = hasSession && session.performance_metric != null &&
+            session.performance_metric.Count > 0 && session.performance_metric[0] != null;
+        if (exportPdfButton != null) exportPdfButton.interactable = hasMetrics;
+        if (exportCsvButton != null) exportCsvButton.interactable = hasMetrics;
+        if (exportJsonButton != null) exportJsonButton.interactable = hasSession;
+    }
+
+    private void ShowExportError(string message)
+    {
+        if (selectedRecordDetailsText != null)
+            selectedRecordDetailsText.text += "\n\n<color=#FF8A65>" + message + "</color>";
+    }
+
     private void OnExportPdfClicked()
     {
         if (currentlyInspectedSession != null)
         {
-            string path = DataExporter.ExportToPDFReport(currentlyInspectedSession);
-            Debug.Log($"[EducatorDashboard] PDF exported: {path}");
+            DataExporter.ExportWithFeedback(() => DataExporter.ExportToPDFReport(currentlyInspectedSession), ShowExportError);
         }
     }
 
@@ -203,8 +232,7 @@ public class EducatorDashboardController : MonoBehaviour
     {
         if (currentlyInspectedSession != null)
         {
-            string path = DataExporter.ExportToCSV(currentlyInspectedSession);
-            Debug.Log($"[EducatorDashboard] CSV exported: {path}");
+            DataExporter.ExportWithFeedback(() => DataExporter.ExportToCSV(currentlyInspectedSession), ShowExportError);
         }
     }
 
@@ -212,7 +240,7 @@ public class EducatorDashboardController : MonoBehaviour
     {
         if (currentlyInspectedSession != null)
         {
-            DataExporter.ExportToJSON(currentlyInspectedSession);
+            DataExporter.ExportWithFeedback(() => DataExporter.ExportToJSON(currentlyInspectedSession), ShowExportError);
         }
     }
 }
