@@ -11,6 +11,7 @@ public sealed class NPCSpeakerBorder : MonoBehaviour
     private Mesh mesh;
     private Color tint = Color.clear;
     private static readonly int Tint = Shader.PropertyToID("_Tint");
+    private static readonly int Headset = Shader.PropertyToID("_Headset");
 
     private void Awake()
     {
@@ -21,20 +22,9 @@ public sealed class NPCSpeakerBorder : MonoBehaviour
         material = new Material(shader) { enableInstancing = true };
         var surface = new GameObject("Speaking NPC screen edge");
         surface.transform.SetParent(transform, false);
-        mesh = new Mesh { name = "Screen edge ring" };
-        var vertices = new Vector3[8];
-        var triangles = new int[24];
-        for (int i = 0; i < 4; i++)
-        {
-            vertices[i] = new Vector3(i == 0 || i == 3 ? -1 : 1, i < 2 ? -1 : 1);
-            vertices[i + 4] = vertices[i] * .92f;
-            int next = (i + 1) % 4;
-            int t = i * 6;
-            triangles[t] = i; triangles[t+1] = next; triangles[t+2] = i+4;
-            triangles[t+3] = next; triangles[t+4] = next+4; triangles[t+5] = i+4;
-        }
-        mesh.vertices = vertices;
-        mesh.triangles = triangles;
+        mesh = new Mesh { name = "Speaker border surface" };
+        mesh.vertices = new[] { new Vector3(-1,-1), new Vector3(1,-1), new Vector3(1,1), new Vector3(-1,1) };
+        mesh.triangles = new[] { 0, 1, 2, 0, 2, 3 };
         surface.AddComponent<MeshFilter>().sharedMesh = mesh;
         overlay = surface.AddComponent<MeshRenderer>();
         overlay.sharedMaterial = material;
@@ -78,7 +68,11 @@ public sealed class NPCSpeakerBorder : MonoBehaviour
         if (!overlay) return;
         overlay.enabled = tint.a > .002f && camera.cameraType == CameraType.Game && camera == Camera.main;
         if (overlay.enabled)
+        {
+            material.SetFloat(Headset, camera.stereoEnabled ||
+                (UnityEngine.XR.XRSettings.isDeviceActive && camera.stereoTargetEye != StereoTargetEyeMask.None) ? 1f : 0f);
             overlay.transform.position = camera.transform.position + camera.transform.forward * (camera.nearClipPlane + .5f);
+        }
     }
 
     private void EndCamera(ScriptableRenderContext context, Camera camera)
