@@ -36,6 +36,8 @@ public class AppSystemManager : MonoBehaviour
         if (Instance == null)
         {
             Instance = this;
+            // Unity can only preserve root objects across scene changes.
+            transform.SetParent(null, true);
             DontDestroyOnLoad(gameObject);
             LoadSettings();
         }

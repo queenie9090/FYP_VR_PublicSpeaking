@@ -57,13 +57,13 @@ public class SupabaseAuthManager : MonoBehaviour
             return;
         }
         Instance = this;
-        DontDestroyOnLoad(gameObject);
 
         SetupInputFieldEnterListeners();
     }
 
     private void OnDestroy()
     {
+        if (Instance == this) Instance = null;
         if (loginEmailInput != null) loginEmailInput.onSubmit.RemoveAllListeners();
         if (loginPasswordInput != null) loginPasswordInput.onSubmit.RemoveAllListeners();
         if (signUpEmailInput != null) signUpEmailInput.onSubmit.RemoveAllListeners();
