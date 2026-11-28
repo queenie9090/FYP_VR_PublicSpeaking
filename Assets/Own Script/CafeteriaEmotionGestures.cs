@@ -45,6 +45,8 @@ public sealed class CafeteriaEmotionGestures : MonoBehaviour
     private static readonly int ChairState = Animator.StringToHash("Base Layer.Chair Posture");
     private static readonly int Cheer = Animator.StringToHash("CafeReaction.Cheer");
     private int reactionLayer;
+    private int recordedTurn;
+    private string recordedGesture, recordedActivity, recordedEmotion;
 
     private void Awake()
     {
@@ -290,6 +292,53 @@ public sealed class CafeteriaEmotionGestures : MonoBehaviour
                 Quaternion.LookRotation(aim, up) * Quaternion.Inverse(pointingHandFrame));
         }
         else animator.SetIKRotationWeight(AvatarIKGoal.RightHand, 0f);
+
+        // Record the evaluated reaction, including the seated IK gestures that do
+        // not have a named Animator state of their own.
+        string gesture = null;
+        if (pose != Pose.Neutral && Weight(pose) > .01f)
+        {
+            gesture = pose switch {
+                Pose.Happy => "Seated cheer", Pose.Sad => "Downcast posture",
+                Pose.Angry => "Stand and point", Pose.Nervous => "Hand fidget",
+                Pose.Thinking when head => "Thinking head tilt", _ => null
+            };
+        }
+        if (gesture == null && session && session.IsPlayerCapturing && nodWeight > .01f)
+            gesture = "Listening nod";
+        if (gesture == null && speakingWeight > .01f && total <= .001f &&
+            pose != Pose.Angry && pose != Pose.Happy && pose != Pose.Thinking)
+            gesture = "Speaking hand gesture";
+        RecordGesture(gesture);
+    }
+
+    private void RecordGesture(string gesture)
+    {
+        // A response can arrive between Update and IK. Wait for the new pose
+        // before attributing an animation to that response.
+        if (ReadPose(face.currentEmotion) != pose) return;
+        var history = NPCEmotionSessionManager.Instance;
+        if (gesture == null || !session || !session.IsSessionActive || !persona ||
+            !history || !history.IsCollectingBodyEvents || history.CurrentBehaviourTurn <= 0)
+        {
+            recordedGesture = null;
+            return;
+        }
+        string activity = history.GetBehaviourActivity(face);
+        if (string.IsNullOrEmpty(activity)) return;
+        int turn = history.CurrentBehaviourTurn;
+        if (gesture == recordedGesture && turn == recordedTurn && activity == recordedActivity &&
+            face.currentEmotion == recordedEmotion) return;
+        history.RecordBodyAnimation(new BodyAnimationEventRecord {
+            animation_event_id = System.Guid.NewGuid().ToString(), npc_id = persona.characterName,
+            npc_type = NPCBodyType.AMBIENT.ToString(), scene_type = gameObject.scene.name,
+            npc_activity = activity, emotion = face.currentEmotion, animation_name = gesture,
+            timestamp = System.DateTime.UtcNow.ToString("o"), turnNumber = turn
+        });
+        recordedGesture = gesture;
+        recordedTurn = turn;
+        recordedActivity = activity;
+        recordedEmotion = face.currentEmotion;
     }
 
     private void LateUpdate()

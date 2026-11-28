@@ -8404,7 +8404,6 @@ GameObject:
   - component: {fileID: 358367106}
   - component: {fileID: 358367105}
   - component: {fileID: 358367104}
-  - component: {fileID: 358367103}
   - component: {fileID: 358367102}
   m_Layer: 5
   m_Name: EducatorDashboardBttn
@@ -8430,28 +8429,6 @@ MonoBehaviour:
   scaleSpeed: 12
   normalTextColor: {r: 0.84313726, g: 0.8392157, b: 0.9882353, a: 1}
   hoverTextColor: {r: 0.6039216, g: 0.59607846, b: 1, a: 1}
---- !u!95 &358367103
-Animator:
-  serializedVersion: 7
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 358367101}
-  m_Enabled: 1
-  m_Avatar: {fileID: 0}
-  m_Controller: {fileID: 9100000, guid: 518c54f214cffed49909927f1f2ee43d, type: 2}
-  m_CullingMode: 0
-  m_UpdateMode: 0
-  m_ApplyRootMotion: 0
-  m_LinearVelocityBlending: 0
-  m_StabilizeFeet: 0
-  m_AnimatePhysics: 0
-  m_WarningMessage: 
-  m_HasTransformHierarchy: 1
-  m_AllowConstantClipSamplingOptimization: 1
-  m_KeepAnimatorStateOnDisable: 0
-  m_WriteDefaultValuesOnDisable: 0
 --- !u!114 &358367104
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -19475,7 +19452,6 @@ GameObject:
   - component: {fileID: 831730012}
   - component: {fileID: 831730011}
   - component: {fileID: 831730010}
-  - component: {fileID: 831730014}
   - component: {fileID: 831730013}
   m_Layer: 5
   m_Name: SettingButton
@@ -19640,28 +19616,6 @@ MonoBehaviour:
   scaleSpeed: 12
   normalTextColor: {r: 0.84313726, g: 0.8392157, b: 0.9882353, a: 1}
   hoverTextColor: {r: 0.6039216, g: 0.59607846, b: 1, a: 1}
---- !u!95 &831730014
-Animator:
-  serializedVersion: 7
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 831730008}
-  m_Enabled: 1
-  m_Avatar: {fileID: 0}
-  m_Controller: {fileID: 9100000, guid: 518c54f214cffed49909927f1f2ee43d, type: 2}
-  m_CullingMode: 0
-  m_UpdateMode: 0
-  m_ApplyRootMotion: 0
-  m_LinearVelocityBlending: 0
-  m_StabilizeFeet: 0
-  m_AnimatePhysics: 0
-  m_WarningMessage: 
-  m_HasTransformHierarchy: 1
-  m_AllowConstantClipSamplingOptimization: 1
-  m_KeepAnimatorStateOnDisable: 0
-  m_WriteDefaultValuesOnDisable: 0
 --- !u!1 &832903665
 GameObject:
   m_ObjectHideFlags: 0
@@ -42331,7 +42285,6 @@ GameObject:
   - component: {fileID: 1906826666}
   - component: {fileID: 1906826665}
   - component: {fileID: 1906826664}
-  - component: {fileID: 1906826663}
   - component: {fileID: 1906826662}
   m_Layer: 5
   m_Name: HistoryButton
@@ -42378,28 +42331,6 @@ MonoBehaviour:
   scaleSpeed: 12
   normalTextColor: {r: 0.84313726, g: 0.8392157, b: 0.9882353, a: 1}
   hoverTextColor: {r: 0.6039216, g: 0.59607846, b: 1, a: 1}
---- !u!95 &1906826663
-Animator:
-  serializedVersion: 7
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1906826660}
-  m_Enabled: 1
-  m_Avatar: {fileID: 0}
-  m_Controller: {fileID: 9100000, guid: 518c54f214cffed49909927f1f2ee43d, type: 2}
-  m_CullingMode: 0
-  m_UpdateMode: 0
-  m_ApplyRootMotion: 0
-  m_LinearVelocityBlending: 0
-  m_StabilizeFeet: 0
-  m_AnimatePhysics: 0
-  m_WarningMessage: 
-  m_HasTransformHierarchy: 1
-  m_AllowConstantClipSamplingOptimization: 1
-  m_KeepAnimatorStateOnDisable: 0
-  m_WriteDefaultValuesOnDisable: 0
 --- !u!114 &1906826664
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -46556,7 +46487,6 @@ GameObject:
   - component: {fileID: 2108640899}
   - component: {fileID: 2108640898}
   - component: {fileID: 2108640897}
-  - component: {fileID: 2108640896}
   - component: {fileID: 2108640895}
   m_Layer: 5
   m_Name: SignUpBttn
@@ -46603,28 +46533,6 @@ MonoBehaviour:
   scaleSpeed: 12
   normalTextColor: {r: 0.84313726, g: 0.8392157, b: 0.9882353, a: 1}
   hoverTextColor: {r: 0.6039216, g: 0.59607846, b: 1, a: 1}
---- !u!95 &2108640896
-Animator:
-  serializedVersion: 7
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2108640893}
-  m_Enabled: 1
-  m_Avatar: {fileID: 0}
-  m_Controller: {fileID: 9100000, guid: 518c54f214cffed49909927f1f2ee43d, type: 2}
-  m_CullingMode: 0
-  m_UpdateMode: 0
-  m_ApplyRootMotion: 0
-  m_LinearVelocityBlending: 0
-  m_StabilizeFeet: 0
-  m_AnimatePhysics: 0
-  m_WarningMessage: 
-  m_HasTransformHierarchy: 1
-  m_AllowConstantClipSamplingOptimization: 1
-  m_KeepAnimatorStateOnDisable: 0
-  m_WriteDefaultValuesOnDisable: 0
 --- !u!114 &2108640897
 MonoBehaviour:
   m_ObjectHideFlags: 0
