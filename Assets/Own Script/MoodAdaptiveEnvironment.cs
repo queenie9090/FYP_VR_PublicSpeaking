@@ -74,7 +74,11 @@ public class MoodAdaptiveEnvironment : MonoBehaviour
         foreach (var light in lights)
         {
             if (light == null || runtimeLights.Contains(light)) continue;
+#if UNITY_EDITOR
             if (light.lightmapBakeType == LightmapBakeType.Baked)
+#else
+            if (light.bakingOutput.lightmapBakeType == LightmapBakeType.Baked)
+#endif
             {
                 Debug.LogWarning("[Mood Environment] Skipping baked light: " + light.name, light);
                 continue;
