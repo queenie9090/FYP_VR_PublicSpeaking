@@ -3570,6 +3570,10 @@ PrefabInstance:
       value: BodyGestures
       objectReference: {fileID: 0}
     - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
+      propertyPath: seatedOverlay
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5682188433028514560, guid: 2e6ef32409f7080499b021d5dd33ec80, type: 3}
       propertyPath: listeningNodPause
       value: 0.4
       objectReference: {fileID: 0}

@@ -774,6 +774,8 @@ MonoBehaviour:
   targetOpenXRApiVersion: 
   required: 0
   customRuntimeLoaderName: 
+<<<<<<< HEAD
+=======
 --- !u!114 &-7213966839562197638
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -796,6 +798,7 @@ MonoBehaviour:
   targetOpenXRApiVersion: 
   required: 0
   customRuntimeLoaderName: 
+>>>>>>> origin/main
 --- !u!114 &-7169320004640807097
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1100,6 +1103,8 @@ MonoBehaviour:
   targetOpenXRApiVersion: 
   required: 0
   customRuntimeLoaderName: 
+<<<<<<< HEAD
+=======
 --- !u!114 &-6498931293603949059
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1126,6 +1131,7 @@ MonoBehaviour:
   symmetricProjection: 0
   optimizeBufferDiscards: 1
   multiviewRenderRegionsOptimizationMode: 0
+>>>>>>> origin/main
 --- !u!114 &-6344438642778541017
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2857,7 +2863,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 90ae1e8c3c7a542bba339faf2e771c5a, type: 3}
-  m_Name: AndroidXRSupportFeature Android
+  m_Name: AndroidXRSupportFeature Standalone
   m_EditorClassIdentifier: Unity.XR.AndroidOpenXR::UnityEngine.XR.OpenXR.Features.Android.AndroidXRSupportFeature
   m_enabled: 0
   nameUi: Android XR Support
@@ -2979,7 +2985,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6c36843bac48b29469f79baf3c98f9b6, type: 3}
-  m_Name: AndroidXRHandMeshData Android
+  m_Name: AndroidXRHandMeshData Standalone
   m_EditorClassIdentifier: Unity.XR.AndroidOpenXR::UnityEngine.XR.OpenXR.Features.Android.AndroidXRHandMeshData
   m_enabled: 0
   nameUi: 'Android XR: Hand Mesh Data'
@@ -4488,6 +4494,8 @@ MonoBehaviour:
   targetOpenXRApiVersion: 
   required: 0
   customRuntimeLoaderName: 
+<<<<<<< HEAD
+=======
 --- !u!114 &1441179628752309200
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4510,6 +4518,7 @@ MonoBehaviour:
   targetOpenXRApiVersion: 
   required: 0
   customRuntimeLoaderName: 
+>>>>>>> origin/main
 --- !u!114 &1499085582305189289
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6889,7 +6898,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 12d3bf61b014a48a2b7564c61da9d7ad, type: 3}
-  m_Name: AndroidXRPerformanceMetrics Android
+  m_Name: AndroidXRPerformanceMetrics Standalone
   m_EditorClassIdentifier: Unity.XR.AndroidOpenXR::UnityEngine.XR.OpenXR.Features.Android.AndroidXRPerformanceMetrics
   m_enabled: 0
   nameUi: Android XR Performance Metrics

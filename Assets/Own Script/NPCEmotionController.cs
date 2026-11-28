@@ -146,6 +146,14 @@ public class NPCEmotionController : MonoBehaviour
         SetEmotion(currentEmotion, emotionIntensity);
     }
 
+    public int ConversationReactionVersion { get; private set; }
+
+    public void ApplyConversationReaction(string emotion, int intensity)
+    {
+        SetEmotion(emotion, intensity);
+        ConversationReactionVersion++;
+    }
+
     public void SetEmotion(string emotion, int intensity)
     {
         if (string.IsNullOrWhiteSpace(emotion))

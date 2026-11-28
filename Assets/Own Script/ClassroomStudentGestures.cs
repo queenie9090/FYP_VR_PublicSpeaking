@@ -16,6 +16,7 @@ public sealed class ClassroomStudentGestures : MonoBehaviour
     private string emotion = "NEUTRAL";
     private float weight, age, listeningTime, listeningWeight, speechTime, speechWeight, settle;
     private bool applied;
+    private int seenReaction;
 
     private void Start()
     {
@@ -52,10 +53,15 @@ public sealed class ClassroomStudentGestures : MonoBehaviour
         listeningWeight = Mathf.MoveTowards(listeningWeight, listening ? 1 : 0, 5f*dt);
         speechTime = speechWeight > 0 ? speechTime + dt : 0;
         listeningTime = listeningWeight > 0 ? listeningTime + dt : 0;
+        if (seenReaction != face.ConversationReactionVersion)
+        {
+            seenReaction = face.ConversationReactionVersion;
+            if (emotion == face.currentEmotion) age = 0f;
+        }
         if (emotion != face.currentEmotion && weight <= .001f) { emotion = face.currentEmotion; age = 0; }
         age += dt;
-        float target = emotion == face.currentEmotion && emotion != "NEUTRAL" && age < 3.2f
-            ? Mathf.Sqrt(Mathf.Clamp01(face.emotionIntensity / 100f)) : 0f;
+        float target = emotion == face.currentEmotion && emotion != "NEUTRAL" && age < 4.2f
+            ? Mathf.Lerp(.55f, 1f, Mathf.Clamp01(face.emotionIntensity / 100f)) : 0f;
         weight = Mathf.MoveTowards(weight, target, 4f*dt);
         settle = Mathf.MoveTowards(settle, 1f, 3f*dt);
         for (int i = 0; i < bones.Length; i++)

@@ -12,7 +12,8 @@ public sealed partial class HallAudienceCelebration : MonoBehaviour
     [SerializeField, Range(0.05f, 1f)] private float blendSeconds = 0.3f;
     [SerializeField, Range(0f, 1f)] private float layerWeight = 1f;
     private Coroutine activeJudge, activeA, activeB;
-    private Coroutine soundRoutine;
+    private Coroutine groupRoutine;
+    private bool groupClapping, pendingHappy;
     private AudioSource applauseSource, cheerSource;
     public bool IsCelebrationAudible => (applauseSource && applauseSource.isPlaying && applauseSource.volume > 0f)
         || (cheerSource && cheerSource.isPlaying && cheerSource.volume > 0f);
@@ -102,7 +103,7 @@ public sealed partial class HallAudienceCelebration : MonoBehaviour
     }
 
 #if UNITY_EDITOR
-    public void PreviewAudienceClap() { PlayCelebration(false, false); }
+    public void PreviewAudienceClap() { PreviewSingleClap(true); clapB = true; activeB = StartCoroutine(Play(audienceB, clapClip, "Clap")); }
     public void PreviewSingleClap(bool leftAudience)
     {
         StopReactions();
@@ -113,16 +114,76 @@ public sealed partial class HallAudienceCelebration : MonoBehaviour
         if (!CanPlay(rig, clapClip, "Clap")) return;
         if (leftAudience) activeA = StartCoroutine(Play(rig, clapClip, "Clap"));
         else activeB = StartCoroutine(Play(rig, clapClip, "Clap"));
-        soundRoutine = StartCoroutine(PlaySounds(true, false));
+        // Solo editor previews are silent. Audible applause belongs to the group.
     }
 #endif
 
-    public void OnSessionStarted() { PlayCelebration(true, false); }
-    public void OnSessionCompleted() { PlayCelebration(true, false); }
-    public void OnJudgeHappy() { PlayCelebration(false, true); }
+    public void OnSessionStarted() => StartGroupClap(false);
+    public void OnSessionCompleted() => StartGroupClap(false);
+    public void OnJudgeHappy() => StartGroupClap(true);
+
+    private void StartGroupClap(bool followWithHappy)
+    {
+        if (!isActiveAndEnabled) return;
+        if (groupClapping) { pendingHappy = followWithHappy; return; }
+        StopReactions();
+        if (!CanPlay(judge, clapClip, "Clap") || !CanPlay(audienceA, clapClip, "Clap") ||
+            !CanPlay(audienceB, clapClip, "Clap"))
+        {
+            Debug.LogWarning("[Hall Celebration] All three clap bindings are required for group applause.", this);
+            return;
+        }
+        groupClapping = true;
+        pendingHappy = followWithHappy;
+        groupRoutine = StartCoroutine(GroupClap());
+    }
+
+    private IEnumerator GroupClap()
+    {
+        clapStart = Time.time;
+        clapJudge = clapA = clapB = true;
+        activeJudge = StartCoroutine(Play(judge, clapClip, "Clap", group: true));
+        activeA = StartCoroutine(Play(audienceA, clapClip, "Clap", group: true));
+        activeB = StartCoroutine(Play(audienceB, clapClip, "Clap", group: true));
+        // Establish hand motion before starting the sound.
+        yield return new WaitForSeconds(blendSeconds);
+        if (applauseSound && soundVolume > 0)
+        {
+            if (!applauseSource) applauseSource = CreateSoundSource();
+            applauseSource.clip = applauseSound;
+            applauseSource.volume = soundVolume;
+            applauseSource.Play();
+            while (applauseSource.isPlaying) yield return null;
+        }
+        else yield return new WaitForSeconds(clapClip.length);
+        groupClapping = false;
+        while (clapJudge || clapA || clapB) yield return null;
+        groupRoutine = null;
+        if (pendingHappy)
+        {
+            pendingHappy = false;
+            clapStart = Time.time;
+            clapA = true;
+            activeA = StartCoroutine(Play(audienceA, clapClip, "Clap"));
+            if (CanPlay(audienceB, cheerClip, "Cheer"))
+            {
+                activeB = StartCoroutine(Play(audienceB, cheerClip, "Cheer"));
+                if (cheerSound)
+                {
+                    if (!cheerSource) cheerSource = CreateSoundSource();
+                    cheerSource.clip = cheerSound;
+                    cheerSource.volume = soundVolume;
+                    cheerSource.Play();
+                }
+            }
+        }
+    }
 
     public void StopReactions()
     {
+        if (groupRoutine != null) StopCoroutine(groupRoutine);
+        groupRoutine = null;
+        groupClapping = pendingHappy = false;
         clapJudge = clapA = clapB = false;
         if (activeJudge != null) StopCoroutine(activeJudge);
         if (activeA != null) StopCoroutine(activeA);
@@ -132,60 +193,11 @@ public sealed partial class HallAudienceCelebration : MonoBehaviour
         ResetLayer(judge); ResetLayer(audienceA); ResetLayer(audienceB);
     }
     private void OnDisable() { RestoreAudiencePoses(); StopReactions(); }
-    private void PlayCelebration(bool includeJudge, bool cheerForB)
-    {
-        if (!isActiveAndEnabled) return;
-        if (activeJudge != null) StopCoroutine(activeJudge);
-        clapJudge = includeJudge && CanPlay(judge, clapClip, "Clap");
-        if (clapJudge) activeJudge = StartCoroutine(Play(judge, clapClip, "Clap"));
-        else ResetLayer(judge);
-        clapStart = Time.time;
-        clapA = true;
-        clapB = !cheerForB;
-        if (activeA != null) StopCoroutine(activeA);
-        if (activeB != null) StopCoroutine(activeB);
-        StopSounds();
-        activeA = StartCoroutine(Play(audienceA, clapClip, "Clap"));
-        activeB = StartCoroutine(Play(audienceB, cheerForB ? cheerClip : clapClip, cheerForB ? "Cheer" : "Clap"));
-        bool clapPlaying = clapJudge || CanPlay(audienceA, clapClip, "Clap") ||
-            (!cheerForB && CanPlay(audienceB, clapClip, "Clap"));
-        bool cheerPlaying = cheerForB && CanPlay(audienceB, cheerClip, "Cheer");
-        if (clapPlaying || cheerPlaying)
-            soundRoutine = StartCoroutine(PlaySounds(clapPlaying, cheerPlaying));
-    }
     private bool CanPlay(Animator animator, AnimationClip clip, string state)
     {
         if (animator == null || !animator.isActiveAndEnabled || !animator.isHuman || clip == null) return false;
         int layer = animator.GetLayerIndex(layerName);
         return layer >= 0 && animator.HasState(layer, Animator.StringToHash(layerName + "." + state));
-    }
-    private IEnumerator PlaySounds(bool clapPlaying, bool cheerPlaying)
-    {
-        if (clapPlaying && applauseSound != null)
-        {
-            if (applauseSource == null) applauseSource = CreateSoundSource();
-            applauseSource.clip = applauseSound;
-            applauseSource.volume = soundVolume;
-            applauseSource.Play();
-        }
-        if (cheerPlaying && cheerSound != null)
-        {
-            if (cheerSource == null) cheerSource = CreateSoundSource();
-            cheerSource.clip = cheerSound;
-            cheerSource.volume = soundVolume;
-            cheerSource.Play();
-        }
-        float clapRemaining = clapPlaying && clapClip != null ? clapClip.length : 0f;
-        float cheerRemaining = cheerPlaying && cheerClip != null ? cheerClip.length : 0f;
-        while (clapRemaining > 0f || cheerRemaining > 0f)
-        {
-            yield return null;
-            clapRemaining -= Time.deltaTime;
-            cheerRemaining -= Time.deltaTime;
-            if (clapRemaining <= 0f && applauseSource != null && applauseSource.isPlaying) applauseSource.Stop();
-            if (cheerRemaining <= 0f && cheerSource != null && cheerSource.isPlaying) cheerSource.Stop();
-        }
-        soundRoutine = null;
     }
     private AudioSource CreateSoundSource()
     {
@@ -197,12 +209,10 @@ public sealed partial class HallAudienceCelebration : MonoBehaviour
     }
     private void StopSounds()
     {
-        if (soundRoutine != null) StopCoroutine(soundRoutine);
-        soundRoutine = null;
         if (applauseSource != null) applauseSource.Stop();
         if (cheerSource != null) cheerSource.Stop();
     }
-    private IEnumerator Play(Animator animator, AnimationClip clip, string state, float maxDuration = float.PositiveInfinity)
+    private IEnumerator Play(Animator animator, AnimationClip clip, string state, float maxDuration = float.PositiveInfinity, bool group = false)
     {
         if (animator == null || !animator.isActiveAndEnabled || !animator.isHuman || clip == null) yield break;
         int layer = animator.GetLayerIndex(layerName);
@@ -213,13 +223,18 @@ public sealed partial class HallAudienceCelebration : MonoBehaviour
         float initial = animator.GetLayerWeight(layer);
         while (elapsed < blend) { elapsed += Time.deltaTime; animator.SetLayerWeight(layer, Mathf.Lerp(initial, layerWeight, Mathf.Clamp01(elapsed / blend))); yield return null; }
         animator.SetLayerWeight(layer, layerWeight);
-        yield return new WaitForSeconds(Mathf.Max(0, Mathf.Min(clip.length, maxDuration) - blend * 2));
+        if (group) { while (groupClapping) yield return null; }
+        else yield return new WaitForSeconds(Mathf.Max(0, Mathf.Min(clip.length, maxDuration) - blend * 2));
         elapsed = 0;
         while (elapsed < blend) { elapsed += Time.deltaTime; animator.SetLayerWeight(layer, Mathf.Lerp(layerWeight, 0, Mathf.Clamp01(elapsed / blend))); yield return null; }
         animator.SetLayerWeight(layer, 0);
         if (animator == judge) clapJudge = false;
         if (animator == audienceA) clapA = false;
-        if (animator == audienceB) clapB = false;
+        if (animator == audienceB)
+        {
+            clapB = false;
+            if (state == "Cheer" && cheerSource) cheerSource.Stop();
+        }
     }
     private void ResetLayer(Animator animator)
     {
