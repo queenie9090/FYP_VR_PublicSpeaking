@@ -43,7 +43,6 @@ public class SpeechInteractionController : MonoBehaviour
         }
 
         int maxAttempts = Mathf.Max(1, maxSilentAttempts);
-        int sttFailures = 0;
         float totalSpeechDuration = 0f;
         float totalSilenceDuration = 0f;
 
@@ -121,18 +120,18 @@ public class SpeechInteractionController : MonoBehaviour
 
             if (sttFailed)
             {
-                if (++sttFailures >= 3)
+                if (attempt >= maxAttempts)
                 {
                     if (uiManager != null)
-                        uiManager.SetStatus("Speech recognition unavailable. Check your connection; trying again shortly.");
-                    sttFailures = 0;
-                    yield return new WaitForSecondsRealtime(3f);
+                        uiManager.SetStatus("Speech recognition unavailable. Check your connection and restart the session.");
+                    Debug.LogError("[SpeechInteractionController] Speech recognition failed after all retry attempts.");
+                    onFatalMicError?.Invoke();
+                    yield break;
                 }
 
                 if (uiManager != null)
                     uiManager.SetStatus("Speech recognition failed. Please try speaking again.");
                 yield return new WaitForSeconds(1.5f);
-                attempt--;
                 continue;
             }
 
