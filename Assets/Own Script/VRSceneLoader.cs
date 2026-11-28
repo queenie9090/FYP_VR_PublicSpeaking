@@ -147,12 +147,15 @@ public class VRSceneLoader : MonoBehaviour
             if (manager.isInitializationComplete)
             {
                 try { manager.StopSubsystems(); } catch { }
+                yield return null;
                 try { manager.DeinitializeLoader(); } catch { }
             }
         }
 
         vrSubsystemsStarted = false;
         yield return null;
-        SceneManager.LoadScene(menuSceneName);
+        yield return Resources.UnloadUnusedAssets();
+        System.GC.Collect();
+        yield return SceneManager.LoadSceneAsync(menuSceneName);
     }
 }
