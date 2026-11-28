@@ -225,8 +225,8 @@ public class EmotionDashboardUIController : MonoBehaviour
         string name = record.npcName?.Trim() ?? "";
         if (classroomBreakdown)
         {
-            if (string.Equals(name, "Amy", StringComparison.OrdinalIgnoreCase)) return "Student A";
-            if (string.Equals(name, "Jack", StringComparison.OrdinalIgnoreCase)) return "Student B";
+            if (string.Equals(name, "Student A", StringComparison.OrdinalIgnoreCase)) return "Amy";
+            if (string.Equals(name, "Student B", StringComparison.OrdinalIgnoreCase)) return "Jack";
         }
         return hallBreakdown && string.Equals(name, "Tutor", StringComparison.OrdinalIgnoreCase) ? "Judge" : name;
     }
@@ -239,7 +239,7 @@ public class EmotionDashboardUIController : MonoBehaviour
         classroomBreakdown = string.Equals(scene?.Trim(), "Classroom", StringComparison.OrdinalIgnoreCase);
         string[] roster = hall ? new[] { "Judge", "Audience Member A", "Audience Member B" } :
             classroomBreakdown
-                ? new[] { "Student A", "Student B" } : Array.Empty<string>();
+                ? new[] { "Amy", "Jack" } : Array.Empty<string>();
         // Earlier Hall sessions saved the Judge under the prefab persona name.
         hallBreakdown = hall;
         npcNames = roster.Concat(sessionHistory.Select(NpcName)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();

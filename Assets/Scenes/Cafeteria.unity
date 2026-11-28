@@ -23271,7 +23271,8 @@ MonoBehaviour:
   faceDistance: 0.81
   framingHeightOffset: 0
   fieldOfView: 32
-  boneFramedNpcs: []
+  boneFramedNpcs:
+  - {fileID: 2004293282}
 --- !u!114 &1292598827
 MonoBehaviour:
   m_ObjectHideFlags: 0

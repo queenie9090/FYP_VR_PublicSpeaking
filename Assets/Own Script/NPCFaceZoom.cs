@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.XR.Interaction.Toolkit.Interactables;
 using UnityEngine.XR.Interaction.Toolkit.UI;
 
 // A live view of the existing animated mesh. This component owns no session data.
@@ -9,9 +10,15 @@ public class NPCFaceZoom : MonoBehaviour
 {
     [SerializeField] private InteractionManager interactionManager;
     [SerializeField, Min(0.3f)] private float panelDistance = 1.3f;
+    [Tooltip("Metres above eye level when the panel opens.")]
+    [SerializeField] private float panelOpeningHeight;
     [SerializeField, Min(0.1f)] private float faceDistance = 0.65f;
     [Tooltip("Vertical offset in metres for the portrait camera and its framing centre.")]
     [SerializeField] private float framingHeightOffset;
+    [Tooltip("Camera height above the framing centre in metres.")]
+    [SerializeField] private float portraitCameraLift;
+    [Tooltip("Horizontal angle around the NPC's face, in degrees.")]
+    [SerializeField, Range(-45f, 45f)] private float portraitYaw;
     [SerializeField, Range(15f, 60f)] private float fieldOfView = 32f;
     [Tooltip("NPCs framed from their own animated eye or head bones.")]
     [SerializeField] private List<NPCEmotionController> boneFramedNpcs = new();
@@ -91,7 +98,7 @@ public class NPCFaceZoom : MonoBehaviour
         Vector3 forward = Vector3.ProjectOnPlane(playerCamera.transform.forward, Vector3.up).normalized;
         if (forward.sqrMagnitude < 0.01f) forward = playerCamera.transform.forward;
         panel.transform.SetPositionAndRotation(
-            playerCamera.transform.position + forward * panelDistance,
+            playerCamera.transform.position + forward * panelDistance + Vector3.up * panelOpeningHeight,
             Quaternion.LookRotation(forward, Vector3.up));
         panel.SetActive(true);
         UpdateFaceCamera();
@@ -125,6 +132,7 @@ public class NPCFaceZoom : MonoBehaviour
         panel = new GameObject("NPC Face Zoom Panel", typeof(RectTransform), typeof(Canvas),
             typeof(TrackedDeviceGraphicRaycaster), typeof(GraphicRaycaster));
         panel.layer = 5;
+        panel.SetActive(false);
         UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(panel, gameObject.scene);
         var canvas = panel.GetComponent<Canvas>();
         canvas.renderMode = RenderMode.WorldSpace;
@@ -183,6 +191,23 @@ public class NPCFaceZoom : MonoBehaviour
         label.alignment = TextAlignmentOptions.Center;
         label.color = Color.white;
         label.raycastTarget = false;
+
+        // Only the strip below Exit is grabbable; the buttons keep their UI ray targets.
+        var strip = MakeRect("Move panel", panel.transform, new Vector2(800, 54), new Vector2(0, -477));
+        strip.gameObject.AddComponent<Image>().raycastTarget = false;
+        var handle = MakeRect("Grip", strip, new Vector2(610, 23), Vector2.zero);
+        var grip = handle.gameObject.AddComponent<Image>();
+        grip.color = new Color32(47, 91, 153, 255);
+        grip.raycastTarget = false;
+        var hit = strip.gameObject.AddComponent<BoxCollider>();
+        hit.size = new Vector3(800, 54, 30);
+        var body = panel.AddComponent<Rigidbody>();
+        body.isKinematic = true;
+        body.useGravity = false;
+        var grab = panel.AddComponent<XRGrabInteractable>();
+        grab.colliders.Add(hit);
+        grab.useDynamicAttach = true;
+        grab.throwOnDetach = false;
     }
 
     private static RectTransform MakeRect(string name, Transform parent, Vector2 size, Vector2 position)
@@ -229,7 +254,8 @@ public class NPCFaceZoom : MonoBehaviour
             if (front.sqrMagnitude > .000001f) towardPlayer = front.normalized;
         }
         if (towardPlayer.sqrMagnitude < 0.01f) towardPlayer = controller.transform.forward;
-        faceCamera.transform.position = target + towardPlayer * faceDistance;
+        towardPlayer = Quaternion.AngleAxis(portraitYaw, Vector3.up) * towardPlayer;
+        faceCamera.transform.position = target + towardPlayer * faceDistance + Vector3.up * portraitCameraLift;
         faceCamera.transform.LookAt(target, Vector3.up);
         faceCamera.enabled = true;
     }

@@ -17,6 +17,7 @@ public sealed class BusinessmanEmotionGesture : MonoBehaviour
     private readonly Quaternion[] relaxedFingers = new Quaternion[15], curledFingers = new Quaternion[15];
     private Quaternion handFrame;
     private bool applied, hasHandFrame;
+    private bool hallJudge;
     private int seenReaction;
     private string displayed = "NEUTRAL";
     private float elapsed, strength;
@@ -25,6 +26,7 @@ public sealed class BusinessmanEmotionGesture : MonoBehaviour
     private void Awake()
     {
         rig = GetComponent<Animator>();
+        hallJudge = gameObject.scene.name == "Hall";
         body = GetComponent<NPCBodyAnimation>();
         face = GetComponent<NPCEmotionController>();
         if (!rig.isHuman || !rig.runtimeAnimatorController) { enabled = false; return; }
@@ -110,8 +112,10 @@ public sealed class BusinessmanEmotionGesture : MonoBehaviour
             elapsed = 0;
         }
         elapsed += Time.deltaTime;
-        float target = displayed != face.currentEmotion || elapsed >= Duration ? 0f :
-            Mathf.Lerp(.45f, 1f, Mathf.Clamp01(face.emotionIntensity / 100f));
+        float intensity = Mathf.Clamp01(face.emotionIntensity / 100f);
+        float duration = hallJudge ? Mathf.Lerp(3.4f, 5f, intensity) : Duration;
+        float target = displayed != face.currentEmotion || elapsed >= duration ? 0f :
+            Mathf.Lerp(hallJudge ? .74f : .45f, 1f, intensity);
         strength = Mathf.MoveTowards(strength, target, Time.deltaTime * 3.2f);
         bool breathing = displayed == "NEUTRAL";
         bool hasOverlay = body && body.isActiveAndEnabled && body.Overlay != NPCBodyAnimation.SeatedOverlay.None;
@@ -132,16 +136,28 @@ public sealed class BusinessmanEmotionGesture : MonoBehaviour
             case "THINKING":
                 Rotate(head, forward, -14f * w);
                 Rotate(head, right, -8f * w);
+                if (hallJudge)
+                {
+                    Rotate(head, up, 15f * w);
+                    Rotate(chest, right, 6f * w);
+                    Reach(false, chest.position + scale * (.14f * right + .23f * forward), w);
+                }
                 break;
             case "SAD":
-                Rotate(chest, right, 7f * w);
-                Rotate(head, right, 15f * w);
+                Rotate(chest, right, (hallJudge ? 13f : 7f) * w);
+                Rotate(head, right, (hallJudge ? 20f : 15f) * w);
                 Rotate(leftShoulder, forward, 8f * w);
                 Rotate(rightShoulder, forward, -8f * w);
                 RestOnThigh(true,w); RestOnThigh(false,w);
                 break;
             case "NERVOUS":
                 Vector3 middle = chest.position + scale * (.25f * forward - .08f * up);
+                if (hallJudge)
+                {
+                    Rotate(leftShoulder, forward, -8f * w);
+                    Rotate(rightShoulder, forward, 8f * w);
+                    middle += up * (.035f * scale * Mathf.Sin(elapsed * 5f));
+                }
                 Reach(true, middle - right * (.044f * scale), w);
                 Reach(false, middle + scale * (.043f * right + (.015f + .009f * Mathf.Sin(elapsed * 13f)) * up), w);
                 if (hasHandFrame) ShapeFingers(w * .55f, -1, .55f + .35f * Mathf.Sin(elapsed * 13f));
@@ -152,7 +168,7 @@ public sealed class BusinessmanEmotionGesture : MonoBehaviour
                 Vector3 aim = forward;
                 if (!happy && Camera.main)
                     aim = Vector3.RotateTowards(forward,(Camera.main.transform.position - chest.position).normalized,.65f,0f);
-                if (!happy) Rotate(chest, right, 6f * w);
+                if (!happy) Rotate(chest, right, (hallJudge ? 14f : 6f) * w);
                 Vector3 wrist = chest.position + scale * ((happy ? .17f : .12f) * right +
                     (happy ? .12f : .09f) * up + (happy ? .24f : .47f) * aim);
                 Reach(false, wrist, w);
