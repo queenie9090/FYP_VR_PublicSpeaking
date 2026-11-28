@@ -565,7 +565,15 @@ public class SupabaseAuthManager : MonoBehaviour
             SetStatus("Please enter both email and password.", isSignUp, isError: true);
             return false;
         }
-        if (!email.Contains("@") || !email.Contains("."))
+        try
+        {
+            var address = new System.Net.Mail.MailAddress(email);
+            string host = address.Host;
+            if (!string.Equals(address.Address, email, StringComparison.OrdinalIgnoreCase) ||
+                !host.Contains(".") || host.StartsWith(".") || host.EndsWith(".") || host.Contains(".."))
+                throw new FormatException();
+        }
+        catch (FormatException)
         {
             SetStatus("Please enter a valid email address.", isSignUp, isError: true);
             return false;

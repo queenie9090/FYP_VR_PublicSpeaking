@@ -131,6 +131,17 @@ public class AudioRecorder : MonoBehaviour
         return devices[0];
     }
 
+    // This checks availability without opening or interrupting a microphone.
+    public bool IsMicrophoneAvailable()
+    {
+        try { return !string.IsNullOrEmpty(ResolveMicrophoneDevice()); }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("[AudioRecorder] Unable to check microphone availability: " + ex.Message);
+            return false;
+        }
+    }
+
     public void RequestStopRecording()
     {
         stopRequested = true;
@@ -139,11 +150,13 @@ public class AudioRecorder : MonoBehaviour
     public IEnumerator RecordUserSpeechRoutine(Action<byte[], float, float> onRecordingComplete, Action<float, float> onProgress = null)
     {
         stopRequested = false;
-        string requestedDevice = ResolveMicrophoneDevice();
+        string requestedDevice = null;
+        try { requestedDevice = ResolveMicrophoneDevice(); }
+        catch (Exception ex) { Debug.LogWarning("[AudioRecorder] Could not check microphones: " + ex.Message); }
 
         if (string.IsNullOrEmpty(requestedDevice))
         {
-            Debug.LogError("[AudioRecorder] No valid microphone device found!");
+            Debug.LogWarning("[AudioRecorder] No valid microphone device found!");
             onRecordingComplete?.Invoke(null, 0f, 0f);
             yield break;
         }
@@ -157,13 +170,21 @@ public class AudioRecorder : MonoBehaviour
             activeMicDevice = requestedDevice;
             Debug.Log($"[AudioRecorder] Opening session microphone: '{activeMicDevice}'");
             int bufferSeconds = Mathf.Max(1, Mathf.CeilToInt(maxAllowedDuration) + 2);
-            using (MicStartMarker.Auto())
-                sessionClip = VoiceMicTrace.Start(activeMicDevice, bufferSeconds, targetSampleRate, true);
+            try
+            {
+                using (MicStartMarker.Auto())
+                    sessionClip = VoiceMicTrace.Start(activeMicDevice, bufferSeconds, targetSampleRate, true);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[AudioRecorder] The microphone could not start: " + ex.Message);
+                sessionClip = null;
+            }
         }
         AudioClip recordedClip = sessionClip;
         if (recordedClip == null)
         {
-            Debug.LogError("[AudioRecorder] The microphone could not start recording.");
+            Debug.LogWarning("[AudioRecorder] The microphone could not start recording.");
             onRecordingComplete?.Invoke(null, 0f, 0f);
             yield break;
         }
@@ -329,14 +350,21 @@ public class AudioRecorder : MonoBehaviour
 
     private void ReleaseSessionCapture()
     {
-        if (!string.IsNullOrEmpty(activeMicDevice) && VoiceMicTrace.IsRecording(activeMicDevice))
+        try
         {
-            using (MicStopMarker.Auto()) VoiceMicTrace.End(activeMicDevice);
-            Debug.Log("[AudioRecorder] Session microphone closed.");
+            if (!string.IsNullOrEmpty(activeMicDevice) && VoiceMicTrace.IsRecording(activeMicDevice))
+            {
+                using (MicStopMarker.Auto()) VoiceMicTrace.End(activeMicDevice);
+                Debug.Log("[AudioRecorder] Session microphone closed.");
+            }
         }
-        if (sessionClip != null) Destroy(sessionClip);
-        sessionClip = null;
-        activeMicDevice = null;
+        catch (Exception ex) { Debug.LogWarning("[AudioRecorder] Could not close microphone: " + ex.Message); }
+        finally
+        {
+            if (sessionClip != null) Destroy(sessionClip);
+            sessionClip = null;
+            activeMicDevice = null;
+        }
     }
 }
 

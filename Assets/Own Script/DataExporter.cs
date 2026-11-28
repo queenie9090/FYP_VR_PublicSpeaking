@@ -10,6 +10,16 @@ using UnityEditor;
 
 public class DataExporter : MonoBehaviour
 {
+    // A cancelled save dialog returns null and is not an error.
+    public static void ExportWithFeedback(Func<string> export, Action<string> onError)
+    {
+        try { export(); }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("[DataExporter] Export failed: " + ex.Message);
+            onError?.Invoke("Export failed. Check the save location and try again.");
+        }
+    }
     /// <summary>
     /// Exports complete session metrics and detailed dialogue logs to a formatted CSV file.
     /// Prompts the user to choose a save location on Windows PC by default.

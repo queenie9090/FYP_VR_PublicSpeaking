@@ -162,12 +162,21 @@ public class SessionHistoryController : MonoBehaviour
         }
     }
 
+    private void ShowExportError(string message)
+    {
+        if (selectedSessionDetailsText != null) selectedSessionDetailsText.text += "\n\n<color=#FF8A65>" + message + "</color>";
+    }
+
     private void OnExportPdfClicked()
     {
         if (selectedSessionData != null)
         {
-            string path = DataExporter.ExportToPDFReport(selectedSessionData);
-            Debug.Log($"[SessionHistory] Report exported to: {path}");
+            if (selectedSessionData.performance_metric == null || selectedSessionData.performance_metric.Count == 0 || selectedSessionData.performance_metric[0] == null)
+            {
+                ShowExportError("This session has no performance metrics to export. You can still view its details.");
+                return;
+            }
+            DataExporter.ExportWithFeedback(() => DataExporter.ExportToPDFReport(selectedSessionData), ShowExportError);
         }
     }
 }

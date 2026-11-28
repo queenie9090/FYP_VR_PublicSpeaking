@@ -121,9 +121,17 @@ public class PCDashboardController : MonoBehaviour
         // 1. Check if user navigated here from Main Menu History
         if (UserSession.CurrentSessionData != null)
         {
-            ShowDashboardContent(true);
             cachedCurrentSession = UserSession.CurrentSessionData;
-            PopulateDashboard(cachedCurrentSession);
+            if (HasMetrics(cachedCurrentSession))
+            {
+                ShowDashboardContent(true);
+                PopulateDashboard(cachedCurrentSession);
+            }
+            else
+            {
+                cachedCurrentSession = null;
+                ShowEmptyState("This session has no performance metrics available.");
+            }
 
             // Reset payload so subsequent visits load default behavior
             UserSession.CurrentSessionData = null;
@@ -135,7 +143,7 @@ public class PCDashboardController : MonoBehaviour
 
         StartCoroutine(supabaseManager.GetLatestNormalizedSession(userId, (data) =>
         {
-            if (data != null && data.performance_metric != null && data.performance_metric.Count > 0)
+            if (HasMetrics(data))
             {
                 ShowDashboardContent(true);
                 cachedCurrentSession = data;
@@ -151,6 +159,9 @@ public class PCDashboardController : MonoBehaviour
             Debug.LogError($"[PCDashboard] Error fetching session: {error}");
         }));
     }
+
+    private static bool HasMetrics(NormalizedSessionData data) =>
+        data != null && data.performance_metric != null && data.performance_metric.Count > 0 && data.performance_metric[0] != null;
 
     private void PopulateDashboard(NormalizedSessionData data)
     {
@@ -333,19 +344,24 @@ public class PCDashboardController : MonoBehaviour
     private void OnExportCSVClicked()
     {
         if (cachedCurrentSession != null)
-            DataExporter.ExportToCSV(cachedCurrentSession);
+            DataExporter.ExportWithFeedback(() => DataExporter.ExportToCSV(cachedCurrentSession), ShowExportError);
     }
 
     private void OnExportJSONClicked()
     {
         if (cachedCurrentSession != null)
-            DataExporter.ExportToJSON(cachedCurrentSession);
+            DataExporter.ExportWithFeedback(() => DataExporter.ExportToJSON(cachedCurrentSession), ShowExportError);
     }
 
     private void OnExportPDFClicked()
     {
         if (cachedCurrentSession != null)
-            DataExporter.ExportToPDFReport(cachedCurrentSession);
+            DataExporter.ExportWithFeedback(() => DataExporter.ExportToPDFReport(cachedCurrentSession), ShowExportError);
+    }
+
+    private void ShowExportError(string message)
+    {
+        if (aiFeedbackText != null) aiFeedbackText.text += "\n\n<color=#FF8A65>" + message + "</color>";
     }
 
     private void ShowDashboardContent(bool hasData)
